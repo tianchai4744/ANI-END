@@ -32,12 +32,16 @@
             width: 100%;
             height: 100%; 
             background-color: #000;
+            display: flex; /* (NEW) สำหรับจัดวาง video หรือ iframe */
+            align-items: center;
+            justify-content: center;
         }
 
-        /* 3. กล่องหลาน (Grandchild - ตัว Iframe) - ขยายเต็มกล่องลูก */
+        /* 3. กล่องหลาน (Grandchild - ตัว Video/Iframe) - ขยายเต็มกล่องลูก */
         #video-player-embed iframe {
             width: 100%;
             height: 100%;
+            min-width: initial !important; 
         }
         
         /* Removed Tab-related CSS */
@@ -130,6 +134,21 @@
             font-size: 10px;
             font-weight: 700;
         }
+        
+        /* (MODIFIED) ลบ media query เก่าที่แก้ไขปัญหา iframe ล้นจอออก */
+        @media (max-width: 1023px) {
+             .video-aspect-wrapper {
+                padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+                overflow-x: hidden; 
+                height: 0; 
+             }
+             #video-player-embed {
+                 position: absolute;
+                 width: 100%;
+                 height: 100%;
+             }
+        }
+
 
     </style>
 </head>
@@ -170,7 +189,70 @@
         const top10ListContainer = document.getElementById('top10-list-container'); 
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
-        
+
+        // (REMOVED: getArchiveItemId)
+        // (REMOVED: playCustomVideo)
+
+        // (MODIFIED) Function to handle the Iframe embed (เดิมคือ playIframeFallback)
+        function embedVideo(embedCode) {
+            console.log("Using standard iframe embed.");
+            
+            // 1. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
+            if (embedCode.trim().startsWith('http')) {
+                let videoUrlStr = embedCode;
+                
+                // พยายามเพิ่ม autoplay=1
+                try {
+                    const videoUrl = new URL(videoUrlStr);
+                    videoUrl.searchParams.set('autoplay', '1');
+                    // (NEW) ลบ muted=0 ออก เพื่อให้เบราว์เซอร์จัดการเสียง
+                    videoUrlStr = videoUrl.href;
+                } catch (e) {
+                    console.warn("Could not parse URL to add params, trying string append:", e);
+                    videoUrlStr += (videoUrlStr.includes('?') ? '&' : '?') + 'autoplay=1';
+                }
+
+                const iframe = document.createElement('iframe');
+                iframe.src = videoUrlStr; 
+                iframe.setAttribute('frameborder', '0');
+                // (MODIFIED) อนุญาต autoplay; fullscreen
+                iframe.setAttribute('allow', 'autoplay; fullscreen'); 
+                iframe.setAttribute('webkitallowfullscreen', 'true');
+                iframe.setAttribute('mozallowfullscreen', 'true');
+                iframe.setAttribute('allowfullscreen', 'true');
+                
+                playerEmbedDiv.innerHTML = ''; // Clear previous content
+                playerEmbedDiv.appendChild(iframe);
+                
+            } else if (embedCode) {
+                // 2. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
+                let finalEmbedCode = embedCode;
+                // พยายามเพิ่ม autoplay และลบ muted ออก
+                if (!finalEmbedCode.includes('autoplay')) {
+                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay `);
+                }
+                finalEmbedCode = finalEmbedCode.replace(/muted/g, ''); 
+
+                // พยายามเพิ่มพารามิเตอร์ใน src
+                if (finalEmbedCode.includes('src="')) {
+                    finalEmbedCode = finalEmbedCode.replace(/src="([^"]*)"/i, (match, src) => {
+                        if (!src.includes('autoplay=')) {
+                            src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
+                        }
+                        if (src.includes('muted=1')) {
+                             src = src.replace('muted=1', 'muted=0'); // Change muted=1 to muted=0
+                        }
+                        return `src="${src}"`;
+                    });
+                }
+                playerEmbedDiv.innerHTML = finalEmbedCode;
+                
+            } else {
+                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
+            }
+        }
+
+
         async function initializeFirebase() {
             try {
                 const app = initializeApp(firebaseConfig); 
@@ -181,9 +263,9 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
+                        
                         console.log("User Authenticated (Anonymous):", userId);
-                        // (MODIFIED) เรียก loadContent เพื่อโหลดเนื้อหาที่เกี่ยวข้องกับ Show ID
-                        // และเรียก loadGlobalContent เพื่อโหลดรายการที่ไม่ต้องใช้ Show ID
+                        
                         await loadContent(); 
                         await loadGlobalContent();
                     } else {
@@ -212,9 +294,9 @@
         // (NEW) ฟังก์ชันสำหรับโหลดเนื้อหาที่ไม่ขึ้นกับ Show ID (เช่น Top 10)
         async function loadGlobalContent() {
             console.log("Loading global content (Top 10)...");
-            // NOTE: เราจะเรียก renderTop10List ที่นี่
+            
             await renderTop10List();
-            // (NEW) Call sync height after showing content
+            
             syncEpisodeListHeight(); 
         }
 
@@ -227,8 +309,7 @@
                 
                 if (!showId) {
                     playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบ ID ของซีรีส์</p>`;
-                    // (NEW) ในกรณีที่ไม่พบ ID ให้แสดง UI หลักทันที แต่เนื้อหาวิดีโอว่างเปล่า
-                    // เราต้องแสดง UI หลักเพราะ loadGlobalContent จะจัดการ Top 10 เอง
+                    
                     playerContentWrapper.classList.remove('hidden');
                     loadingPlayer.classList.add('hidden');
                     
@@ -237,8 +318,7 @@
                     showDescEl.textContent = "โปรดกลับไปที่หน้าแรกเพื่อเลือกซีรีส์ที่ถูกต้อง";
                     episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่สามารถโหลดรายการตอนได้</p>`;
                     
-                    // (NEW) หากไม่มี showId เราจะไม่สามารถหา Related List ได้
-                    // ให้โหลด Related List โดยไม่มี Tag กรอง (เพื่อแสดงเรื่องแนะนำทั่วไป)
+                    // หากไม่มี showId เราจะไม่สามารถหา Related List ได้
                     await renderRelatedList([]);
 
                     return; // หยุดการโหลดข้อมูลเฉพาะซีรีส์
@@ -250,7 +330,7 @@
 
                 if (!showSnap.exists()) {
                     playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบข้อมูลซีรีส์</p>`;
-                    // (NEW) แสดง UI หลักเมื่อพบข้อผิดพลาด
+                    
                     playerContentWrapper.classList.remove('hidden');
                     loadingPlayer.classList.add('hidden');
                     return;
@@ -285,7 +365,7 @@
                 
                 // 4. Render UI เฉพาะซีรีส์นี้
                 renderEpisodeList(currentEpisodes);
-                // (NEW) เรียก renderRelatedList ที่นี่ เพราะต้องใช้ currentShow.tags
+                
                 await renderRelatedList(currentShow.tags || []); 
 
                 // 5. เล่นตอนแรก (ถ้ามี)
@@ -295,18 +375,20 @@
                     playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับซีรีส์นี้</p>`;
                 }
                 
+                
             } catch (error) {
                 console.error("Error loading content:", error);
                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">เกิดข้อผิดพลาดในการโหลด</p>`;
             } finally {
-                // ซ่อน Loading และแสดงเนื้อหา (ถ้ายังไม่ได้ทำในเงื่อนไข showId)
+                
                 loadingPlayer.classList.add('hidden');
                 playerContentWrapper.classList.remove('hidden');
-                // (NEW) Call sync height after showing content
+                
                 syncEpisodeListHeight(); 
             }
         }
 
+        
         // (NEW) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player
         function syncEpisodeListHeight() {
             // 1. หาความสูงของ Video Player Wrapper
@@ -537,46 +619,14 @@
         }
 
 
-        // ฟังก์ชันเล่นวิดีโอ (ไม่มีการเปลี่ยนแปลง)
+        // ฟังก์ชันเล่นวิดีโอ (กลับไปใช้ Embed Video)
         function playEpisode(episode) {
             console.log(`Playing: ${episode.title}`, episode.embedCode);
             
             playerEmbedDiv.innerHTML = ''; 
             
-            if (episode.embedCode && episode.embedCode.trim().startsWith('http')) {
-                // กรณีเป็น URL (เช่น archive.org/embed/)
-                let videoUrlStr = episode.embedCode;
-
-                // พยายามเพิ่ม autoplay=1
-                try {
-                    const videoUrl = new URL(videoUrlStr);
-                    videoUrl.searchParams.set('autoplay', '1');
-                    videoUrlStr = videoUrl.href;
-                } catch (e) {
-                    console.warn("Could not parse URL to add autoplay, trying string append:", e);
-                    if (videoUrlStr.includes('?')) {
-                        videoUrlStr += '&autoplay=1';
-                    } else {
-                        videoUrlStr += '?autoplay=1';
-                    }
-                }
-
-                const iframe = document.createElement('iframe');
-                iframe.src = videoUrlStr; 
-                iframe.setAttribute('frameborder', '0');
-                iframe.setAttribute('allow', 'autoplay; fullscreen'); 
-                iframe.setAttribute('webkitallowfullscreen', 'true');
-                iframe.setAttribute('mozallowfullscreen', 'true');
-                iframe.setAttribute('allowfullscreen', 'true');
-                
-                playerEmbedDiv.appendChild(iframe);
-
-            } else if (episode.embedCode) {
-                // กรณีเป็น <iframe> tag (HTML string)
-                playerEmbedDiv.innerHTML = episode.embedCode;
-            } else {
-                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
-            }
+            // ใช้ฟังก์ชัน embedVideo ที่สร้างไว้
+            embedVideo(episode.embedCode);
             
             // อัปเดตชื่อเรื่องหลัก
             showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
@@ -595,7 +645,6 @@
             initializeFirebase(); 
             // (NEW) Attach resize listener
             window.addEventListener('resize', syncEpisodeListHeight);
-            // Removed Tab logic as we are no longer using tabs.
         });
 
     </script>
@@ -633,10 +682,13 @@
     
     <!-- Content (Hidden by default) -->
     <div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
-        <div class="flex flex-col lg:flex-row gap-6">
+        
+        <!-- FLEX CONTAINER หลัก: เปลี่ยนจาก lg:flex-row เป็น flex-wrap เพื่อควบคุม order ได้ง่ายขึ้นบน Desktop -->
+        <!-- เราจะจัดเรียง 4 องค์ประกอบหลักใน container นี้ -->
+        <div class="flex flex-wrap gap-6">
             
-            <!-- Left Side: Player, Info, and Related Shows -->
-            <div class="flex-1 lg:w-2/3">
+            <!-- 1. Player & Info (วิดีโอและรายละเอียด) -->
+            <div class="w-full lg:w-[calc(66.666%-12px)] order-1 lg:order-1">
                 <!-- Responsive Video Player Wrapper -->
                 <div class="video-aspect-wrapper rounded-lg overflow-hidden mb-4">
                     <div id="video-player-embed">
@@ -650,15 +702,30 @@
                 <!-- Show Info -->
                 <div class="text-white mb-6">
                     <h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
-                    <div class="flex items-center space-x-4 text-gray-400 text-sm mb-4">
+                    <!-- START DELETION: ลบ div แสดงคะแนน ยอดวิว และปี -->
+                    <!-- <div class="flex items-center space-x-4 text-gray-400 text-sm mb-4">
                         <span><i class="ri-thumb-up-line text-green-500"></i> 9.5</span>
                         <span>1.2 พันล้านวิว</span>
                         <span>2024</span>
-                    </div>
+                    </div> -->
+                    <!-- END DELETION -->
                     <p id="show-description" class="text-gray-300 line-clamp-3">...</p>
                 </div>
-                
-                <!-- NEW SECTION: อนิเมะที่คุณอาจจะชอบ (Moved from right/aside) -->
+            </div>
+            
+            <!-- 2. รายการตอน (Episodes List) - ลำดับ 2 บนมือถือ -->
+            <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-2 lg:order-2">
+                <section class="bg-gray-800 rounded-lg p-4">
+                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
+                    <div id="episode-list-container" class="flex flex-wrap gap-2">
+                        <!-- Episode buttons injected by JS -->
+                        <p class="text-gray-400">กำลังโหลดตอน...</p>
+                    </div>
+                </section>
+            </div>
+            
+            <!-- 3. อนิเมะที่คุณอาจจะชอบ (Related Shows) - ลำดับ 3 บนมือถือ -->
+            <div class="w-full lg:w-[calc(66.666%-12px)] order-3 lg:order-3">
                 <section class="bg-gray-800 rounded-lg p-4 mb-6">
                     <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">อนิเมะที่คุณอาจจะชอบ</h3>
                     <div id="related-list-container">
@@ -667,21 +734,11 @@
                     </div>
                 </section>
                 
+                <!-- (REMOVED) SECTION: ระบบคอมเมนต์ -->
             </div>
             
-            <!-- Right Side: Playlist & Top 10 (Full width on mobile, 1/3 on desktop) -->
-            <aside class="w-full lg:w-1/3 lg:max-w-md flex-shrink-0 space-y-6">
-                
-                <!-- SECTION 1: รายการตอน (Episodes List) - MOVED TO TOP OF ASIDE -->
-                <section class="bg-gray-800 rounded-lg p-4">
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
-                    <div id="episode-list-container" class="flex flex-wrap gap-2">
-                        <!-- Episode buttons injected by JS -->
-                        <p class="text-gray-400">กำลังโหลดตอน...</p>
-                    </div>
-                </section>
-
-                <!-- SECTION 2: 10 อันดับอนิเมะยอดนิยม -->
+            <!-- 4. 10 อันดับอนิเมะยอดนิยม (Top 10 List) - ลำดับ 4 บนมือถือ -->
+            <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-4 lg:order-4">
                 <section class="bg-gray-800 rounded-lg p-4">
                     <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">10 อันดับอนิเมะยอดนิยม</h3>
                     <div id="top10-list-container" class="flex flex-col space-y-1">
@@ -689,8 +746,7 @@
                         <p class="text-gray-400">กำลังโหลด 10 อันดับ...</p>
                     </div>
                 </section>
-
-            </aside>
+            </div>
             
         </div>
     </div>
