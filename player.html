@@ -32,18 +32,12 @@
             width: 100%;
             height: 100%; 
             background-color: #000;
-            display: flex; /* (NEW) สำหรับจัดวาง video หรือ iframe */
-            align-items: center;
-            justify-content: center;
         }
 
-        /* 3. กล่องหลาน (Grandchild - ตัว Video/Iframe) - ขยายเต็มกล่องลูก */
-        #video-player-embed video,
+        /* 3. กล่องหลาน (Grandchild - ตัว Iframe) - ขยายเต็มกล่องลูก */
         #video-player-embed iframe {
             width: 100%;
             height: 100%;
-            /* ลบ Responsive CSS ที่เพิ่มไปรอบที่แล้วออก เนื่องจาก Video element จัดการเองได้ดีกว่า */
-            min-width: initial !important; 
         }
         
         /* Removed Tab-related CSS */
@@ -136,21 +130,6 @@
             font-size: 10px;
             font-weight: 700;
         }
-        
-        /* (MODIFIED) ลบ media query เก่าที่แก้ไขปัญหา iframe ล้นจอออก */
-        @media (max-width: 1023px) {
-             .video-aspect-wrapper {
-                padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
-                overflow-x: hidden; 
-                height: 0; 
-             }
-             #video-player-embed {
-                 position: absolute;
-                 width: 100%;
-                 height: 100%;
-             }
-        }
-
 
     </style>
 </head>
@@ -192,164 +171,8 @@
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
 
-        // (NEW) Function to extract Archive.org Item Identifier
-        function getArchiveItemId(url) {
-            try {
-                const urlObj = new URL(url);
-                // Regex to match item ID in path like /embed/{item_id} or /details/{item_id}
-                const match = urlObj.pathname.match(/\/(?:embed|details)\/([a-zA-Z0-9_-]+)/);
-                if (match && match[1]) {
-                    return match[1];
-                }
-            } catch (e) {
-                console.warn("Invalid URL format:", e);
-                // Fallback for non-URL strings like HTML embed codes
-                const idMatch = url.match(/archive\.org\/(?:embed|details)\/([a-zA-Z0-9_-]+)/);
-                if (idMatch && idMatch[1]) {
-                    return idMatch[1];
-                }
-            }
-            return null;
-        }
+        // (REMOVED: Comment UI Elements)
         
-        // (MODIFIED) Function to handle the custom video player (HTML5 Video)
-        function playCustomVideo(itemId, episodeTitle, fallbackUrl) {
-            // ลำดับการลอง URL ของไฟล์ MP4 ที่เป็นไปได้
-            const possibleUrls = [
-                `https://archive.org/download/${itemId}/${itemId}.mp4`, // Default filename
-                `https://archive.org/download/${itemId}/${itemId}_512kb.mp4`, // Low bandwidth 
-                `https://archive.org/download/${itemId}/${itemId}_h264.mp4` // Common h264 name
-            ];
-            
-            // ใช้ตัวติดตามเพื่อลอง URL
-            let currentUrlIndex = 0;
-
-            function attemptLoad() {
-                if (currentUrlIndex >= possibleUrls.length) {
-                    // หากลองทุก URL แล้วล้มเหลว ให้ทำ Fallback
-                    console.warn("All direct MP4 URLs failed. Falling back to iframe embed...");
-                    playIframeFallback(fallbackUrl);
-                    return;
-                }
-
-                const mp4Url = possibleUrls[currentUrlIndex];
-                console.log(`Attempting to load MP4: ${mp4Url}`);
-
-                playerEmbedDiv.innerHTML = `
-                    <video 
-                        id="custom-video-player"
-                        controls 
-                        autoplay 
-                        playsinline
-                        class="w-full h-full object-cover"
-                    >
-                        <source src="${mp4Url}" type="video/mp4">
-                        <p class="text-white p-4">เบราว์เซอร์ของคุณไม่รองรับวิดีโอ HTML5. หรือไม่พบไฟล์ MP4</p>
-                    </video>
-                `;
-                
-                const videoElement = document.getElementById('custom-video-player');
-                
-                if (!videoElement) {
-                    console.error("Video element not created.");
-                    return;
-                }
-
-                // ลบ Listener เก่าเพื่อป้องกันการเรียกซ้ำ
-                videoElement.removeEventListener('error', handleError);
-
-                // 1. Listener สำหรับการจัดการข้อผิดพลาดในการโหลดวิดีโอ (ถ้าไฟล์ MP4 ไม่ถูกโหลด)
-                function handleError(e) {
-                    console.warn(`Video source error (Code ${videoElement.error.code}) for URL: ${mp4Url}`);
-                    currentUrlIndex++; // ลอง URL ถัดไป
-                    attemptLoad();
-                }
-                videoElement.addEventListener('error', handleError, { once: true });
-                
-                // 2. บังคับให้เล่นอัตโนมัติ (เปิดเสียง)
-                const playPromise = videoElement.play();
-                
-                if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        console.log("Autoplay successful (with sound).");
-                        // หากเล่นสำเร็จ เราไม่ต้องการให้ error listener ถูกเรียกอีก
-                        videoElement.removeEventListener('error', handleError);
-                    }).catch(error => {
-                        // หาก Autoplay ถูกบล็อกจริง ๆ (โดยเฉพาะมือถือ/ไม่มีการโต้ตอบก่อนหน้า)
-                        console.warn("Autoplay was prevented (Promise Rejected). User must click play button on video controls.", error);
-                        // วิดีโอจะยังคงโหลดและแสดงเฟรมแรก แต่ผู้ใช้ต้องคลิกปุ่ม Play บนตัวควบคุมวิดีโอเอง
-                        videoElement.removeEventListener('error', handleError); // ลบ error listener ออก เพราะวิดีโอถูกบล็อก ไม่ใช่ไฟล์เสีย
-                    });
-                }
-            }
-
-            // เริ่มกระบวนการโหลด
-            attemptLoad();
-        }
-        
-        // (NEW) Function to handle the Iframe fallback
-        function playIframeFallback(embedCode) {
-            console.log("Using standard iframe embed as fallback.");
-            
-            // 1. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
-            if (embedCode.trim().startsWith('http')) {
-                let videoUrlStr = embedCode;
-                let isFirstParam = videoUrlStr.includes('?') ? false : true;
-
-                // พยายามเพิ่ม autoplay=1 และ muted=0 (เปิดเสียง)
-                try {
-                    const videoUrl = new URL(videoUrlStr);
-                    videoUrl.searchParams.set('autoplay', '1');
-                    videoUrl.searchParams.set('muted', '0'); // พยายามตั้งเป็น 0 เพื่อให้เปิดเสียง
-                    videoUrlStr = videoUrl.href;
-                } catch (e) {
-                    console.warn("Could not parse URL to add params, trying string append:", e);
-                    videoUrlStr += (isFirstParam ? '?' : '&') + 'autoplay=1&muted=0';
-                }
-
-                const iframe = document.createElement('iframe');
-                iframe.src = videoUrlStr; 
-                iframe.setAttribute('frameborder', '0');
-                iframe.setAttribute('allow', 'autoplay; fullscreen; microphone'); // microphone อาจช่วยในบางกรณี
-                iframe.setAttribute('webkitallowfullscreen', 'true');
-                iframe.setAttribute('mozallowfullscreen', 'true');
-                iframe.setAttribute('allowfullscreen', 'true');
-                
-                playerEmbedDiv.innerHTML = ''; // Clear previous content
-                playerEmbedDiv.appendChild(iframe);
-                
-            } else if (embedCode) {
-                // 2. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
-                let finalEmbedCode = embedCode;
-                // พยายามเพิ่ม autoplay และ unmute attributes ให้กับ iframe
-                if (!finalEmbedCode.includes('autoplay')) {
-                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay `);
-                }
-                 // ลบ muted ออกถ้ามี, หรือพยายามเพิ่ม volume/unmute parameter ใน src
-                finalEmbedCode = finalEmbedCode.replace(/muted/g, ''); 
-
-                // พยายามเพิ่มพารามิเตอร์ใน src
-                if (finalEmbedCode.includes('src="')) {
-                    finalEmbedCode = finalEmbedCode.replace(/src="([^"]*)"/i, (match, src) => {
-                        if (!src.includes('autoplay=')) {
-                            src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
-                        }
-                        if (src.includes('muted=1')) {
-                             src = src.replace('muted=1', 'muted=0');
-                        } else if (!src.includes('muted=')) {
-                            src += (src.includes('?') ? '&' : '?') + 'muted=0';
-                        }
-                        return `src="${src}"`;
-                    });
-                }
-                playerEmbedDiv.innerHTML = finalEmbedCode;
-                
-            } else {
-                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
-            }
-        }
-
-
         async function initializeFirebase() {
             try {
                 const app = initializeApp(firebaseConfig); 
@@ -723,28 +546,43 @@
         }
 
 
-        // ฟังก์ชันเล่นวิดีโอ (มีการเปลี่ยนแปลงอย่างมาก)
+        // ฟังก์ชันเล่นวิดีโอ (ไม่มีการเปลี่ยนแปลง)
         function playEpisode(episode) {
             console.log(`Playing: ${episode.title}`, episode.embedCode);
             
             playerEmbedDiv.innerHTML = ''; 
             
-            // 1. ตรวจสอบว่าเป็น Archive.org URL หรือไม่
-            const itemId = getArchiveItemId(episode.embedCode);
-            
-            if (itemId) {
-                // (NEW LOGIC) ใช้ Custom HTML5 Video Player
-                // ส่ง embedCode ไปเป็น fallback URL ด้วย เผื่อกรณีโหลด MP4 ตรงไม่ได้
-                playCustomVideo(itemId, episode.title, episode.embedCode);
+            if (episode.embedCode && episode.embedCode.trim().startsWith('http')) {
+                // กรณีเป็น URL (เช่น archive.org/embed/)
+                let videoUrlStr = episode.embedCode;
+
+                // พยายามเพิ่ม autoplay=1
+                try {
+                    const videoUrl = new URL(videoUrlStr);
+                    videoUrl.searchParams.set('autoplay', '1');
+                    videoUrlStr = videoUrl.href;
+                } catch (e) {
+                    console.warn("Could not parse URL to add autoplay, trying string append:", e);
+                    if (videoUrlStr.includes('?')) {
+                        videoUrlStr += '&autoplay=1';
+                    } else {
+                        videoUrlStr += '?autoplay=1';
+                    }
+                }
+
+                const iframe = document.createElement('iframe');
+                iframe.src = videoUrlStr; 
+                iframe.setAttribute('frameborder', '0');
+                iframe.setAttribute('allow', 'autoplay; fullscreen'); 
+                iframe.setAttribute('webkitallowfullscreen', 'true');
+                iframe.setAttribute('mozallowfullscreen', 'true');
+                iframe.setAttribute('allowfullscreen', 'true');
                 
-            } else if (episode.embedCode && episode.embedCode.trim().startsWith('http')) {
-                // 2. ถ้าเป็น URL อื่นๆ (เช่น Youtube, Google Drive) ให้ใช้ iframe ปกติ
-                playIframeFallback(episode.embedCode);
+                playerEmbedDiv.appendChild(iframe);
 
             } else if (episode.embedCode) {
-                // 3. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
-                playIframeFallback(episode.embedCode);
-
+                // กรณีเป็น <iframe> tag (HTML string)
+                playerEmbedDiv.innerHTML = episode.embedCode;
             } else {
                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
             }
@@ -824,13 +662,11 @@
                 <!-- Show Info -->
                 <div class="text-white mb-6">
                     <h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
-                    <!-- START DELETION: ลบ div แสดงคะแนน ยอดวิว และปี -->
-                    <!-- <div class="flex items-center space-x-4 text-gray-400 text-sm mb-4">
+                    <div class="flex items-center space-x-4 text-gray-400 text-sm mb-4">
                         <span><i class="ri-thumb-up-line text-green-500"></i> 9.5</span>
                         <span>1.2 พันล้านวิว</span>
                         <span>2024</span>
-                    </div> -->
-                    <!-- END DELETION -->
+                    </div>
                     <p id="show-description" class="text-gray-300 line-clamp-3">...</p>
                 </div>
             </div>
