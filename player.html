@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeTV Clone - รับชม</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Remixicon Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        
+        /* 1. กล่องแม่ (Parent) - สร้างกรอบ 16:9 */
+        .video-aspect-wrapper {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            height: 0;
+            overflow: hidden;
+            background-color: #000;
+        }
+        
+        /* 2. กล่องลูก (Child) - ต้องเป็น Absolute เพื่อขยายเต็มกรอบแม่ */
+        #video-player-embed {
+            position: absolute; 
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%; 
+            background-color: #000;
+        }
+
+        /* 3. กล่องหลาน (Grandchild - ตัว Iframe) - ขยายเต็มกล่องลูก */
+        #video-player-embed iframe {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .ep-button.active { background-color: #00b87c; color: #fff; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+
+    <!-- Firebase SDK and Application Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, doc, getDoc, onSnapshot, collection, query, where, getDocs,
+            setLogLevel,
+            updateDoc, increment // (NEW) เพิ่ม updateDoc และ increment
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // (*** จำลอง Firebase Config เนื่องจาก Canvas ไม่ได้ให้ global vars มาในโหมดนี้ ***)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVXZUnw5oiTLqCG00GYdtPTwzOubCSe1o",
+            authDomain: "ani-end-94710.firebaseapp.com",
+            projectId: "ani-end-94710",
+            storageBucket: "ani-end-94710.firebasestorage.app",
+            messagingSenderId: "374608108501",
+            appId: "1:374608108501:web:19a4767c41a020bfb03b5c",
+            measurementId: "G-VZM1XTPMYL"
+        };
+        
+        
+        let db, auth, userId;
+        let currentShow = null;
+        let currentEpisodes = [];
+
+        // UI Elements
+        const playerEmbedDiv = document.getElementById('video-player-embed');
+        const showTitleEl = document.getElementById('show-title');
+        const showDescEl = document.getElementById('show-description');
+        const episodeListContainer = document.getElementById('episode-list-container');
+        const relatedListContainer = document.getElementById('related-list-container');
+        const loadingPlayer = document.getElementById('loading-player');
+        const playerContentWrapper = document.getElementById('player-content-wrapper');
+        
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig); 
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); 
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("User Authenticated (Anonymous):", userId);
+                        await loadContent(); // โหลดเนื้อหาหลัก
+                    } else {
+                        await signIn(); // ถ้ายังไม่ล็อกอิน ให้ล็อกอินก่อน
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+            }
+        }
+
+        async function signIn() {
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Sign In Error:", error);
+            }
+        }
+
+        // ฟังก์ชันช่วยสำหรับอ้างอิง Collection
+        function getCollectionRef(collectionName) {
+            const appId = firebaseConfig.projectId;
+            return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+        }
+
+        // โหลดเนื้อหา (ซีรีส์และตอน)
+        async function loadContent() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const showId = urlParams.get('id'); // ดึง ID จาก URL
+                
+                if (!showId) {
+                    playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบ ID ของซีรีส์</p>`;
+                    return;
+                }
+
+                // 1. ดึงข้อมูลซีรีส์
+                const showRef = doc(getCollectionRef("shows"), showId);
+                const showSnap = await getDoc(showRef);
+
+                if (!showSnap.exists()) {
+                    playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบข้อมูลซีรีส์</p>`;
+                    return;
+                }
+                
+                // (NEW) นับยอดวิว +1
+                // This update happens in the background and doesn't block page load
+                try {
+                    await updateDoc(showRef, {
+                        viewCount: increment(1)
+                    });
+                    console.log("View count incremented.");
+                } catch (viewError) {
+                    console.error("Error incrementing view count:", viewError);
+                }
+
+                currentShow = { id: showSnap.id, ...showSnap.data() };
+                renderShowDetails(currentShow);
+
+                // 2. ดึงข้อมูลตอนทั้งหมดของซีรีส์นี้
+                const episodesQuery = query(getCollectionRef("episodes"), where("showId", "==", showId));
+                const episodesSnapshot = await getDocs(episodesQuery);
+                
+                currentEpisodes = [];
+                episodesSnapshot.forEach((doc) => {
+                    currentEpisodes.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // 3. เรียงลำดับตอน
+                currentEpisodes.sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0));
+                
+                console.log(`Loaded ${currentEpisodes.length} episodes for ${currentShow.title}`);
+                
+                // 4. Render UI
+                renderEpisodeList(currentEpisodes);
+                renderRelatedList(currentShow.tags || []); 
+
+                // 5. เล่นตอนแรก (ถ้ามี)
+                if (currentEpisodes.length > 0) {
+                    playEpisode(currentEpisodes[0]);
+                } else {
+                    playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับซีรีส์นี้</p>`;
+                }
+                
+            } catch (error) {
+                console.error("Error loading content:", error);
+                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">เกิดข้อผิดพลาดในการโหลด</p>`;
+            } finally {
+                // ซ่อน Loading และแสดงเนื้อหา
+                loadingPlayer.classList.add('hidden');
+                playerContentWrapper.classList.remove('hidden');
+            }
+        }
+
+        // แสดงรายละเอียดซีรีส์
+        function renderShowDetails(show) {
+            showTitleEl.textContent = show.title;
+            showDescEl.textContent = show.description || "ไม่มีคำอธิบาย";
+        }
+
+        // แสดงปุ่มรายการตอน
+        function renderEpisodeList(episodes) {
+            episodeListContainer.innerHTML = ''; 
+            if (episodes.length === 0) {
+                episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่พบตอน</p>`;
+                return;
+            }
+            
+            episodes.forEach((ep, index) => {
+                const button = document.createElement('button');
+                button.className = "ep-button w-12 h-12 flex-shrink-0 bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200";
+                button.textContent = ep.episodeNumber || (index + 1);
+                button.dataset.episodeId = ep.id;
+                
+                button.addEventListener('click', () => {
+                    playEpisode(ep);
+                });
+                
+                episodeListContainer.appendChild(button);
+            });
+        }
+        
+        // แสดงรายการ "เรื่องแนะนำ"
+        async function renderRelatedList(tags) {
+            relatedListContainer.innerHTML = ''; 
+            if (!tags || tags.length === 0) {
+                 relatedListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่พบเรื่องแนะนำ</p>`;
+                 return;
+            }
+            
+            try {
+                // ค้นหาซีรีส์ที่มี tag ตรงกันอย่างน้อย 1 tag
+                const relatedQuery = query(getCollectionRef("shows"), where("tags", "array-contains-any", tags));
+                const querySnapshot = await getDocs(relatedQuery);
+                
+                let relatedShows = [];
+                querySnapshot.forEach((doc) => {
+                    if (doc.id !== currentShow.id) { // ไม่เอาเรื่องตัวเอง
+                        relatedShows.push({ id: doc.id, ...doc.data() });
+                    }
+                });
+                
+                // สุ่มและจำกัด 5 รายการ
+                relatedShows = relatedShows.sort(() => 0.5 - Math.random()).slice(0, 5);
+                
+                if(relatedShows.length === 0) {
+                    relatedListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่พบเรื่องแนะนำ</p>`;
+                    return;
+                }
+
+                relatedShows.forEach(show => {
+                    relatedListContainer.innerHTML += `
+                        <a href="player.html?id=${show.id}" class="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-700">
+                            <img src="${show.thumbnailUrl || 'https://placehold.co/160x90/333/fff?text=No+Img'}" alt="${show.title}" class="w-32 h-20 object-cover rounded-md flex-shrink-0">
+                            <div>
+                                <h4 class="font-medium text-white line-clamp-2">${show.title}</h4>
+                                <p class="text-sm text-gray-400 line-clamp-1">${show.description || ''}</p>
+                            </div>
+                        </a>
+                    `;
+                });
+
+            } catch (error) {
+                console.error("Error fetching related shows:", error);
+            }
+        }
+
+        // ฟังก์ชันเล่นวิดีโอ
+        function playEpisode(episode) {
+            console.log(`Playing: ${episode.title}`, episode.embedCode);
+            
+            playerEmbedDiv.innerHTML = ''; 
+            
+            if (episode.embedCode && episode.embedCode.trim().startsWith('http')) {
+                // กรณีเป็น URL (เช่น archive.org/embed/)
+                let videoUrlStr = episode.embedCode;
+
+                // พยายามเพิ่ม autoplay=1
+                try {
+                    const videoUrl = new URL(videoUrlStr);
+                    videoUrl.searchParams.set('autoplay', '1');
+                    videoUrlStr = videoUrl.href;
+                } catch (e) {
+                    console.warn("Could not parse URL to add autoplay, trying string append:", e);
+                    if (videoUrlStr.includes('?')) {
+                        videoUrlStr += '&autoplay=1';
+                    } else {
+                        videoUrlStr += '?autoplay=1';
+                    }
+                }
+
+                const iframe = document.createElement('iframe');
+                iframe.src = videoUrlStr; 
+                iframe.setAttribute('frameborder', '0');
+                iframe.setAttribute('allow', 'autoplay; fullscreen'); 
+                iframe.setAttribute('webkitallowfullscreen', 'true');
+                iframe.setAttribute('mozallowfullscreen', 'true');
+                iframe.setAttribute('allowfullscreen', 'true');
+                
+                playerEmbedDiv.appendChild(iframe);
+
+            } else if (episode.embedCode) {
+                // กรณีเป็น <iframe> tag (HTML string)
+                playerEmbedDiv.innerHTML = episode.embedCode;
+            } else {
+                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
+            }
+            
+            // อัปเดตชื่อเรื่องหลัก
+            showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
+            
+            // อัปเดตปุ่มที่ active
+            document.querySelectorAll('.ep-button').forEach(btn => {
+                if (btn.dataset.episodeId === episode.id) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebase(); 
+
+            // Logic การสลับ Tab (รายการตอน / เรื่องแนะนำ)
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const targetId = button.id.replace('tab-btn-', 'tab-content-');
+                    
+                    // อัปเดตสไตล์ปุ่ม Tab
+                    tabButtons.forEach(btn => {
+                        btn.classList.remove('text-white', 'border-green-500');
+                        btn.classList.add('text-gray-400', 'border-transparent');
+                    });
+                    button.classList.add('text-white', 'border-green-500');
+                    button.classList.remove('text-gray-400', 'border-transparent');
+                    
+                    // แสดง/ซ่อนเนื้อหา Tab
+                    tabContents.forEach(content => {
+                        if (content.id === targetId) {
+                            content.classList.add('active');
+                        } else {
+                            content.classList.remove('active');
+                        }
+                    });
+                });
+            });
+            
+            // ตั้งค่า Tab เริ่มต้น
+            document.getElementById('tab-btn-episodes').click();
+        });
+
+    </script>
+
+    <!-- Header -->
+    <header class="bg-gray-900/80 backdrop-blur-md sticky top-0 z-50">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo & Desktop Nav -->
+                <div class="flex items-center">
+                    <!-- (MODIFIED) ยืนยันว่าลิงก์เป็น index.html -->
+                    <a href="index.html" class="flex-shrink-0 flex items-center text-white">
+                        <span class="font-bold text-2xl">ANI-END</span>
+                    </a>
+                    <div class="hidden md:block">
+                        <div class="ml-10 flex items-baseline space-x-4">
+                            <a href="index.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                            
+                            <!-- (แก้ไข) เพิ่ม URL parameter '?page=' เพื่อระบุหน้าที่จะไป -->
+                            <a href="index.html?page=อนิเมะ" class="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                            <a href="index.html?page=อนิเมะจีน" class="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
+                            <a href="index.html?page=อนิเมะพากย์ไทย" class="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Player Content -->
+    <!-- Loading State -->
+    <div id="loading-player" class="flex items-center justify-center" style="min-height: 80vh;">
+        <p class="text-2xl text-gray-400">กำลังโหลดเนื้อหา...</p>
+    </div>
+    
+    <!-- Content (Hidden by default) -->
+    <div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
+        <div class="flex flex-col lg:flex-row gap-6">
+            
+            <!-- Left Side: Player & Info -->
+            <div class="flex-1 lg:w-2/3">
+                <!-- Responsive Video Player Wrapper -->
+                <div class="video-aspect-wrapper rounded-lg overflow-hidden mb-4">
+                    <div id="video-player-embed">
+                        <!-- Initial Loading state for player -->
+                        <div class="w-full h-full flex items-center justify-center bg-black">
+                            <p class="text-gray-400">กำลังโหลดวิดีโอ...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Show Info -->
+                <div class="text-white">
+                    <h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
+                    <div class="flex items-center space-x-4 text-gray-400 text-sm mb-4">
+                        <span><i class="ri-thumb-up-line text-green-500"></i> 9.5</span>
+                        <span>1.2 พันล้านวิว</span>
+                        <span>2024</span>
+                    </div>
+                    <p id="show-description" class="text-gray-300 mb-4 line-clamp-3">...</p>
+                </div>
+            </div>
+            
+            <!-- Right Side: Playlist & Related -->
+            <aside class="w-full lg:w-1/3 lg:max-w-md flex-shrink-0">
+                <div class="bg-gray-800 rounded-lg overflow-hidden">
+                    <!-- Tabs -->
+                    <div class="flex border-b border-gray-700">
+                        <button id="tab-btn-episodes" class="tab-button flex-1 text-white border-b-2 border-green-500 py-3 px-4 text-center font-medium transition-colors duration-200">
+                            รายการตอน
+                        </button>
+                        <button id="tab-btn-related" class="tab-button flex-1 text-gray-400 border-b-2 border-transparent hover:text-white py-3 px-4 text-center font-medium transition-colors duration-200">
+                            เรื่องแนะนำ
+                        </button>
+                    </div>
+                    
+                    <!-- Tab Content: Episodes -->
+                    <div id="tab-content-episodes" class="tab-content active p-4 max-h-96 overflow-y-auto">
+                        <div id="episode-list-container" class="flex flex-wrap gap-2">
+                            <!-- Episode buttons injected by JS -->
+                            <p class="text-gray-400">กำลังโหลดตอน...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab Content: Related -->
+                    <div id="tab-content-related" class="tab-content p-4 max-h-96 overflow-y-auto">
+                        <div id="related-list-container" class="flex flex-col space-y-3">
+                            <!-- Related videos injected by JS -->
+                            <p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+            
+        </div>
+    </div>
+    
+</body>
+</html>

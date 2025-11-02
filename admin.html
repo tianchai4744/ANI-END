@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANI-END Admin Panel</title> 
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <style>
+        body { 
+            background-color: #1f2937; /* gray-800 */
+            color: #f3f4f6; /* gray-100 */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+        }
+        .modal { display: none; }
+        .modal.flex { display: flex; }
+    </style>
+</head>
+<body class="text-gray-100">
+
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, onAuthStateChanged, 
+            signInWithEmailAndPassword, signOut, signInAnonymously, signInWithCustomToken
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, 
+            onSnapshot, collection, query, serverTimestamp,
+            setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        
+        // (FIX) บังคับให้ใช้ config ของ ani-end-94710 เพื่อแก้ปัญหา auth/operation-not-allowed
+        // โดยไม่สนใจ __firebase_config ที่อาจมาจากสภาพแวดล้อม
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVXZUnw5oiTLqCG00GYdtPTwzOubCSe1o",
+            authDomain: "ani-end-94710.firebaseapp.com",
+            projectId: "ani-end-94710",
+            storageBucket: "ani-end-94710.firebasestorage.app",
+            messagingSenderId: "374608108501",
+            appId: "1:374608108501:web:19a4767c41a020bfb03b5c",
+            measurementId: "G-VZM1XTPMYL"
+        };
+        
+        // (FIX) บังคับให้ใช้ projectId จาก config ที่ถูกต้อง
+        const appId = firebaseConfig.projectId;
+
+
+        let db, auth, userId;
+        let shows = []; // เก็บข้อมูลซีรีส์ทั้งหมด
+        let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
+
+        // UI Elements
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const loginView = document.getElementById('login-view');
+        const mainContent = document.getElementById('main-content');
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+        const logoutButton = document.getElementById('logout-button');
+        
+        const episodeListView = document.getElementById('episode-list-view');
+        const showListView = document.getElementById('show-list-view');
+        const bannerListView = document.getElementById('banner-list-view'); // (NEW)
+        const episodeTableBody = document.getElementById('episode-table-body');
+        const showTableBody = document.getElementById('show-table-body');
+        const bannerTableBody = document.getElementById('banner-table-body'); // (NEW)
+        
+        const showEpisodeListBtn = document.getElementById('show-episode-list-btn');
+        const showShowListBtn = document.getElementById('show-show-list-btn');
+        const showBannerListBtn = document.getElementById('show-banner-list-btn'); // (NEW)
+
+        // Modal: Episode
+        const episodeModal = document.getElementById('episode-modal');
+        const episodeModalTitle = document.getElementById('episode-modal-title');
+        const episodeForm = document.getElementById('episode-form');
+        const episodeTitleInput = document.getElementById('episode-title');
+        const episodeNumberInput = document.getElementById('episode-number');
+        const episodeEmbedInput = document.getElementById('episode-embed-code');
+        const episodeShowSelect = document.getElementById('episode-show-select');
+        const closeEpisodeModalBtn = document.getElementById('close-episode-modal');
+        const addEpisodeBtn = document.getElementById('add-episode-btn');
+        const deleteEpisodeBtn = document.getElementById('delete-episode-btn');
+
+        // Modal: Show
+        const showModal = document.getElementById('show-modal');
+        const showModalTitle = document.getElementById('show-modal-title');
+        const showForm = document.getElementById('show-form');
+        const showTitleInput = document.getElementById('show-title');
+        const showDescInput = document.getElementById('show-description');
+        const showThumbnailInput = document.getElementById('show-thumbnail');
+        const showViewCountInput = document.getElementById('show-view-count'); // (NEW)
+        const closeShowModalBtn = document.getElementById('close-show-modal');
+        const addShowBtn = document.getElementById('add-show-btn');
+        const deleteShowBtn = document.getElementById('delete-show-btn');
+
+        // (NEW) Modal: Banner
+        const bannerModal = document.getElementById('banner-modal');
+        const bannerModalTitle = document.getElementById('banner-modal-title');
+        const bannerForm = document.getElementById('banner-form');
+        const bannerShowSelect = document.getElementById('banner-show-select');
+        const bannerImageUrlInput = document.getElementById('banner-image-url');
+        const closeBannerModalBtn = document.getElementById('close-banner-modal');
+        const addBannerBtn = document.getElementById('add-banner-btn');
+        const deleteBannerBtn = document.getElementById('delete-banner-btn');
+
+
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); 
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user && user.email) {
+                        // Admin Login
+                        userId = user.uid;
+                        console.log("Admin Authenticated:", userId, user.email);
+                        showMainContent();
+                        await setupListeners(); 
+                    } else if (user) {
+                        // Possibly anonymous user from other pages, sign them out
+                        await signOut(auth);
+                        console.log("Anonymous user signed out, showing admin login.");
+                        showLoginView();
+                    } else {
+                         // (REMOVED) Token check, as admin should only use Email/Pass
+                         console.log("No admin user. Showing login form.");
+                         showLoginView();
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                loadingIndicator.textContent = "Error initializing app. Check console.";
+            }
+        }
+
+        function showLoginView() {
+            loadingIndicator.classList.add('hidden');
+            mainContent.classList.add('hidden');
+            loginView.classList.remove('hidden');
+        }
+
+        function showMainContent() {
+            loginView.classList.add('hidden');
+            mainContent.classList.remove('hidden');
+            loadingIndicator.classList.add('hidden');
+        }
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            loginError.textContent = '';
+            
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                // onAuthStateChanged จะจัดการซ่อน/แสดงหน้าเอง
+            } catch (error) {
+                console.error("Login Error:", error.code);
+                loginError.textContent = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+            }
+        });
+        
+        logoutButton.addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                // onAuthStateChanged จะจัดการซ่อน/แสดงหน้าเอง
+            } catch (error) {
+                console.error("Logout Error:", error);
+            }
+        });
+
+        
+        function getCollectionRef(collectionName) {
+            
+            return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+        }
+
+        async function setupListeners() {
+            // 1. Listen to Shows (ซีรีส์)
+            const showQuery = query(getCollectionRef("shows"));
+            onSnapshot(showQuery, (snapshot) => {
+                shows = [];
+                showTableBody.innerHTML = '';
+                const showSelectHtml = '<option value="">-- เลือกซีรีส์ --</option>';
+                
+                let episodeOptions = showSelectHtml;
+                let bannerOptions = showSelectHtml; // (NEW)
+
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    shows.push({ id: doc.id, ...data });
+                    
+                    showTableBody.innerHTML += `
+                        <tr class="border-b border-gray-700 hover:bg-gray-700">
+                            <td class="py-3 px-4">
+                                <img src="${data.thumbnailUrl || 'https://placehold.co/100x60/333/fff?text=No+Img'}" alt="thumb" class="w-24 h-14 object-cover rounded">
+                            </td>
+                            <td class="py-3 px-4">${data.title}</td>
+                            <td class="py-3 px-4 text-sm">${(data.tags || []).join(', ')}</td>
+                            <td class="py-3 px-4">
+                                <button class="text-green-400 hover:text-green-300 edit-show-btn" data-id="${doc.id}">แก้ไข</button>
+                            </td>
+                        </tr>
+                    `;
+                    const option = `<option value="${doc.id}">${data.title}</option>`;
+                    episodeOptions += option;
+                    bannerOptions += option; // (NEW)
+                });
+                
+                episodeShowSelect.innerHTML = episodeOptions;
+                bannerShowSelect.innerHTML = bannerOptions; // (NEW)
+
+                console.log("Shows loaded:", shows.length);
+            }, (error) => console.error("Error listening to shows:", error));
+
+            // 2. Listen to Episodes (ตอน)
+            const episodeQuery = query(getCollectionRef("episodes"));
+            onSnapshot(episodeQuery, (snapshot) => {
+                episodeTableBody.innerHTML = '';
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const show = shows.find(s => s.id === data.showId); // หาชื่อเรื่องจาก ID
+                    
+                    episodeTableBody.innerHTML += `
+                        <tr class="border-b border-gray-700 hover:bg-gray-700">
+                            <td class="py-3 px-4 text-sm">${data.episodeNumber || '-'}</td>
+                            <td class="py-3 px-4">${data.title}</td>
+                            <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
+                            <td class="py-3 px-4">
+                                <button class="text-green-400 hover:text-green-300 edit-episode-btn" data-id="${doc.id}">แก้ไข</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                console.log("Episodes loaded:", snapshot.size);
+            }, (error) => console.error("Error listening to episodes:", error));
+
+            // (NEW) 3. Listen to Banners
+            const bannerQuery = query(getCollectionRef("banners"));
+            onSnapshot(bannerQuery, (snapshot) => {
+                bannerTableBody.innerHTML = '';
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const show = shows.find(s => s.id === data.showId);
+                    
+                    bannerTableBody.innerHTML += `
+                        <tr class="border-b border-gray-700 hover:bg-gray-700">
+                            <td class="py-3 px-4">
+                                <img src="${data.bannerImageUrl || 'https://placehold.co/150x50/333/fff?text=No+Img'}" alt="banner" class="w-36 h-12 object-cover rounded">
+                            </td>
+                            <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
+                            <td class="py-3 px-4">
+                                <button class="text-green-400 hover:text-green-300 edit-banner-btn" data-id="${doc.id}">แก้ไข</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                console.log("Banners loaded:", snapshot.size);
+            }, (error) => console.error("Error listening to banners:", error));
+        }
+
+        // --- Navigation (สลับหน้า) ---
+        function switchView(viewId) {
+            episodeListView.classList.add('hidden');
+            showListView.classList.add('hidden');
+            bannerListView.classList.add('hidden'); // (NEW)
+
+            showEpisodeListBtn.classList.remove('bg-gray-900', 'text-white');
+            showShowListBtn.classList.remove('bg-gray-900', 'text-white');
+            showBannerListBtn.classList.remove('bg-gray-900', 'text-white'); // (NEW)
+
+            if (viewId === 'episode') {
+                episodeListView.classList.remove('hidden');
+                showEpisodeListBtn.classList.add('bg-gray-900', 'text-white');
+            } else if (viewId === 'show') {
+                showListView.classList.remove('hidden');
+                showShowListBtn.classList.add('bg-gray-900', 'text-white');
+            } else if (viewId === 'banner') {
+                bannerListView.classList.remove('hidden');
+                showBannerListBtn.classList.add('bg-gray-900', 'text-white');
+            }
+        }
+        showEpisodeListBtn.addEventListener('click', () => switchView('episode'));
+        showShowListBtn.addEventListener('click', () => switchView('show'));
+        showBannerListBtn.addEventListener('click', () => switchView('banner')); // (NEW)
+
+
+        // --- Show (ซีรีส์) Modal Logic ---
+        function openShowModal(mode, showData = {}, showId = null) {
+            currentEditingId = showId;
+            if (mode === 'add') {
+                showModalTitle.textContent = "เพิ่มเรื่องใหม่";
+                showForm.reset();
+                showViewCountInput.value = 0; // (NEW)
+                document.querySelectorAll('.show-tag-option').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                deleteShowBtn.classList.add('hidden');
+            } else {
+                showModalTitle.textContent = "แก้ไขเรื่อง";
+                showTitleInput.value = showData.title || '';
+                showDescInput.value = showData.description || '';
+                showThumbnailInput.value = showData.thumbnailUrl || '';
+                showViewCountInput.value = showData.viewCount || 0; // (NEW)
+                
+                const tags = showData.tags || [];
+                document.querySelectorAll('.show-tag-option').forEach(checkbox => {
+                    checkbox.checked = tags.includes(checkbox.value);
+                });
+
+                deleteShowBtn.classList.remove('hidden');
+            }
+            showModal.classList.add('flex');
+        }
+        addShowBtn.addEventListener('click', () => openShowModal('add'));
+        closeShowModalBtn.addEventListener('click', () => showModal.classList.remove('flex'));
+        
+        showForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            let tagsArray = [];
+            document.querySelectorAll('.show-tag-option:checked').forEach(checkbox => {
+                tagsArray.push(checkbox.value);
+            });
+            if (tagsArray.length === 0) {
+                tagsArray.push('อนิเมะ');
+            }
+
+            const showData = {
+                title: showTitleInput.value,
+                description: showDescInput.value,
+                thumbnailUrl: showThumbnailInput.value,
+                viewCount: parseInt(showViewCountInput.value, 10) || 0, // (NEW)
+                tags: tagsArray,
+                updatedAt: serverTimestamp()
+            };
+
+            try {
+                if (currentEditingId) {
+                    const docRef = doc(getCollectionRef("shows"), currentEditingId);
+                    await updateDoc(docRef, showData);
+                } else {
+                    showData.createdAt = serverTimestamp();
+                    showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; // (NEW) ตรวจสอบว่ามีค่าตอนสร้าง
+                    await addDoc(getCollectionRef("shows"), showData);
+                }
+                showForm.reset();
+                showModal.classList.remove('flex');
+            } catch (error) {
+                console.error("Error saving show: ", error);
+            }
+        });
+        
+        deleteShowBtn.addEventListener('click', async () => {
+            if (!currentEditingId) return;
+            console.log("Deleting show... (In real app, use a custom confirm modal)");
+            try {
+                await deleteDoc(doc(getCollectionRef("shows"), currentEditingId));
+                showModal.classList.remove('flex');
+            } catch (error) {
+                console.error("Error deleting show: ", error);
+            }
+        });
+
+        showTableBody.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('edit-show-btn')) {
+                const showId = e.target.dataset.id;
+                try {
+                    const docRef = doc(getCollectionRef("shows"), showId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        openShowModal('edit', docSnap.data(), showId);
+                    }
+                } catch (error) {
+                    console.error("Error fetching show for edit:", error);
+                }
+            }
+        });
+
+        // --- Episode (ตอน) Modal Logic ---
+        function openEpisodeModal(mode, episodeData = {}, episodeId = null) {
+            currentEditingId = episodeId;
+            if (mode === 'add') {
+                episodeModalTitle.textContent = "เพิ่มตอนใหม่";
+                episodeForm.reset();
+                deleteEpisodeBtn.classList.add('hidden');
+            } else {
+                episodeModalTitle.textContent = "แก้ไขตอน";
+                episodeTitleInput.value = episodeData.title || '';
+                episodeNumberInput.value = episodeData.episodeNumber || '';
+                episodeEmbedInput.value = episodeData.embedCode || '';
+                episodeShowSelect.value = episodeData.showId || '';
+                deleteEpisodeBtn.classList.remove('hidden');
+            }
+            episodeModal.classList.add('flex');
+        }
+        addEpisodeBtn.addEventListener('click', () => openEpisodeModal('add'));
+        closeEpisodeModalBtn.addEventListener('click', () => episodeModal.classList.remove('flex'));
+        
+        episodeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const episodeData = {
+                title: episodeTitleInput.value,
+                episodeNumber: parseInt(episodeNumberInput.value, 10) || 0,
+                embedCode: episodeEmbedInput.value, 
+                showId: episodeShowSelect.value,
+                updatedAt: serverTimestamp()
+            };
+
+            if (!episodeData.showId) {
+                console.error("Please select a show.");
+                return;
+            }
+
+            try {
+                if (currentEditingId) {
+                    const docRef = doc(getCollectionRef("episodes"), currentEditingId);
+                    await updateDoc(docRef, episodeData);
+                } else {
+                    episodeData.createdAt = serverTimestamp();
+                    await addDoc(getCollectionRef("episodes"), episodeData);
+                }
+                episodeForm.reset();
+                episodeModal.classList.remove('flex');
+            } catch (error) {
+                console.error("Error saving episode: ", error);
+            }
+        });
+        
+        deleteEpisodeBtn.addEventListener('click', async () => {
+            if (!currentEditingId) return;
+            console.log("Deleting episode... (In real app, use a custom confirm modal)");
+            try {
+                await deleteDoc(doc(getCollectionRef("episodes"), currentEditingId));
+                episodeModal.classList.remove('flex');
+            } catch (error) {
+                console.error("Error deleting episode: ", error);
+            }
+        });
+        
+        episodeTableBody.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('edit-episode-btn')) {
+                const episodeId = e.target.dataset.id;
+                try {
+                    const docRef = doc(getCollectionRef("episodes"), episodeId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        openEpisodeModal('edit', docSnap.data(), episodeId);
+                    }
+                } catch (error) {
+                    console.error("Error fetching episode for edit:", error);
+                }
+            }
+        });
+
+        // (NEW) --- Banner Modal Logic ---
+        function openBannerModal(mode, bannerData = {}, bannerId = null) {
+            currentEditingId = bannerId;
+            if (mode === 'add') {
+                bannerModalTitle.textContent = "เพิ่มแบนเนอร์ใหม่";
+                bannerForm.reset();
+                deleteBannerBtn.classList.add('hidden');
+            } else {
+                bannerModalTitle.textContent = "แก้ไขแบนเนอร์";
+                bannerShowSelect.value = bannerData.showId || '';
+                bannerImageUrlInput.value = bannerData.bannerImageUrl || '';
+                deleteBannerBtn.classList.remove('hidden');
+            }
+            bannerModal.classList.add('flex');
+        }
+        addBannerBtn.addEventListener('click', () => openBannerModal('add'));
+        closeBannerModalBtn.addEventListener('click', () => bannerModal.classList.remove('flex'));
+
+        bannerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const bannerData = {
+                showId: bannerShowSelect.value,
+                bannerImageUrl: bannerImageUrlInput.value,
+                updatedAt: serverTimestamp()
+            };
+
+            if (!bannerData.showId || !bannerData.bannerImageUrl) {
+                console.error("Please select a show and provide an image URL.");
+                return;
+            }
+
+            try {
+                if (currentEditingId) {
+                    const docRef = doc(getCollectionRef("banners"), currentEditingId);
+                    await updateDoc(docRef, bannerData);
+                } else {
+                    bannerData.createdAt = serverTimestamp();
+                    await addDoc(getCollectionRef("banners"), bannerData);
+                }
+                bannerForm.reset();
+                bannerModal.classList.remove('flex');
+            } catch (error) {
+                console.error("Error saving banner: ", error);
+            }
+        });
+
+        deleteBannerBtn.addEventListener('click', async () => {
+            if (!currentEditingId) return;
+            console.log("Deleting banner... (In real app, use a custom confirm modal)");
+            try {
+                await deleteDoc(doc(getCollectionRef("banners"), currentEditingId));
+                bannerModal.classList.remove('flex');
+            } catch (error) {
+                console.error("Error deleting banner: ", error);
+            }
+        });
+
+        bannerTableBody.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('edit-banner-btn')) {
+                const bannerId = e.target.dataset.id;
+                try {
+                    const docRef = doc(getCollectionRef("banners"), bannerId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        openBannerModal('edit', docSnap.data(), bannerId);
+                    }
+                } catch (error) {
+                    console.error("Error fetching banner for edit:", error);
+                }
+            }
+        });
+
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            episodeNumberInput.addEventListener('input', () => {
+                const epNumber = episodeNumberInput.value;
+                if (epNumber) {
+                    episodeTitleInput.value = `ตอนที่ ${epNumber}`;
+                } else {
+                    episodeTitleInput.value = '';
+                }
+            });
+            
+            initializeFirebase();
+        });
+
+    </script>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" class="flex items-center justify-center min-h-screen">
+        <p class="text-2xl text-gray-400">กำลังโหลดแผงควบคุม...</p>
+    </div>
+
+    <!-- Login View -->
+    <div id="login-view" class="hidden flex items-center justify-center min-h-screen">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-sm">
+            <h2 class="text-3xl font-bold text-white text-center mb-6">Admin Login</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-300 mb-1">Email</label>
+                    <input type="email" id="login-email" required class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-300 mb-1">Password</label>
+                    <input type="password" id="login-password" required class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+                <p id="login-error" class="text-red-400 text-sm text-center"></p>
+                <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg">
+                    ล็อกอิน
+                </button>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- Main Admin Content -->
+    <div id="main-content" class="hidden">
+
+        <!-- Admin Header -->
+        <header class="bg-gray-800 shadow-md">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                <!-- (MODIFIED) Logo link -->
+                <a href="admin.html" class="text-2xl font-bold text-white">ANI-END Admin Panel</a>
+                <button id="logout-button" class="text-gray-300 hover:text-white text-sm font-medium">
+                    <i class="ri-logout-box-r-line mr-1"></i>
+                    ล็อกเอาต์
+                </button>
+            </div>
+        </header>
+
+        <!-- Sidebar Navigation -->
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 flex">
+            <aside class="w-48 flex-shrink-0">
+                <nav class="flex flex-col space-y-2">
+                    <!-- (NEW) Banner Button -->
+                    <button id="show-banner-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium">
+                        <i class="ri-image-line"></i>
+                        <span>แบนเนอร์</span>
+                    </button>
+                    <button id="show-episode-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg bg-gray-900 text-white font-medium">
+                        <i class="ri-movie-2-line"></i>
+                        <span>ตอน (Episodes)</span>
+                    </button>
+                    <button id="show-show-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium">
+                        <i class="ri-play-list-line"></i>
+                        <span>เรื่อง</span>
+                    </button>
+                </nav>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="flex-1 ml-8">
+
+                <!-- (NEW) Banner List View -->
+                <div id="banner-list-view" class="hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-white">รายการแบนเนอร์</h2>
+                        <button id="add-banner-btn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                            <i class="ri-add-line"></i>
+                            <span>เพิ่มแบนเนอร์</span>
+                        </button>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                        <table class="w-full">
+                            <thead class="bg-gray-900">
+                                <tr>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">รูปแบนเนอร์</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่องที่ลิงก์</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="banner-table-body" class="divide-y divide-gray-700">
+                                <!-- Data injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Episode List View -->
+                <div id="episode-list-view">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-white">รายการตอน</h2>
+                        <button id="add-episode-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                            <i class="ri-add-line"></i>
+                            <span>เพิ่มตอน</span>
+                        </button>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                        <table class="w-full">
+                            <thead class="bg-gray-900">
+                                <tr>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ตอนที่</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อตอน</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="episode-table-body" class="divide-y divide-gray-700">
+                                <!-- Data injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Show List View -->
+                <div id="show-list-view" class="hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-white">รายการเรื่อง</h2>
+                        <button id="add-show-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                            <i class="ri-add-line"></i>
+                            <span>เพิ่มเรื่อง</span>
+                        </button>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                        <table class="w-full">
+                            <thead class="bg-gray-900">
+                                <tr>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ปก</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อเรื่อง</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
+                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="show-table-body" class="divide-y divide-gray-700">
+                                <!-- Data injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+
+    <!-- Modal for Adding/Editing Episode -->
+    <div id="episode-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <form id="episode-form">
+                <div class="flex justify-between items-center p-5 border-b border-gray-700">
+                    <h3 id="episode-modal-title" class="text-2xl font-bold text-white">เพิ่มตอนใหม่</h3>
+                    <button type="button" id="close-episode-modal" class="text-gray-400 hover:text-white">
+                        <i class="ri-close-line text-2xl"></i>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label for="episode-show-select" class="block text-sm font-medium text-gray-300 mb-1">เรื่อง *</label>
+                        <select id="episode-show-select" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                            <option value="">-- เลือกเรื่อง --</option>
+                            <!-- Options injected by JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label for="episode-number" class="block text-sm font-medium text-gray-300 mb-1">ตอนที่ (Episode Number) *</label>
+                        <input type="number" id="episode-number" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                    </div>
+                    <div>
+                        <label for="episode-title" class="block text-sm font-medium text-gray-300 mb-1">ชื่อตอน (Title) *</label>
+                        <input type="text" id="episode-title" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="เช่น ตอนที่ 1: การเริ่มต้น" required>
+                    </div>
+                    
+                    <div>
+                        <label for="episode-embed-code" class="block text-sm font-medium text-gray-300 mb-1">ลิงก์วิดีโอ (URL) หรือ Embed Code *</label>
+                        <textarea id="episode-embed-code" rows="4" placeholder="https://archive.org/embed/... หรือ <iframe ...></iframe>" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
+                    </div>
+
+                </div>
+                <div class="flex items-center justify-between p-5 border-t border-gray-700">
+                    <button type="button" id="delete-episode-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg hidden">
+                        ลบตอน
+                    </button>
+                    <button type="submit" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg">
+                        บันทึก
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Adding/Editing Show -->
+    <div id="show-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <form id="show-form">
+                <div class="flex justify-between items-center p-5 border-b border-gray-700">
+                    <h3 id="show-modal-title" class="text-2xl font-bold text-white">เพิ่มซีรีส์ใหม่</h3>
+                    <button type="button" id="close-show-modal" class="text-gray-400 hover:text-white">
+                        <i class="ri-close-line text-2xl"></i>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label for="show-title" class="block text-sm font-medium text-gray-300 mb-1">ชื่อเรื่อง (Title) *</label>
+                        <input type="text" id="show-title" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label for="show-description" class="block text-sm font-medium text-gray-300 mb-1">คำอธิบาย (Description)</label>
+                        <textarea id="show-description" rows="3" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div>
+                        <label for="show-thumbnail" class="block text-sm font-medium text-gray-300 mb-1">URL รูปปก (Thumbnail) *</label>
+                        <input type="url" id="show-thumbnail" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    
+                    <!-- (NEW) View Count Input -->
+                    <div>
+                        <label for="show-view-count" class="block text-sm font-medium text-gray-300 mb-1">ยอดเข้าชม (View Count)</label>
+                        <input type="number" id="show-view-count" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="0">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Tags</label>
+                        <div class="flex flex-wrap gap-x-6 gap-y-2 mt-2">
+                            <label class="flex items-center space-x-2 text-gray-200">
+                                <input type="checkbox" value="อนิเมะ" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
+                                <span>อนิเมะ</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-200">
+                                <input type="checkbox" value="อนิเมะจีน" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
+                                <span>อนิเมะจีน</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-200">
+                                <input type="checkbox" value="อนิเมะพากย์ไทย" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
+                                <span>อนิเมะพากย์ไทย</span>
+                            </label>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="flex items-center justify-between p-5 border-t border-gray-700">
+                    <button type="button" id="delete-show-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg hidden">
+                        ลบเรื่อง
+                    </button>
+                    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg">
+                        บันทึก
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- (NEW) Modal for Adding/Editing Banner -->
+    <div id="banner-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <form id="banner-form">
+                <div class="flex justify-between items-center p-5 border-b border-gray-700">
+                    <h3 id="banner-modal-title" class="text-2xl font-bold text-white">เพิ่มแบนเนอร์ใหม่</h3>
+                    <button type="button" id="close-banner-modal" class="text-gray-400 hover:text-white">
+                        <i class="ri-close-line text-2xl"></i>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label for="banner-show-select" class="block text-sm font-medium text-gray-300 mb-1">เรื่อง (Show) *</label>
+                        <select id="banner-show-select" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500" required>
+                            <option value="">-- เลือกเรื่องที่จะลิงก์ --</option>
+                            <!-- Options injected by JS from shows -->
+                        </select>
+                    </div>
+                    <div>
+                        <label for="banner-image-url" class="block text-sm font-medium text-gray-300 mb-1">URL รูปแบนเนอร์ (ขนาด 10:3) *</label>
+                        <input type="url" id="banner-image-url" placeholder="https://.../banner_image.jpg" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500" required>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between p-5 border-t border-gray-700">
+                    <button type="button" id="delete-banner-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg hidden">
+                        ลบแบนเนอร์
+                    </button>
+                    <button type="submit" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg">
+                        บันทึก
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</body>
+</html>
