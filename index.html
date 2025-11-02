@@ -141,7 +141,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, setLogLevel,
-            limit, orderBy, where, startAfter, getDocs // (MODIFIED) เพิ่ม where, startAfter, getDocs
+            limit, orderBy, where, startAfter, getDocs 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config เนื่องจาก Canvas ไม่ได้ให้ global vars มาในโหมดนี้ ***)
@@ -164,11 +164,10 @@
         let currentPageId = 'home'; 
         let heroSwiperInstance = null; // ตัวแปรสำหรับ Swiper
         
-        // (NEW) State for Grid View Pagination
+        // (MODIFIED) State for Grid View Pagination (Client-Side Paging)
         let currentGridTag = null; 
-        let lastVisibleDoc = null; 
-        let hasMoreShows = true;
-        let loadedShowIds = new Set(); // (NEW) ใช้ Set เพื่อติดตาม ID ที่โหลดแล้ว (สำหรับหลีกเลี่ยงรายการซ้ำ)
+        let gridFilteredShows = []; // (NEW) All matching shows for the current tag
+        let currentRenderedIndex = 0; // (NEW) The index up to which shows have been rendered
 
         const homeView = document.getElementById('home-view');
         const gridViewContainer = document.getElementById('grid-view-container');
@@ -195,8 +194,6 @@
                     if (user) {
                         userId = user.uid;
                         console.log("User Authenticated (Anonymous):", userId);
-                        // ไม่ต้องเรียก setupListeners ทันที เพราะเราต้องการให้ Carousel แสดงผลจากข้อมูลที่มีอยู่ก่อน
-                        // และ Grid View จะโหลดเมื่อมีการคลิก
                         await setupListeners();
                     } else {
                         console.log("No user signed in. Attempting sign in...");
@@ -224,7 +221,6 @@
 
         async function setupListeners() {
             // 1. Listener for Shows (ยังคงใช้ onSnapshot เพื่ออัพเดท allShows สำหรับ Carousel/Search)
-            // แต่จะไม่ใช้ allShows สำหรับ Grid View ที่มีการแบ่งหน้าแล้ว
             const showsQuery = query(getCollectionRef("shows"));
             onSnapshot(showsQuery, (snapshot) => {
                 allShows = [];
@@ -245,11 +241,8 @@
                 } else if (currentPageId === 'search-results') {
                     console.log("Snapshot update: on SEARCH page, re-rendering nav");
                     renderDynamicNav('search-results'); 
-                    // Search results logic might need re-run if underlying data changed significantly
                 } else if (currentGridTag && currentPageId !== 'home') {
-                    // หากมีการอัพเดทข้อมูลในขณะที่ Grid View เปิดอยู่
-                    // เราจะแสดงผล Grid View ใหม่เฉพาะรายการที่โหลดมาล่าสุด (ไม่จำเป็นต้องโหลดใหม่ทั้งหมด)
-                    // แต่เพื่อความง่ายในการจัดการ state ของ pagination, เราจะพยายามโหลด Grid View ใหม่จากหน้าแรก
+                    // หากมีการอัพเดทข้อมูลในขณะที่ Grid View เปิดอยู่ ให้ re-initialize การแบ่งหน้า
                     console.log("Snapshot update: re-initializing Grid View for", currentGridTag);
                     renderDynamicNav(currentGridTag);
                     renderGridView(currentGridTag); 
@@ -473,114 +466,82 @@
             `;
         }
         
-        // (NEW) Function to load shows with pagination from Firestore
-        async function loadShowsByTag(tag, append = false) {
+        // (NEW) Function to initialize client-side pagination for Grid View
+        function initializeGridPaging(tag) {
             currentGridTag = tag;
-            const showsRef = getCollectionRef("shows");
-            
             gridViewTitle.textContent = tag;
-            if (!append) {
-                // Clear state and content for new query
-                lastVisibleDoc = null;
-                hasMoreShows = true;
-                loadedShowIds.clear(); // (NEW) Clear loaded IDs
-                gridViewContent.innerHTML = '';
-                loadMoreButton.classList.add('hidden');
-                gridViewContainer.style.display = 'block'; // Make sure container is visible
-                
-                // Show loading indicator when starting a new query
-                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">กำลังโหลดรายการแรก...</p>`;
-            }
             
-            if (!hasMoreShows && append) {
-                console.log("No more shows to load for tag:", tag);
+            // 1. Filter and Sort all shows on the client side (since we cannot rely on Firestore indexes)
+            gridFilteredShows = allShows
+                .filter(s => (s.tags || []).includes(tag))
+                .sort((a, b) => (a.title || "").localeCompare(b.title || "")); // Sort by title for consistency
+
+            currentRenderedIndex = 0; // Start rendering from the first item
+            gridViewContent.innerHTML = '';
+            loadMoreButton.classList.add('hidden');
+            gridViewContainer.style.display = 'block';
+            
+            // Show loading text momentarily
+            gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">กำลังจัดเรียงและโหลดรายการ...</p>`;
+
+            // 2. Render the first page
+            appendNextPage();
+
+            // 3. Ensure layout is correct
+            gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
+        }
+
+        // (NEW) Function to append the next page of shows
+        function appendNextPage() {
+            if (currentRenderedIndex >= gridFilteredShows.length) {
                 loadMoreButton.classList.add('hidden');
                 return;
             }
             
-            // Hide "Load More" button while loading
-            if (loadMoreButton) loadMoreButton.disabled = true;
-
-            // 1. Build the Query
-            let showsQuery = query(
-                showsRef, 
-                where("tags", "array-contains", tag),
-                // (REMOVED) orderBy("title") เพื่อแก้ไข Index Error
-                limit(PAGINATION_LIMIT)
-            );
-
-            // (REMOVED) startAfter(lastVisibleDoc) เพื่อแก้ไข Index Error
-            // หากต้องการ pagination ที่แม่นยำ ต้องมี orderBy ซึ่งจะบังคับให้สร้าง Index 
-            // ในที่นี้ เราเลี่ยง Index โดยการไม่ใช้ startAfter/orderBy แต่จะใช้ limit และดึง ID มากรองซ้ำใน client-side
+            const startIndex = currentRenderedIndex;
+            const endIndex = Math.min(currentRenderedIndex + PAGINATION_LIMIT, gridFilteredShows.length);
+            const showsToRender = gridFilteredShows.slice(startIndex, endIndex);
             
-            try {
-                const snapshot = await getDocs(showsQuery);
-                let showDocs = snapshot.docs;
-                
-                // 3. Process Results (Client-side filtering to avoid duplication, though order is not guaranteed)
-                let newShows = [];
-                showDocs.forEach((doc) => {
-                    if (!loadedShowIds.has(doc.id)) { // (NEW) Check for duplication
-                        newShows.push(doc.data());
-                        loadedShowIds.add(doc.id);
-                    }
-                });
+            // Hide button temporarily while rendering (even though it's fast)
+            loadMoreButton.disabled = true;
 
-                // (NEW) Sort shows by title on the client-side for better user experience (optional but recommended)
-                newShows.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-                
-                // 4. Render new shows
-                if (!append) {
-                    gridViewContent.innerHTML = ''; // Clear loading indicator/previous content
-                }
-                
-                if (newShows.length === 0 && loadedShowIds.size === 0) { // Check if no shows were ever loaded
-                    gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบซีรีส์สำหรับ "${tag}"</p>`;
-                    hasMoreShows = false;
-                } else {
-                    newShows.forEach((show) => {
-                        gridViewContent.innerHTML += createContentCard(show);
-                    });
-                    
-                    // 5. Update Pagination State
-                    // เนื่องจากไม่มี startAfter() เราจะถือว่ามีรายการเพิ่มเติมตราบใดที่ดึงมาได้เต็ม PAGINATION_LIMIT
-                    hasMoreShows = showDocs.length === PAGINATION_LIMIT && newShows.length > 0;
-                    lastVisibleDoc = showDocs[showDocs.length - 1]; // ยังคงเก็บไว้ แต่ไม่ได้ใช้เพื่อ startAfter ในปัจจุบัน
-                }
-
-            } catch (error) {
-                console.error("Error loading shows by tag:", error);
-                if (!append) {
-                     gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-red-500">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>`;
-                }
-                hasMoreShows = false;
-            } finally {
-                // 6. Update Load More Button visibility and state
-                if (loadMoreButton) {
-                    loadMoreButton.disabled = false;
-                    if (hasMoreShows) {
-                         loadMoreButton.textContent = `ดูเพิ่มเติม (${PAGINATION_LIMIT} รายการถัดไป)`; // (NEW) Add count to button
-                         loadMoreButton.classList.remove('hidden');
-                    } else {
-                         loadMoreButton.classList.add('hidden');
-                    }
-                }
-                
-                // Ensure layout is correctly set for Grid View
-                gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
+            // If initial load was just loading text, clear it
+            if (startIndex === 0) {
+                gridViewContent.innerHTML = '';
             }
+            
+            if (showsToRender.length > 0) {
+                showsToRender.forEach((show) => {
+                    gridViewContent.innerHTML += createContentCard(show);
+                });
+                currentRenderedIndex = endIndex;
+            } else if (currentRenderedIndex === 0) {
+                 // No shows found at all
+                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบซีรีส์สำหรับ "${currentGridTag}"</p>`;
+            }
+
+            // Update Load More Button visibility
+            const remainingCount = gridFilteredShows.length - currentRenderedIndex;
+            if (remainingCount > 0) {
+                loadMoreButton.textContent = `ดูเพิ่มเติม (${Math.min(PAGINATION_LIMIT, remainingCount)} รายการถัดไป)`;
+                loadMoreButton.classList.remove('hidden');
+            } else {
+                loadMoreButton.classList.add('hidden');
+            }
+            
+            loadMoreButton.disabled = false;
         }
-        
-        // (MODIFIED) เปลี่ยน renderGridView ให้เป็นการเรียก loadShowsByTag สำหรับชุดแรก
+
+        // (MODIFIED) เปลี่ยน renderGridView ให้เป็นการเรียก initializeGridPaging สำหรับชุดแรก
         function renderGridView(tag) {
             // เมื่อเรียก renderGridView ใหม่ ให้ตั้งค่าทุกอย่างเป็นเริ่มต้นและโหลดหน้าแรก
-            loadShowsByTag(tag, false);
+            initializeGridPaging(tag);
         }
         
-        // (NEW) Load More handler
+        // (MODIFIED) Load More handler
         loadMoreButton.addEventListener('click', () => {
-             if (currentGridTag && hasMoreShows) {
-                 loadShowsByTag(currentGridTag, true);
+             if (currentGridTag) {
+                 appendNextPage();
              }
         });
 
@@ -783,7 +744,7 @@
                     <!-- (MODIFIED) เปลี่ยนเป็นลิงก์ตรง & ลบ nav-link, data-page -->
                     <a href="index.html" class="flex-shrink-0 flex items-center text-white">
                         <span class="font-bold text-2xl">ANI-END</span> 
-                    </a>
+                    </a href="index.html" class="flex-shrink-0 flex items-center text-white">
                     <div class="hidden md:block">
                         <div id="desktop-nav-links" class="ml-10 flex items-baseline space-x-4">
                             <!-- Links generated by JS -->
@@ -812,7 +773,7 @@
                 <div class="flex md:hidden items-center space-x-2">
                     <a href="#" id="mobile-search-button" class="text-gray-300 hover:text-white p-2">
                         <i class="ri-search-line text-xl"></i>
-                    </button>
+                    </a>
                     <button id="mobile-menu-btn" class="text-gray-300 hover:text-white p-2">
                         <i class="ri-menu-line text-2xl"></i>
                     </button>
