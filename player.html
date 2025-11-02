@@ -38,31 +38,6 @@
         #video-player-embed iframe {
             width: 100%;
             height: 100%;
-            /* (NEW) แก้ปัญหา Embed Player ล้นจอ: กำหนด min-width เพื่อให้แถบควบคุมไม่เบียดกันจนเกินไป */
-            min-width: 380px; /* ค่าขั้นต่ำที่ปลอดภัยสำหรับ Embed Player ส่วนใหญ่ */
-            /* (NEW) ต้องทำให้กล่องแม่ยอมให้เกิด Scrollbar เพื่อแสดง min-width */
-        }
-        
-        /* (NEW) ปรับแก้ให้ video-aspect-wrapper ยอมให้มีการเลื่อนดูบนมือถือ */
-        @media (max-width: 1023px) {
-             .video-aspect-wrapper {
-                /* กำหนดให้กล่องแม่ยอมให้เกิด Scrollbar แนวนอน */
-                overflow-x: auto; 
-                /* ลบ padding-bottom ชั่วคราวเพื่อให้ความสูงยืดหยุ่นตาม iframe ที่มี min-width */
-                padding-bottom: 0;
-                height: 220px; /* กำหนดความสูงคงที่สำหรับมือถือ (ตัวอย่าง) */
-             }
-             /* (NEW) ต้องบังคับให้ iframe อยู่ใน flow ปกติเพื่อให้ min-width ทำงาน */
-             #video-player-embed {
-                 position: static;
-                 width: 100%;
-                 height: 100%;
-             }
-             /* (NEW) ให้ iframe มีขนาด 100% ถ้าเนื้อหาไม่เกิน min-width */
-             #video-player-embed iframe {
-                width: 100%;
-                height: 100%;
-             }
         }
         
         /* Removed Tab-related CSS */
@@ -580,40 +555,35 @@
             if (episode.embedCode && episode.embedCode.trim().startsWith('http')) {
                 // กรณีเป็น URL (เช่น archive.org/embed/)
                 let videoUrlStr = episode.embedCode;
+                let isFirstParam = videoUrlStr.includes('?') ? false : true;
 
-                // พยายามเพิ่ม autoplay=1
+                // 1. พยายามเพิ่ม autoplay=1
                 try {
                     const videoUrl = new URL(videoUrlStr);
                     videoUrl.searchParams.set('autoplay', '1');
                     videoUrlStr = videoUrl.href;
                 } catch (e) {
                     console.warn("Could not parse URL to add autoplay, trying string append:", e);
-                    if (videoUrlStr.includes('?')) {
-                        videoUrlStr += '&autoplay=1';
-                    } else {
-                        videoUrlStr += '?autoplay=1';
-                    }
-                }
-                
-                // (MODIFIED) พยายามเพิ่มพารามิเตอร์ "simple=1" หรือ "controls=0" เพื่อลดเครื่องมือ (ถ้า Embed Code รองรับ)
-                try {
-                    const videoUrl = new URL(videoUrlStr);
-                    // ลองใช้พารามิเตอร์ 'simple' หรือ 'controls=0' ที่อาจใช้ได้กับบางแพลตฟอร์ม
-                    if (videoUrl.hostname.includes('archive.org')) {
-                        videoUrl.searchParams.set('simple', '1'); 
-                    } else if (videoUrl.hostname.includes('youtube.com') || videoUrl.hostname.includes('youtu.be')) {
-                        videoUrl.searchParams.set('controls', '0'); // ซ่อนแถบควบคุม (อาจไม่ทำงานเสมอไป)
-                    }
-                    videoUrlStr = videoUrl.href;
-                } catch (e) {
-                    console.warn("Could not modify URL parameters to simplify player:", e);
+                    videoUrlStr += (isFirstParam ? '?' : '&') + 'autoplay=1';
+                    isFirstParam = false;
                 }
 
+                // (NEW) 2. พยายามเพิ่ม muted=1 เพื่อหลีกเลี่ยงการบล็อก Autoplay บน Mobile
+                try {
+                    const videoUrl = new URL(videoUrlStr);
+                    videoUrl.searchParams.set('muted', '1');
+                    videoUrlStr = videoUrl.href;
+                } catch (e) {
+                    console.warn("Could not parse URL to add muted, trying string append:", e);
+                    videoUrlStr += (isFirstParam ? '?' : '&') + 'muted=1';
+                    isFirstParam = false;
+                }
 
                 const iframe = document.createElement('iframe');
                 iframe.src = videoUrlStr; 
                 iframe.setAttribute('frameborder', '0');
-                iframe.setAttribute('allow', 'autoplay; fullscreen'); 
+                // (MODIFIED) เพิ่ม 'muted' ใน allow attribute เพื่อให้ iframe อนุญาตให้ปิดเสียง
+                iframe.setAttribute('allow', 'autoplay; fullscreen; muted'); 
                 iframe.setAttribute('webkitallowfullscreen', 'true');
                 iframe.setAttribute('mozallowfullscreen', 'true');
                 iframe.setAttribute('allowfullscreen', 'true');
@@ -622,7 +592,26 @@
 
             } else if (episode.embedCode) {
                 // กรณีเป็น <iframe> tag (HTML string)
-                playerEmbedDiv.innerHTML = episode.embedCode;
+                // (FIX) ถ้าเป็น iframe ที่ผู้ใช้ใส่มา ต้องพยายามเพิ่ม 'autoplay' และ 'muted' attributes ให้กับ iframe
+                let embedCode = episode.embedCode;
+                if (!embedCode.includes('autoplay')) {
+                    // ใช้ regex เพื่อเพิ่ม autoplay และ muted attributes เข้าไปในแท็ก iframe
+                    embedCode = embedCode.replace(/<iframe\s/i, `<iframe autoplay muted `);
+                    // หากไม่มี iframe attribute, พยายามเพิ่มพารามิเตอร์ใน src 
+                    if (embedCode.includes('src="')) {
+                        embedCode = embedCode.replace(/src="([^"]*)"/i, (match, src) => {
+                            if (!src.includes('autoplay=')) {
+                                src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
+                            }
+                            if (!src.includes('muted=')) {
+                                src += (src.includes('?') ? '&' : '?') + 'muted=1';
+                            }
+                            return `src="${src}"`;
+                        });
+                    }
+                }
+                playerEmbedDiv.innerHTML = embedCode;
+
             } else {
                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
             }
