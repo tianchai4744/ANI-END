@@ -175,7 +175,7 @@
         const commentForm = document.getElementById('comment-form');
         const commentInput = document.getElementById('comment-input');
         const commentsContainer = document.getElementById('comments-container');
-        const userNameInput = document.getElementById('comment-user-name');
+        // REMOVED: const userNameInput = document.getElementById('comment-user-name');
         
         async function initializeFirebase() {
             try {
@@ -187,11 +187,8 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
-                        // (NEW) ตั้งชื่อผู้ใช้เริ่มต้น (สามารถเปลี่ยนได้)
-                        // (FIX) ตรวจสอบว่า userNameInput พร้อมใช้งานก่อนกำหนดค่า
-                        if (userNameInput) {
-                            userNameInput.value = `User-${userId.substring(0, 6)}`; 
-                        }
+                        // (REMOVED) ไม่ต้องกำหนดค่า userNameInput แล้ว เพราะถูกลบไปแล้ว
+                        
                         console.log("User Authenticated (Anonymous):", userId);
                         // (MODIFIED) เรียก loadContent เพื่อโหลดเนื้อหาที่เกี่ยวข้องกับ Show ID
                         // และเรียก loadGlobalContent เพื่อโหลดรายการที่ไม่ต้องใช้ Show ID
@@ -328,7 +325,8 @@
                 
                 // (FIX) ใช้ตัวแปร commentInput และ userNameInput ที่ถูกผูกกับ DOM แล้ว
                 const commentText = commentInput.value.trim();
-                const userName = userNameInput.value.trim() || `User-${userId.substring(0, 6)}`;
+                // (FIXED) ไม่ใช้ input field แล้ว กำหนดชื่อผู้ใช้แบบ Anonymous โดยตรง
+                const userName = `User-${userId.substring(0, 6)}`;
                 
                 if (!commentText || !currentShow || !userId) {
                     console.warn("Cannot post comment: Missing text, show ID, or user ID.");
@@ -338,7 +336,7 @@
                 const newComment = {
                     showId: currentShow.id,
                     userId: userId,
-                    userName: userName,
+                    userName: userName, // ใช้ชื่อ Anonymous ที่สร้างขึ้น
                     commentText: commentText,
                     createdAt: serverTimestamp()
                 };
@@ -346,7 +344,7 @@
                 try {
                     await addDoc(getCollectionRef("comments"), newComment);
                     commentInput.value = ''; // Clear input
-                    userNameInput.value = userName; // Preserve current user name
+                    // (REMOVED) ไม่ต้อง preserve username แล้ว
                 } catch (error) {
                     console.error("Error posting comment:", error);
                     console.log("Error posting comment. Please try again.");
@@ -799,10 +797,9 @@
                     
                     <!-- Form ส่งคอมเมนต์ -->
                     <form id="comment-form" class="mb-6 space-y-3">
-                        <input type="text" id="comment-user-name" placeholder="ชื่อผู้ใช้ (อัตโนมัติ)" 
-                               class="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                        <!-- REMOVED: input for comment-user-name -->
                                
-                        <textarea id="comment-input" rows="3" placeholder="พิมพ์ความคิดเห็นของคุณ..." 
+                        <textarea id="comment-input" rows="3" placeholder="พิมพ์ความคิดเห็นของคุณ (คุณจะถูกแสดงเป็น User-xxxxxx)" 
                                   class="w-full bg-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
                                   
                         <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
