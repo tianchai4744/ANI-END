@@ -227,10 +227,12 @@
             return null;
         }
         
-        // (NEW) Function to handle the custom video player (HTML5 Video)
-        function playCustomVideo(itemId, episodeTitle) {
+        // (MODIFIED) Function to handle the custom video player (HTML5 Video)
+        function playCustomVideo(itemId, episodeTitle, fallbackUrl) {
             // Archive.org มักจะมีไฟล์ .mp4 สำหรับเล่นโดยตรงภายใต้ Item ID นั้นๆ
-            // การดึง URL ตรงต้องรู้ชื่อไฟล์วิดีโอ ซึ่งมักจะตรงกับ Item ID
+            // เราจะใช้ URL ที่อ้างอิงถึงไฟล์ .mp4 (ซึ่งอาจมีขนาด 512kb หรือ 256kb เพื่อเพิ่มโอกาสในการโหลด)
+            
+            // NOTE: เราจะลองใช้ชื่อไฟล์ตรงกับ Item ID ก่อน
             const mp4Url = `https://archive.org/download/${itemId}/${itemId}.mp4`;
             
             playerEmbedDiv.innerHTML = `
@@ -258,9 +260,21 @@
             const unmuteOverlay = document.getElementById('unmute-overlay');
             const unmuteButton = document.getElementById('unmute-btn');
             
-            if (!videoElement) return;
+            if (!videoElement) {
+                console.error("Video element not created.");
+                return;
+            }
 
-            // บังคับให้เล่นอัตโนมัติแบบปิดเสียง
+            // (NEW) 1. Listener สำหรับการจัดการข้อผิดพลาดในการโหลดวิดีโอ
+            videoElement.addEventListener('error', (e) => {
+                // Error Code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED
+                console.warn(`Video failed to load (Error code ${videoElement.error.code}). Falling back to iframe embed...`);
+                
+                // (Fallback) ถ้าโหลด MP4 โดยตรงไม่ได้ ให้กลับไปใช้ iframe
+                playIframeFallback(fallbackUrl);
+            }, { once: true }); // ให้ทำงานแค่ครั้งเดียว
+
+            // 2. บังคับให้เล่นอัตโนมัติแบบปิดเสียง
             videoElement.muted = true;
             videoElement.play().then(() => {
                 // หากเล่นได้โดยไม่มีเสียง ให้แสดงปุ่มเปิดเสียง
@@ -282,8 +296,10 @@
                 });
 
             }).catch(error => {
-                // หาก Autoplay ถูกบล็อกจริง ๆ
-                console.warn("Autoplay was prevented. User needs interaction.", error);
+                // 3. หาก Autoplay ถูกบล็อกจริง ๆ (Catch the Promise rejection)
+                console.warn("Autoplay was prevented (Promise Rejected). User needs interaction.", error);
+                
+                // (REMOVED: เปลี่ยนข้อความปุ่มในกรณี Autoplay ถูกบล็อก)
                 unmuteButton.querySelector('span').textContent = "แตะเพื่อเล่น (ถูกบล็อก Autoplay)";
                 unmuteButton.querySelector('i').className = "ri-play-fill text-xl";
                 
@@ -298,6 +314,63 @@
                 unmuteOverlay.classList.remove('hidden');
                 unmuteOverlay.style.opacity = 1;
             });
+        }
+        
+        // (NEW) Function to handle the Iframe fallback
+        function playIframeFallback(embedCode) {
+            console.log("Using standard iframe embed as fallback.");
+            
+            // 1. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
+            if (embedCode.trim().startsWith('http')) {
+                let videoUrlStr = embedCode;
+                let isFirstParam = videoUrlStr.includes('?') ? false : true;
+
+                // พยายามเพิ่ม autoplay=1 และ muted=1
+                try {
+                    const videoUrl = new URL(videoUrlStr);
+                    videoUrl.searchParams.set('autoplay', '1');
+                    videoUrl.searchParams.set('muted', '1'); 
+                    videoUrlStr = videoUrl.href;
+                } catch (e) {
+                    console.warn("Could not parse URL to add params, trying string append:", e);
+                    videoUrlStr += (isFirstParam ? '?' : '&') + 'autoplay=1&muted=1';
+                }
+
+                const iframe = document.createElement('iframe');
+                iframe.src = videoUrlStr; 
+                iframe.setAttribute('frameborder', '0');
+                iframe.setAttribute('allow', 'autoplay; fullscreen; muted'); 
+                iframe.setAttribute('webkitallowfullscreen', 'true');
+                iframe.setAttribute('mozallowfullscreen', 'true');
+                iframe.setAttribute('allowfullscreen', 'true');
+                
+                playerEmbedDiv.innerHTML = ''; // Clear previous content
+                playerEmbedDiv.appendChild(iframe);
+                
+            } else if (embedCode) {
+                // 2. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
+                let finalEmbedCode = embedCode;
+                // พยายามเพิ่ม autoplay และ muted attributes ให้กับ iframe
+                if (!finalEmbedCode.includes('autoplay')) {
+                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay muted `);
+                }
+                // พยายามเพิ่มพารามิเตอร์ใน src
+                if (finalEmbedCode.includes('src="')) {
+                    finalEmbedCode = finalEmbedCode.replace(/src="([^"]*)"/i, (match, src) => {
+                        if (!src.includes('autoplay=')) {
+                            src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
+                        }
+                        if (!src.includes('muted=')) {
+                            src += (src.includes('?') ? '&' : '?') + 'muted=1';
+                        }
+                        return `src="${src}"`;
+                    });
+                }
+                playerEmbedDiv.innerHTML = finalEmbedCode;
+                
+            } else {
+                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
+            }
         }
 
 
@@ -685,55 +758,16 @@
             
             if (itemId) {
                 // (NEW LOGIC) ใช้ Custom HTML5 Video Player
-                playCustomVideo(itemId, episode.title);
+                // ส่ง embedCode ไปเป็น fallback URL ด้วย เผื่อกรณีโหลด MP4 ตรงไม่ได้
+                playCustomVideo(itemId, episode.title, episode.embedCode);
                 
             } else if (episode.embedCode && episode.embedCode.trim().startsWith('http')) {
                 // 2. ถ้าเป็น URL อื่นๆ (เช่น Youtube, Google Drive) ให้ใช้ iframe ปกติ
-                let videoUrlStr = episode.embedCode;
-                let isFirstParam = videoUrlStr.includes('?') ? false : true;
-
-                // พยายามเพิ่ม autoplay=1 และ muted=1
-                try {
-                    const videoUrl = new URL(videoUrlStr);
-                    videoUrl.searchParams.set('autoplay', '1');
-                    videoUrl.searchParams.set('muted', '1'); 
-                    videoUrlStr = videoUrl.href;
-                } catch (e) {
-                    console.warn("Could not parse URL to add params, trying string append:", e);
-                    videoUrlStr += (isFirstParam ? '?' : '&') + 'autoplay=1&muted=1';
-                }
-
-                const iframe = document.createElement('iframe');
-                iframe.src = videoUrlStr; 
-                iframe.setAttribute('frameborder', '0');
-                iframe.setAttribute('allow', 'autoplay; fullscreen; muted'); 
-                iframe.setAttribute('webkitallowfullscreen', 'true');
-                iframe.setAttribute('mozallowfullscreen', 'true');
-                iframe.setAttribute('allowfullscreen', 'true');
-                
-                playerEmbedDiv.appendChild(iframe);
+                playIframeFallback(episode.embedCode);
 
             } else if (episode.embedCode) {
                 // 3. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
-                // (FIX) ถ้าเป็น iframe ที่ผู้ใช้ใส่มา ต้องพยายามเพิ่ม 'autoplay' และ 'muted' attributes ให้กับ iframe
-                let embedCode = episode.embedCode;
-                if (!embedCode.includes('autoplay')) {
-                    // ใช้ regex เพื่อเพิ่ม autoplay และ muted attributes เข้าไปในแท็ก iframe
-                    embedCode = embedCode.replace(/<iframe\s/i, `<iframe autoplay muted `);
-                    // หากไม่มี iframe attribute, พยายามเพิ่มพารามิเตอร์ใน src 
-                    if (embedCode.includes('src="')) {
-                        embedCode = embedCode.replace(/src="([^"]*)"/i, (match, src) => {
-                            if (!src.includes('autoplay=')) {
-                                src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
-                            }
-                            if (!src.includes('muted=')) {
-                                src += (src.includes('?') ? '&' : '?') + 'muted=1';
-                            }
-                            return `src="${src}"`;
-                        });
-                    }
-                }
-                playerEmbedDiv.innerHTML = embedCode;
+                playIframeFallback(episode.embedCode);
 
             } else {
                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
