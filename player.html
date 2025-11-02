@@ -379,9 +379,11 @@
             try {
                 let relatedQuery;
                 let relatedShows = [];
-                
+                // (MODIFIED) 15 items (3 rows * 5 columns)
+                const maxDisplay = 15; 
+
                 if (tags && tags.length > 0) {
-                    // 1. ถ้ามี Tags ให้ค้นหาซีรีส์ที่มี tag ตรงกัน
+                    // 1. ถ้ามี Tags ให้ค้นหาซีรีส์ที่มี tag ตรงกัน (ดึงทั้งหมด)
                     relatedQuery = query(getCollectionRef("shows"), where("tags", "array-contains-any", tags));
                     const querySnapshot = await getDocs(relatedQuery);
                     
@@ -392,19 +394,19 @@
                         }
                     });
                 } else {
-                    // 2. ถ้าไม่มี Tags (หรือไม่มี showId) ให้ดึงเรื่องแนะนำทั่วไป (เรียงตาม ViewCount)
-                    relatedQuery = query(getCollectionRef("shows"), orderBy("viewCount", "desc"), limit(10));
+                    // 2. ถ้าไม่มี Tags (หน้า Error) ให้ดึงเรื่องแนะนำทั่วไป (เรียงตาม ViewCount)
+                    // (MODIFIED) จำกัดเป็น maxDisplay (15)
+                    relatedQuery = query(getCollectionRef("shows"), orderBy("viewCount", "desc"), limit(maxDisplay));
                     const querySnapshot = await getDocs(relatedQuery);
                     
                     querySnapshot.forEach((doc) => {
-                        // ไม่ต้องกรองเรื่องปัจจุบันออก เพราะใช้สำหรับหน้า Error (ไม่พบ ID)
                         relatedShows.push({ id: doc.id, ...doc.data() });
                     });
                 }
 
-                // สุ่มและจำกัด 4-8 รายการ เพื่อแสดงใน Grid (ใช้เฉพาะเมื่อมี tags)
-                const maxRelated = (tags && tags.length > 0) ? 8 : 4; // แสดงน้อยลงถ้าเป็นรายการทั่วไป
-                relatedShows = relatedShows.sort(() => 0.5 - Math.random()).slice(0, maxRelated);
+                // สุ่มและจำกัด 15 รายการ (3 แถว x 5 คอลัมน์)
+                // (MODIFIED) Always use maxDisplay (15) for slicing
+                relatedShows = relatedShows.sort(() => 0.5 - Math.random()).slice(0, maxDisplay);
                 
                 if(relatedShows.length === 0) {
                     // (MODIFIED) ข้อความแสดงผลเมื่อไม่พบ
@@ -412,8 +414,9 @@
                     return;
                 }
                 
-                // ตั้งค่า Container ให้เป็น Grid 2-4 คอลัมน์ (Responsive)
-                relatedListContainer.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4';
+                // (MODIFIED) ตั้งค่า Container ให้เป็น Grid 2-5 คอลัมน์ (Responsive)
+                // grid-cols-2 (mobile), md:grid-cols-3 (tablet), lg:grid-cols-5 (desktop)
+                relatedListContainer.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4';
                 relatedListContainer.innerHTML = ''; // Clear loading text
 
                 relatedShows.forEach(show => {
