@@ -46,21 +46,6 @@
             min-width: initial !important; 
         }
         
-        /* (NEW) Style สำหรับปุ่มแจ้งเตือน Muted Autoplay */
-        #unmute-overlay {
-            position: absolute;
-            inset: 0;
-            background-color: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-            z-index: 20;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            cursor: pointer;
-            transition: opacity 0.3s;
-        }
-        
         /* Removed Tab-related CSS */
         .ep-button.active { background-color: #00b87c; color: #fff; }
         
@@ -230,8 +215,6 @@
         // (MODIFIED) Function to handle the custom video player (HTML5 Video)
         function playCustomVideo(itemId, episodeTitle, fallbackUrl) {
             // Archive.org มักจะมีไฟล์ .mp4 สำหรับเล่นโดยตรงภายใต้ Item ID นั้นๆ
-            // เราจะใช้ URL ที่อ้างอิงถึงไฟล์ .mp4 (ซึ่งอาจมีขนาด 512kb หรือ 256kb เพื่อเพิ่มโอกาสในการโหลด)
-            
             // NOTE: เราจะลองใช้ชื่อไฟล์ตรงกับ Item ID ก่อน
             const mp4Url = `https://archive.org/download/${itemId}/${itemId}.mp4`;
             
@@ -240,32 +223,22 @@
                     id="custom-video-player"
                     controls 
                     autoplay 
-                    muted
                     playsinline
                     class="w-full h-full object-cover"
                 >
                     <source src="${mp4Url}" type="video/mp4">
                     <p class="text-white p-4">เบราว์เซอร์ของคุณไม่รองรับวิดีโอ HTML5. หรือไม่พบไฟล์ MP4</p>
                 </video>
-                <div id="unmute-overlay" class="rounded-lg">
-                    <button id="unmute-btn" class="bg-white text-gray-900 font-bold py-3 px-6 rounded-full flex items-center space-x-2 shadow-lg hover:bg-gray-200 transition-colors">
-                        <i class="ri-volume-mute-fill text-xl"></i>
-                        <span>แตะเพื่อเปิดเสียงและเล่นต่อ</span>
-                    </button>
-                    <p class="text-sm text-gray-300 mt-2">วิดีโอเล่นอัตโนมัติแบบปิดเสียงเพื่อหลีกเลี่ยงการบล็อกของเบราว์เซอร์</p>
-                </div>
             `;
             
             const videoElement = document.getElementById('custom-video-player');
-            const unmuteOverlay = document.getElementById('unmute-overlay');
-            const unmuteButton = document.getElementById('unmute-btn');
             
             if (!videoElement) {
                 console.error("Video element not created.");
                 return;
             }
 
-            // (NEW) 1. Listener สำหรับการจัดการข้อผิดพลาดในการโหลดวิดีโอ
+            // 1. Listener สำหรับการจัดการข้อผิดพลาดในการโหลดวิดีโอ (ถ้าไฟล์ MP4 ไม่ถูกโหลด)
             videoElement.addEventListener('error', (e) => {
                 // Error Code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED
                 console.warn(`Video failed to load (Error code ${videoElement.error.code}). Falling back to iframe embed...`);
@@ -274,46 +247,20 @@
                 playIframeFallback(fallbackUrl);
             }, { once: true }); // ให้ทำงานแค่ครั้งเดียว
 
-            // 2. บังคับให้เล่นอัตโนมัติแบบปิดเสียง
-            videoElement.muted = true;
-            videoElement.play().then(() => {
-                // หากเล่นได้โดยไม่มีเสียง ให้แสดงปุ่มเปิดเสียง
-                unmuteOverlay.classList.remove('hidden');
-                unmuteOverlay.style.opacity = 1;
-
-                unmuteButton.addEventListener('click', () => {
-                    videoElement.muted = false;
-                    unmuteOverlay.style.opacity = 0;
-                    setTimeout(() => unmuteOverlay.classList.add('hidden'), 300);
+            // 2. บังคับให้เล่นอัตโนมัติ (เปิดเสียง)
+            // NOTE: การเรียก play() โดยตรงแบบมีเสียงนี้ มักจะถูกเบราว์เซอร์บล็อก
+            const playPromise = videoElement.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    console.log("Autoplay successful (with sound).");
+                    // วิดีโอเล่นได้ตามปกติ
+                }).catch(error => {
+                    // หาก Autoplay ถูกบล็อกจริง ๆ (โดยเฉพาะมือถือ/ไม่มีการโต้ตอบก่อนหน้า)
+                    console.warn("Autoplay was prevented (Promise Rejected). User must click play button on video controls.", error);
+                    // วิดีโอจะยังคงโหลดและแสดงเฟรมแรก แต่ผู้ใช้ต้องคลิกปุ่ม Play บนตัวควบคุมวิดีโอเอง
                 });
-                
-                // หากผู้ใช้กดควบคุมเปิดเสียงเอง
-                videoElement.addEventListener('volumechange', () => {
-                    if (!videoElement.muted) {
-                         unmuteOverlay.style.opacity = 0;
-                         setTimeout(() => unmuteOverlay.classList.add('hidden'), 300);
-                    }
-                });
-
-            }).catch(error => {
-                // 3. หาก Autoplay ถูกบล็อกจริง ๆ (Catch the Promise rejection)
-                console.warn("Autoplay was prevented (Promise Rejected). User needs interaction.", error);
-                
-                // (REMOVED: เปลี่ยนข้อความปุ่มในกรณี Autoplay ถูกบล็อก)
-                unmuteButton.querySelector('span').textContent = "แตะเพื่อเล่น (ถูกบล็อก Autoplay)";
-                unmuteButton.querySelector('i').className = "ri-play-fill text-xl";
-                
-                // ให้ปุ่มทำหน้าที่กด Play แทน
-                unmuteButton.addEventListener('click', () => {
-                    videoElement.muted = false; // เปิดเสียงไปเลย
-                    videoElement.play();
-                    unmuteOverlay.style.opacity = 0;
-                    setTimeout(() => unmuteOverlay.classList.add('hidden'), 300);
-                }, { once: true });
-                
-                unmuteOverlay.classList.remove('hidden');
-                unmuteOverlay.style.opacity = 1;
-            });
+            }
         }
         
         // (NEW) Function to handle the Iframe fallback
@@ -325,21 +272,21 @@
                 let videoUrlStr = embedCode;
                 let isFirstParam = videoUrlStr.includes('?') ? false : true;
 
-                // พยายามเพิ่ม autoplay=1 และ muted=1
+                // พยายามเพิ่ม autoplay=1 และ muted=0 (เปิดเสียง)
                 try {
                     const videoUrl = new URL(videoUrlStr);
                     videoUrl.searchParams.set('autoplay', '1');
-                    videoUrl.searchParams.set('muted', '1'); 
+                    videoUrl.searchParams.set('muted', '0'); // พยายามตั้งเป็น 0 เพื่อให้เปิดเสียง
                     videoUrlStr = videoUrl.href;
                 } catch (e) {
                     console.warn("Could not parse URL to add params, trying string append:", e);
-                    videoUrlStr += (isFirstParam ? '?' : '&') + 'autoplay=1&muted=1';
+                    videoUrlStr += (isFirstParam ? '?' : '&') + 'autoplay=1&muted=0';
                 }
 
                 const iframe = document.createElement('iframe');
                 iframe.src = videoUrlStr; 
                 iframe.setAttribute('frameborder', '0');
-                iframe.setAttribute('allow', 'autoplay; fullscreen; muted'); 
+                iframe.setAttribute('allow', 'autoplay; fullscreen; microphone'); // microphone อาจช่วยในบางกรณี
                 iframe.setAttribute('webkitallowfullscreen', 'true');
                 iframe.setAttribute('mozallowfullscreen', 'true');
                 iframe.setAttribute('allowfullscreen', 'true');
@@ -350,18 +297,23 @@
             } else if (embedCode) {
                 // 2. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
                 let finalEmbedCode = embedCode;
-                // พยายามเพิ่ม autoplay และ muted attributes ให้กับ iframe
+                // พยายามเพิ่ม autoplay และ unmute attributes ให้กับ iframe
                 if (!finalEmbedCode.includes('autoplay')) {
-                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay muted `);
+                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay `);
                 }
+                 // ลบ muted ออกถ้ามี, หรือพยายามเพิ่ม volume/unmute parameter ใน src
+                finalEmbedCode = finalEmbedCode.replace(/muted/g, ''); 
+
                 // พยายามเพิ่มพารามิเตอร์ใน src
                 if (finalEmbedCode.includes('src="')) {
                     finalEmbedCode = finalEmbedCode.replace(/src="([^"]*)"/i, (match, src) => {
                         if (!src.includes('autoplay=')) {
                             src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
                         }
-                        if (!src.includes('muted=')) {
-                            src += (src.includes('?') ? '&' : '?') + 'muted=1';
+                        if (src.includes('muted=1')) {
+                             src = src.replace('muted=1', 'muted=0');
+                        } else if (!src.includes('muted=')) {
+                            src += (src.includes('?') ? '&' : '?') + 'muted=0';
                         }
                         return `src="${src}"`;
                     });
