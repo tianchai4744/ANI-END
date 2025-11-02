@@ -142,7 +142,7 @@
         import { 
             getFirestore, doc, getDoc, onSnapshot, collection, query, where, getDocs,
             setLogLevel,
-            updateDoc, increment, orderBy, limit, addDoc, serverTimestamp // (NEW) เพิ่ม addDoc, serverTimestamp
+            updateDoc, increment, orderBy, limit 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config เนื่องจาก Canvas ไม่ได้ให้ global vars มาในโหมดนี้ ***)
@@ -170,13 +170,6 @@
         const top10ListContainer = document.getElementById('top10-list-container'); 
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
-
-        // (NEW) Comment UI Elements
-        const commentForm = document.getElementById('comment-form');
-        // (FIX) ต้องผูกตัวแปร UI Elements ให้ถูกต้อง
-        const commentInput = document.getElementById('comment-input');
-        const commentsContainer = document.getElementById('comments-container');
-        const userNameInput = document.getElementById('comment-user-name');
         
         async function initializeFirebase() {
             try {
@@ -188,11 +181,6 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
-                        // (NEW) ตั้งชื่อผู้ใช้เริ่มต้น (สามารถเปลี่ยนได้)
-                        // (FIX) ตรวจสอบว่า userNameInput พร้อมใช้งานก่อนกำหนดค่า
-                        if (userNameInput) {
-                            userNameInput.value = `User-${userId.substring(0, 6)}`; 
-                        }
                         console.log("User Authenticated (Anonymous):", userId);
                         // (MODIFIED) เรียก loadContent เพื่อโหลดเนื้อหาที่เกี่ยวข้องกับ Show ID
                         // และเรียก loadGlobalContent เพื่อโหลดรายการที่ไม่ต้องใช้ Show ID
@@ -240,6 +228,7 @@
                 if (!showId) {
                     playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบ ID ของซีรีส์</p>`;
                     // (NEW) ในกรณีที่ไม่พบ ID ให้แสดง UI หลักทันที แต่เนื้อหาวิดีโอว่างเปล่า
+                    // เราต้องแสดง UI หลักเพราะ loadGlobalContent จะจัดการ Top 10 เอง
                     playerContentWrapper.classList.remove('hidden');
                     loadingPlayer.classList.add('hidden');
                     
@@ -306,9 +295,6 @@
                     playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับซีรีส์นี้</p>`;
                 }
                 
-                // (NEW) ตั้ง Listener สำหรับคอมเมนต์หลังจากโหลด showId สำเร็จ
-                setupCommentListener(showId); 
-                
             } catch (error) {
                 console.error("Error loading content:", error);
                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">เกิดข้อผิดพลาดในการโหลด</p>`;
@@ -319,103 +305,6 @@
                 // (NEW) Call sync height after showing content
                 syncEpisodeListHeight(); 
             }
-        }
-
-        // (NEW) ฟังก์ชันสำหรับจัดการการส่งคอมเมนต์
-        // (FIX) เพิ่มการตรวจสอบว่า commentForm มีอยู่จริง
-        if (commentForm) {
-            commentForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
-                // (FIX) ใช้ตัวแปร commentInput และ userNameInput ที่ถูกผูกกับ DOM แล้ว
-                const commentText = commentInput.value.trim();
-                const userName = userNameInput.value.trim() || `User-${userId.substring(0, 6)}`;
-                
-                if (!commentText || !currentShow || !userId) {
-                    console.warn("Cannot post comment: Missing text, show ID, or user ID.");
-                    return;
-                }
-                
-                const newComment = {
-                    showId: currentShow.id,
-                    userId: userId,
-                    userName: userName,
-                    commentText: commentText,
-                    createdAt: serverTimestamp()
-                };
-
-                try {
-                    await addDoc(getCollectionRef("comments"), newComment);
-                    commentInput.value = ''; // Clear input
-                    userNameInput.value = userName; // Preserve current user name
-                } catch (error) {
-                    console.error("Error posting comment:", error);
-                    console.log("Error posting comment. Please try again.");
-                }
-            });
-        }
-
-        // (NEW) ฟังก์ชันสำหรับตั้ง Listener คอมเมนต์
-        function setupCommentListener(showId) {
-            // (FIX) เพิ่มการตรวจสอบว่า commentsContainer มีอยู่จริง
-            if (!commentsContainer) return;
-            
-            const commentsQuery = query(
-                getCollectionRef("comments"), 
-                where("showId", "==", showId), 
-                orderBy("createdAt", "desc"),
-                limit(50) // จำกัดจำนวนคอมเมนต์ที่แสดง
-            );
-            
-            onSnapshot(commentsQuery, (snapshot) => {
-                commentsContainer.innerHTML = ''; // Clear old comments
-                if (snapshot.empty) {
-                    commentsContainer.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีคอมเมนต์ แสดงความคิดเห็นแรกของคุณสิ!</p>`;
-                    return;
-                }
-                
-                snapshot.forEach((doc) => {
-                    const comment = doc.data();
-                    commentsContainer.innerHTML += createCommentElement(comment);
-                });
-            }, (error) => {
-                console.error("Error listening to comments:", error);
-                commentsContainer.innerHTML = `<p class="text-red-500 p-4">ไม่สามารถโหลดคอมเมนต์ได้</p>`;
-            });
-        }
-        
-        // (NEW) สร้าง HTML Element สำหรับคอมเมนต์เดียว
-        function createCommentElement(comment) {
-            const date = comment.createdAt ? new Date(comment.createdAt.toMillis()) : new Date();
-            const formattedTime = date.toLocaleString('th-TH', { 
-                day: '2-digit', 
-                month: 'short', 
-                year: 'numeric', 
-                hour: '2-digit', 
-                minute: '2-digit' 
-            });
-            
-            // ใช้ SVG icon สำหรับ user avatar
-            const userAvatar = `
-                <svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.98 5.98 0 0010 16a5.979 5.979 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd"></path>
-                </svg>
-            `;
-            
-            return `
-                <div class="flex items-start space-x-3 p-4 border-b border-gray-700 last:border-b-0">
-                    <div class="flex-shrink-0">
-                        ${userAvatar}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-sm font-semibold text-white">${comment.userName}</span>
-                            <span class="text-xs text-gray-500">${formattedTime}</span>
-                        </div>
-                        <p class="text-gray-300 break-words">${comment.commentText}</p>
-                    </div>
-                </div>
-            `;
         }
 
         // (NEW) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player
@@ -744,13 +633,10 @@
     
     <!-- Content (Hidden by default) -->
     <div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
-        
-        <!-- FLEX CONTAINER หลัก: เปลี่ยนจาก lg:flex-row เป็น flex-wrap เพื่อควบคุม order ได้ง่ายขึ้นบน Desktop -->
-        <!-- เราจะจัดเรียง 4 องค์ประกอบหลักใน container นี้ -->
-        <div class="flex flex-wrap gap-6">
+        <div class="flex flex-col lg:flex-row gap-6">
             
-            <!-- 1. Player & Info (วิดีโอและรายละเอียด) -->
-            <div class="w-full lg:w-[calc(66.666%-12px)] order-1 lg:order-1">
+            <!-- Left Side: Player, Info, and Related Shows -->
+            <div class="flex-1 lg:w-2/3">
                 <!-- Responsive Video Player Wrapper -->
                 <div class="video-aspect-wrapper rounded-lg overflow-hidden mb-4">
                     <div id="video-player-embed">
@@ -771,21 +657,8 @@
                     </div>
                     <p id="show-description" class="text-gray-300 line-clamp-3">...</p>
                 </div>
-            </div>
-            
-            <!-- 2. รายการตอน (Episodes List) - ลำดับ 2 บนมือถือ -->
-            <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-2 lg:order-2">
-                <section class="bg-gray-800 rounded-lg p-4">
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
-                    <div id="episode-list-container" class="flex flex-wrap gap-2">
-                        <!-- Episode buttons injected by JS -->
-                        <p class="text-gray-400">กำลังโหลดตอน...</p>
-                    </div>
-                </section>
-            </div>
-            
-            <!-- 3. อนิเมะที่คุณอาจจะชอบ (Related Shows) - ลำดับ 3 บนมือถือ -->
-            <div class="w-full lg:w-[calc(66.666%-12px)] order-3 lg:order-3">
+                
+                <!-- NEW SECTION: อนิเมะที่คุณอาจจะชอบ (Moved from right/aside) -->
                 <section class="bg-gray-800 rounded-lg p-4 mb-6">
                     <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">อนิเมะที่คุณอาจจะชอบ</h3>
                     <div id="related-list-container">
@@ -794,32 +667,21 @@
                     </div>
                 </section>
                 
-                <!-- (NEW) SECTION: ระบบคอมเมนต์ -->
-                <section class="bg-gray-800 rounded-lg p-4 mb-6">
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">ความคิดเห็น (Comments)</h3>
-                    
-                    <!-- Form ส่งคอมเมนต์ -->
-                    <form id="comment-form" class="mb-6 space-y-3">
-                        <input type="text" id="comment-user-name" placeholder="ชื่อผู้ใช้ (อัตโนมัติ)" 
-                               class="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required>
-                               
-                        <textarea id="comment-input" rows="3" placeholder="พิมพ์ความคิดเห็นของคุณ..." 
-                                  class="w-full bg-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
-                                  
-                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
-                            ส่งความคิดเห็น
-                        </button>
-                    </form>
-
-                    <!-- แสดงรายการคอมเมนต์ -->
-                    <div id="comments-container" class="divide-y divide-gray-700 border border-gray-700 rounded-lg overflow-hidden">
-                        <p class="text-gray-400 p-4">กำลังโหลดความคิดเห็น...</p>
-                    </div>
-                </section>
             </div>
             
-            <!-- 4. 10 อันดับอนิเมะยอดนิยม (Top 10 List) - ลำดับ 4 บนมือถือ -->
-            <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-4 lg:order-4">
+            <!-- Right Side: Playlist & Top 10 (Full width on mobile, 1/3 on desktop) -->
+            <aside class="w-full lg:w-1/3 lg:max-w-md flex-shrink-0 space-y-6">
+                
+                <!-- SECTION 1: รายการตอน (Episodes List) - MOVED TO TOP OF ASIDE -->
+                <section class="bg-gray-800 rounded-lg p-4">
+                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
+                    <div id="episode-list-container" class="flex flex-wrap gap-2">
+                        <!-- Episode buttons injected by JS -->
+                        <p class="text-gray-400">กำลังโหลดตอน...</p>
+                    </div>
+                </section>
+
+                <!-- SECTION 2: 10 อันดับอนิเมะยอดนิยม -->
                 <section class="bg-gray-800 rounded-lg p-4">
                     <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">10 อันดับอนิเมะยอดนิยม</h3>
                     <div id="top10-list-container" class="flex flex-col space-y-1">
@@ -827,7 +689,8 @@
                         <p class="text-gray-400">กำลังโหลด 10 อันดับ...</p>
                     </div>
                 </section>
-            </div>
+
+            </aside>
             
         </div>
     </div>
