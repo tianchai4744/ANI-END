@@ -214,53 +214,77 @@
         
         // (MODIFIED) Function to handle the custom video player (HTML5 Video)
         function playCustomVideo(itemId, episodeTitle, fallbackUrl) {
-            // Archive.org มักจะมีไฟล์ .mp4 สำหรับเล่นโดยตรงภายใต้ Item ID นั้นๆ
-            // NOTE: เราจะลองใช้ชื่อไฟล์ตรงกับ Item ID ก่อน
-            const mp4Url = `https://archive.org/download/${itemId}/${itemId}.mp4`;
+            // ลำดับการลอง URL ของไฟล์ MP4 ที่เป็นไปได้
+            const possibleUrls = [
+                `https://archive.org/download/${itemId}/${itemId}.mp4`, // Default filename
+                `https://archive.org/download/${itemId}/${itemId}_512kb.mp4`, // Low bandwidth 
+                `https://archive.org/download/${itemId}/${itemId}_h264.mp4` // Common h264 name
+            ];
             
-            playerEmbedDiv.innerHTML = `
-                <video 
-                    id="custom-video-player"
-                    controls 
-                    autoplay 
-                    playsinline
-                    class="w-full h-full object-cover"
-                >
-                    <source src="${mp4Url}" type="video/mp4">
-                    <p class="text-white p-4">เบราว์เซอร์ของคุณไม่รองรับวิดีโอ HTML5. หรือไม่พบไฟล์ MP4</p>
-                </video>
-            `;
-            
-            const videoElement = document.getElementById('custom-video-player');
-            
-            if (!videoElement) {
-                console.error("Video element not created.");
-                return;
-            }
+            // ใช้ตัวติดตามเพื่อลอง URL
+            let currentUrlIndex = 0;
 
-            // 1. Listener สำหรับการจัดการข้อผิดพลาดในการโหลดวิดีโอ (ถ้าไฟล์ MP4 ไม่ถูกโหลด)
-            videoElement.addEventListener('error', (e) => {
-                // Error Code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED
-                console.warn(`Video failed to load (Error code ${videoElement.error.code}). Falling back to iframe embed...`);
+            function attemptLoad() {
+                if (currentUrlIndex >= possibleUrls.length) {
+                    // หากลองทุก URL แล้วล้มเหลว ให้ทำ Fallback
+                    console.warn("All direct MP4 URLs failed. Falling back to iframe embed...");
+                    playIframeFallback(fallbackUrl);
+                    return;
+                }
+
+                const mp4Url = possibleUrls[currentUrlIndex];
+                console.log(`Attempting to load MP4: ${mp4Url}`);
+
+                playerEmbedDiv.innerHTML = `
+                    <video 
+                        id="custom-video-player"
+                        controls 
+                        autoplay 
+                        playsinline
+                        class="w-full h-full object-cover"
+                    >
+                        <source src="${mp4Url}" type="video/mp4">
+                        <p class="text-white p-4">เบราว์เซอร์ของคุณไม่รองรับวิดีโอ HTML5. หรือไม่พบไฟล์ MP4</p>
+                    </video>
+                `;
                 
-                // (Fallback) ถ้าโหลด MP4 โดยตรงไม่ได้ ให้กลับไปใช้ iframe
-                playIframeFallback(fallbackUrl);
-            }, { once: true }); // ให้ทำงานแค่ครั้งเดียว
+                const videoElement = document.getElementById('custom-video-player');
+                
+                if (!videoElement) {
+                    console.error("Video element not created.");
+                    return;
+                }
 
-            // 2. บังคับให้เล่นอัตโนมัติ (เปิดเสียง)
-            // NOTE: การเรียก play() โดยตรงแบบมีเสียงนี้ มักจะถูกเบราว์เซอร์บล็อก
-            const playPromise = videoElement.play();
-            
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    console.log("Autoplay successful (with sound).");
-                    // วิดีโอเล่นได้ตามปกติ
-                }).catch(error => {
-                    // หาก Autoplay ถูกบล็อกจริง ๆ (โดยเฉพาะมือถือ/ไม่มีการโต้ตอบก่อนหน้า)
-                    console.warn("Autoplay was prevented (Promise Rejected). User must click play button on video controls.", error);
-                    // วิดีโอจะยังคงโหลดและแสดงเฟรมแรก แต่ผู้ใช้ต้องคลิกปุ่ม Play บนตัวควบคุมวิดีโอเอง
-                });
+                // ลบ Listener เก่าเพื่อป้องกันการเรียกซ้ำ
+                videoElement.removeEventListener('error', handleError);
+
+                // 1. Listener สำหรับการจัดการข้อผิดพลาดในการโหลดวิดีโอ (ถ้าไฟล์ MP4 ไม่ถูกโหลด)
+                function handleError(e) {
+                    console.warn(`Video source error (Code ${videoElement.error.code}) for URL: ${mp4Url}`);
+                    currentUrlIndex++; // ลอง URL ถัดไป
+                    attemptLoad();
+                }
+                videoElement.addEventListener('error', handleError, { once: true });
+                
+                // 2. บังคับให้เล่นอัตโนมัติ (เปิดเสียง)
+                const playPromise = videoElement.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log("Autoplay successful (with sound).");
+                        // หากเล่นสำเร็จ เราไม่ต้องการให้ error listener ถูกเรียกอีก
+                        videoElement.removeEventListener('error', handleError);
+                    }).catch(error => {
+                        // หาก Autoplay ถูกบล็อกจริง ๆ (โดยเฉพาะมือถือ/ไม่มีการโต้ตอบก่อนหน้า)
+                        console.warn("Autoplay was prevented (Promise Rejected). User must click play button on video controls.", error);
+                        // วิดีโอจะยังคงโหลดและแสดงเฟรมแรก แต่ผู้ใช้ต้องคลิกปุ่ม Play บนตัวควบคุมวิดีโอเอง
+                        videoElement.removeEventListener('error', handleError); // ลบ error listener ออก เพราะวิดีโอถูกบล็อก ไม่ใช่ไฟล์เสีย
+                    });
+                }
             }
+
+            // เริ่มกระบวนการโหลด
+            attemptLoad();
         }
         
         // (NEW) Function to handle the Iframe fallback
