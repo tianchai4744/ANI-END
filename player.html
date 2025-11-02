@@ -131,75 +131,6 @@
             font-weight: 700;
         }
 
-        /* --- NEW: Danmaku (Bullet Comment) Styles --- */
-
-        /* คอนเทนเนอร์ของคอมเมนต์ลอย */
-        #danmaku-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none; /* ทำให้คลิกทะลุไปที่วิดีโอได้ */
-            overflow: hidden; /* ป้องกันคอมเมนต์ล้นออกไป */
-            z-index: 10; /* ซ้อนทับวิดีโอแต่ไม่ซ้อนทับ UI ควบคุม */
-        }
-
-        /* คอมเมนต์แต่ละตัว */
-        .danmaku-item {
-            position: absolute;
-            white-space: nowrap; /* ป้องกันข้อความตัดบรรทัด */
-            color: white;
-            padding: 2px 4px;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
-            user-select: none;
-            will-change: transform; /* เพิ่มประสิทธิภาพ animation */
-        }
-
-        /* Keyframe Animation: เคลื่อนที่จากขวาไปซ้าย */
-        @keyframes flowDanmaku {
-            from {
-                transform: translateX(100%);
-            }
-            to {
-                transform: translateX(-100vw); /* ใช้ -100vw เพื่อให้เลื่อนออกนอกหน้าจอไปเลย */
-            }
-        }
-        
-        .danmaku-flow {
-            animation-name: flowDanmaku;
-            animation-timing-function: linear;
-            animation-iteration-count: 1; 
-            animation-fill-mode: forwards;
-        }
-        
-        /* (MODIFIED) สไตล์สำหรับ Modal ของ Danmaku Settings: เปลี่ยนเป็น Fixed/Absolute ภายใน Container ใหม่ */
-        .danmaku-modal {
-            position: absolute; /* (MODIFIED) เปลี่ยนเป็น absolute ภายใน Danmaku Bar */
-            bottom: 40px; /* (MODIFIED) ลอยขึ้นเหนือบาร์ */
-            right: 16px;
-            width: 250px;
-            z-index: 30; 
-            background-color: rgba(31, 41, 55, 0.95); /* gray-800 โปร่งแสง */
-            backdrop-filter: blur(5px);
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
-        }
-
-        /* (NEW) สไตล์สำหรับ Danmaku Input */
-        .danmaku-input-container {
-            /* ต้องเป็นส่วนที่อยู่ใต้ Video Player ในคลาส order-1 */
-            background-color: #1f2937; /* gray-800 */
-            padding: 8px 16px;
-            border-top: 1px solid #374151; /* gray-700 */
-            position: relative; /* (NEW) ต้องเป็น relative เพื่อให้ Modal ลอยภายในได้ */
-        }
-        .danmaku-input-container input, 
-        .danmaku-input-container button {
-            /* ทำให้ input และ button อยู่ในบรรทัดเดียวกัน */
-            height: 38px;
-        }
-
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100">
@@ -211,7 +142,7 @@
         import { 
             getFirestore, doc, getDoc, onSnapshot, collection, query, where, getDocs,
             setLogLevel,
-            updateDoc, increment, orderBy, limit, addDoc, serverTimestamp 
+            updateDoc, increment, orderBy, limit, addDoc, serverTimestamp // (NEW) เพิ่ม addDoc, serverTimestamp
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config เนื่องจาก Canvas ไม่ได้ให้ global vars มาในโหมดนี้ ***)
@@ -229,17 +160,6 @@
         let db, auth, userId;
         let currentShow = null;
         let currentEpisodes = [];
-        let allComments = []; 
-        let danmakuEnabled = true; 
-        let danmakuFontSize = 16; 
-        let danmakuOpacity = 0.8; 
-        let danmakuSpeed = 15; 
-        let danmakuInterval = null; 
-        let danmakuLaneHeight = 30; 
-        let danmakuLanes = []; 
-        let danmakuMinTop = 50; 
-        let danmakuMaxTop = 0; 
-        let isDanmakuSettingsOpen = false; 
 
         // UI Elements
         const playerEmbedDiv = document.getElementById('video-player-embed');
@@ -250,36 +170,13 @@
         const top10ListContainer = document.getElementById('top10-list-container'); 
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
-        const danmakuContainer = document.getElementById('danmaku-container'); 
 
         // (NEW) Comment UI Elements
         const commentForm = document.getElementById('comment-form');
+        // (FIX) ต้องผูกตัวแปร UI Elements ให้ถูกต้อง
+        const commentInput = document.getElementById('comment-input');
         const commentsContainer = document.getElementById('comments-container');
-        
-        // (NEW) Danmaku Input & Button
-        const danmakuInput = document.getElementById('danmaku-input'); 
-        const danmakuUserNameInput = document.getElementById('danmaku-user-name'); 
-        const danmakuSettingsTrigger = document.getElementById('danmaku-settings-trigger'); 
-
-        // (NEW) Danmaku Controls
-        const danmakuSettingsModal = document.getElementById('danmaku-settings-modal'); 
-        const danmakuToggleBtn = document.getElementById('danmaku-toggle-btn');
-        const danmakuSizeSlider = document.getElementById('danmaku-size-slider');
-        const danmakuOpacitySlider = document.getElementById('danmaku-opacity-slider');
-        const danmakuAreaSlider = document.getElementById('danmaku-area-slider');
-
-        // (NEW) Main Comment Input
-        const commentInputMain = document.getElementById('comment-input-main');
-        const userNameInputMain = document.getElementById('comment-user-name-main');
-
-        // (FIX) ย้าย signIn() เข้ามาใน scope ของ module
-        async function signIn() {
-            try {
-                await signInAnonymously(auth);
-            } catch (error) {
-                console.error("Sign In Error:", error);
-            }
-        }
+        const userNameInput = document.getElementById('comment-user-name');
         
         async function initializeFirebase() {
             try {
@@ -291,258 +188,33 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
-                        const defaultUserName = `User-${userId.substring(0, 6)}`;
-                        
-                        // (FIXED) กำหนดค่าเริ่มต้นให้กับ input ทั้งหมด
-                        if (userNameInputMain) {
-                            userNameInputMain.value = defaultUserName; 
+                        // (NEW) ตั้งชื่อผู้ใช้เริ่มต้น (สามารถเปลี่ยนได้)
+                        // (FIX) ตรวจสอบว่า userNameInput พร้อมใช้งานก่อนกำหนดค่า
+                        if (userNameInput) {
+                            userNameInput.value = `User-${userId.substring(0, 6)}`; 
                         }
-                        if (danmakuUserNameInput) {
-                            danmakuUserNameInput.value = defaultUserName;
-                        }
-                        
                         console.log("User Authenticated (Anonymous):", userId);
-                        
+                        // (MODIFIED) เรียก loadContent เพื่อโหลดเนื้อหาที่เกี่ยวข้องกับ Show ID
+                        // และเรียก loadGlobalContent เพื่อโหลดรายการที่ไม่ต้องใช้ Show ID
                         await loadContent(); 
                         await loadGlobalContent();
-                        
-                        // (NEW) ตั้งค่าเริ่มต้นของ Danmaku Controls
-                        initializeDanmakuControls();
-                        
                     } else {
-                        // (FIX) เรียก signIn() จากภายใน scope
-                        await signIn(); 
+                        await signIn(); // ถ้ายังไม่ล็อกอิน ให้ล็อกอินก่อน
                     }
                 });
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
             }
         }
-        
-        // (NEW) ฟังก์ชันสำหรับเปิด/ปิด Modal Setting
-        function toggleDanmakuSettings() {
-             isDanmakuSettingsOpen = !isDanmakuSettingsOpen;
-             // (MODIFIED) สลับคลาส hidden
-             danmakuSettingsModal.classList.toggle('hidden', !isDanmakuSettingsOpen);
-        }
 
-        // (NEW) ฟังก์ชันสำหรับเริ่มต้น Danmaku Controls
-        function initializeDanmakuControls() {
-            // ตั้งค่าเริ่มต้นของ Sliders
-            danmakuSizeSlider.value = danmakuFontSize;
-            danmakuOpacitySlider.value = danmakuOpacity * 100;
-            danmakuAreaSlider.value = 75; // 75% ของพื้นที่ด้านบน
-
-            // Event Listeners
-            danmakuSettingsTrigger.addEventListener('click', toggleDanmakuSettings); // (NEW) Trigger
-            danmakuToggleBtn.addEventListener('click', toggleDanmaku);
-            danmakuSizeSlider.addEventListener('input', updateDanmakuSize);
-            danmakuOpacitySlider.addEventListener('input', updateDanmakuOpacity);
-            danmakuAreaSlider.addEventListener('input', updateDanmakuArea);
-            
-            // (NEW) Attach event listener for Danmaku Input form
-            document.getElementById('danmaku-input-form').addEventListener('submit', handleDanmakuInputSubmit);
-
-            // อัปเดต UI ปุ่ม
-            updateDanmakuButtonUI();
-            
-            // คำนวณพื้นที่ Danmaku ครั้งแรก
-            syncDanmakuControls();
-        }
-
-        // (NEW) คำนวณพื้นที่แสดงผล Danmaku
-        function syncDanmakuControls() {
-            const videoWrapper = document.querySelector('.video-aspect-wrapper');
-            if (!videoWrapper) return;
-            
-            const areaPercentage = danmakuAreaSlider.value / 100;
-            danmakuLaneHeight = danmakuFontSize * 1.5; // ปรับความสูงเลนตามขนาดฟอนต์
-            danmakuMaxTop = (videoWrapper.offsetHeight * areaPercentage) - danmakuLaneHeight;
-            
-            // คำนวณจำนวนเลนที่สามารถใช้ได้
-            const totalLanes = Math.floor((danmakuMaxTop - danmakuMinTop) / danmakuLaneHeight);
-            danmakuLanes = Array(Math.max(1, totalLanes)).fill(0); // 0 = ว่าง, timestamp = ไม่ว่าง
-            
-            // ปรับขนาดฟอนต์ให้กับคอมเมนต์ที่ปล่อยออกไปแล้ว
-            document.querySelectorAll('.danmaku-item').forEach(el => {
-                 el.style.fontSize = `${danmakuFontSize}px`;
-                 el.style.opacity = danmakuOpacity;
-            });
-            
-            console.log(`Danmaku: Total Lanes = ${danmakuLanes.length}, Max Height = ${danmakuMaxTop}`);
-        }
-        
-        // (NEW) ฟังก์ชันสำหรับเปิด/ปิด Danmaku
-        function toggleDanmaku() {
-            danmakuEnabled = !danmakuEnabled;
-            updateDanmakuButtonUI();
-            if (danmakuEnabled) {
-                startDanmakuFlow(allComments);
-            } else {
-                stopDanmakuFlow();
-            }
-        }
-        
-        // (NEW) อัปเดต UI ปุ่ม Danmaku
-        function updateDanmakuButtonUI() {
-            danmakuToggleBtn.classList.toggle('bg-green-600', danmakuEnabled);
-            danmakuToggleBtn.classList.toggle('bg-gray-600', !danmakuEnabled);
-            danmakuToggleBtn.innerHTML = danmakuEnabled 
-                ? `<i class="ri-toggle-fill text-xl"></i> <span>ปิดคอมเมนต์ลอย</span>` 
-                : `<i class="ri-toggle-line text-xl"></i> <span>เปิดคอมเมนต์ลอย</span>`;
-        }
-
-        // (NEW) อัปเดตขนาดฟอนต์ Danmaku
-        function updateDanmakuSize(e) {
-            danmakuFontSize = parseInt(e.target.value, 10);
-            syncDanmakuControls(); // เรียกเพื่อปรับฟอนต์ให้กับคอมเมนต์ที่ปล่อยไปแล้ว
-        }
-
-        // (NEW) อัปเดตความโปร่งใส Danmaku
-        function updateDanmakuOpacity(e) {
-            danmakuOpacity = parseInt(e.target.value, 10) / 100;
-            syncDanmakuControls();
-        }
-        
-        // (NEW) อัปเดตพื้นที่แสดง Danmaku
-        function updateDanmakuArea() {
-             syncDanmakuControls();
-        }
-
-
-        // (NEW) ฟังก์ชันเริ่มต้นการปล่อย Danmaku
-        function startDanmakuFlow(comments, singleLaunch = false) {
-             if (!singleLaunch) stopDanmakuFlow(); // หยุด flow เก่าก่อนถ้าไม่ใช่การยิงเดี่ยว
-
-             if (!danmakuEnabled || comments.length === 0) return;
-
-             let commentIndex = 0;
-             const launch = () => {
-                 if (commentIndex >= comments.length) {
-                     commentIndex = 0; // วนกลับไปปล่อยใหม่ (สำหรับตัวอย่าง)
-                 }
-
-                 // ค้นหาเลนที่ว่างที่สุด
-                 const currentTime = Date.now();
-                 let bestLaneIndex = -1;
-                 
-                 for (let i = 0; i < danmakuLanes.length; i++) {
-                     // Check if the lane is clear (or clear enough based on time)
-                     if (danmakuLanes[i] === 0 || danmakuLanes[i] < currentTime) {
-                         bestLaneIndex = i;
-                         break;
-                     } 
-                 }
-                 // ถ้าหาเลนว่างไม่ได้เลย ให้หาเลนที่คอมเมนต์กำลังจะออกจากจอ (minTimestamp)
-                 if (bestLaneIndex === -1) {
-                    let minTime = Infinity;
-                    for (let i = 0; i < danmakuLanes.length; i++) {
-                        if (danmakuLanes[i] < minTime) {
-                            minTime = danmakuLanes[i];
-                            bestLaneIndex = i;
-                        }
-                    }
-                 }
-
-
-                 if (bestLaneIndex !== -1) {
-                     const commentText = comments[commentIndex].commentText;
-                     const laneTop = danmakuMinTop + (bestLaneIndex * danmakuLaneHeight);
-
-                     // สร้างและปล่อยคอมเมนต์
-                     const danmakuEl = createDanmakuElement(commentText, laneTop);
-                     danmakuContainer.appendChild(danmakuEl);
-                     
-                     // อัปเดตสถานะเลน: Timestamp เมื่อคอมเมนต์จะออกจากจอ
-                     // ใช้ความยาวของข้อความในการกำหนดเวลาออกนอกจอ
-                     const textLength = commentText.length;
-                     // สมมติว่าความเร็วคงที่ คอมเมนต์ที่ยาวจะใช้เวลาออกจากจอช้ากว่า
-                     const adjustedSpeed = danmakuSpeed + (textLength * 0.2); 
-                     
-                     danmakuLanes[bestLaneIndex] = currentTime + (adjustedSpeed * 1000 / 2); // ให้ 50% ของเวลา animation เพื่อเคลียร์เลน
-                     
-                     danmakuEl.style.animationDuration = `${adjustedSpeed}s`; 
-
-                     // ลบ Element เมื่อ Animation จบ
-                     danmakuEl.addEventListener('animationend', () => {
-                         danmakuEl.remove();
-                         // ล้างสถานะเลนเมื่อคอมเมนต์ออกจากหน้าจอ
-                         danmakuLanes[bestLaneIndex] = 0; 
-                     });
-
-                     commentIndex++;
-                 }
-             }
-
-             if (singleLaunch) {
-                 launch();
-             } else {
-                 // Start interval flow
-                 danmakuInterval = setInterval(launch, 500); // ปล่อยคอมเมนต์ใหม่ทุก 500ms
-             }
-        }
-
-        // (NEW) ฟังก์ชันหยุดการปล่อย Danmaku
-        function stopDanmakuFlow() {
-             if (danmakuInterval) {
-                 clearInterval(danmakuInterval);
-                 danmakuInterval = null;
-             }
-             danmakuContainer.innerHTML = ''; // ลบคอมเมนต์ที่ลอยอยู่
-             danmakuLanes = danmakuLanes.map(() => 0); // รีเซ็ตเลน
-        }
-
-        // (NEW) ฟังก์ชันสร้าง Element Danmaku
-        function createDanmakuElement(text, top) {
-            const el = document.createElement('div');
-            el.className = 'danmaku-item danmaku-flow';
-            el.textContent = text;
-            el.style.top = `${top}px`;
-            el.style.fontSize = `${danmakuFontSize}px`;
-            el.style.opacity = danmakuOpacity;
-            el.style.animationDuration = `${danmakuSpeed}s`; // ใช้ความเร็วที่ตั้งไว้
-            el.style.animationDelay = `${Math.random() * 2}s`; // เพิ่มความสุ่มเล็กน้อย
-            return el;
-        }
-        
-        // (NEW) ฟังก์ชันจัดการการส่งคอมเมนต์ (ใช้สำหรับ Danmaku Input)
-        async function handleDanmakuInputSubmit(e) {
-            e.preventDefault();
-            
-            const commentText = danmakuInput.value.trim();
-            const userName = danmakuUserNameInput.value.trim() || `User-${userId.substring(0, 6)}`;
-            
-            if (!commentText || !currentShow || !userId) {
-                console.warn("Cannot post comment: Missing text, show ID, or user ID.");
-                return;
-            }
-            
-            const newComment = {
-                showId: currentShow.id,
-                userId: userId,
-                userName: userName,
-                commentText: commentText,
-                isDanmaku: true, // (NEW) เพิ่ม flag สำหรับคอมเมนต์ลอย
-                createdAt: serverTimestamp()
-            };
-
+        async function signIn() {
             try {
-                await addDoc(getCollectionRef("comments"), newComment);
-                danmakuInput.value = ''; // Clear input
-                danmakuUserNameInput.value = userName; // Preserve current user name
-                
-                // (NEW) ปล่อยคอมเมนต์ลอยที่เพิ่งส่งไปทันที (เพื่อ Feedback)
-                if (danmakuEnabled) {
-                     const tempComment = { commentText: commentText };
-                     startDanmakuFlow([tempComment], true); // true = single launch
-                }
-
+                await signInAnonymously(auth);
             } catch (error) {
-                console.error("Error posting comment:", error);
-                console.log("Error posting comment. Please try again.");
+                console.error("Sign In Error:", error);
             }
         }
-        
+
         // ฟังก์ชันช่วยสำหรับอ้างอิง Collection
         function getCollectionRef(collectionName) {
             const appId = firebaseConfig.projectId;
@@ -650,40 +322,44 @@
         }
 
         // (NEW) ฟังก์ชันสำหรับจัดการการส่งคอมเมนต์
-        commentForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            // ใช้ input จากฟอร์มคอมเมนต์หลัก
-            const commentText = document.getElementById('comment-input-main').value.trim();
-            const userName = document.getElementById('comment-user-name-main').value.trim() || `User-${userId.substring(0, 6)}`;
+        // (FIX) เพิ่มการตรวจสอบว่า commentForm มีอยู่จริง
+        if (commentForm) {
+            commentForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                // (FIX) ใช้ตัวแปร commentInput และ userNameInput ที่ถูกผูกกับ DOM แล้ว
+                const commentText = commentInput.value.trim();
+                const userName = userNameInput.value.trim() || `User-${userId.substring(0, 6)}`;
+                
+                if (!commentText || !currentShow || !userId) {
+                    console.warn("Cannot post comment: Missing text, show ID, or user ID.");
+                    return;
+                }
+                
+                const newComment = {
+                    showId: currentShow.id,
+                    userId: userId,
+                    userName: userName,
+                    commentText: commentText,
+                    createdAt: serverTimestamp()
+                };
 
-            if (!commentText || !currentShow || !userId) {
-                console.warn("Cannot post comment: Missing text, show ID, or user ID.");
-                return;
-            }
-            
-            const newComment = {
-                showId: currentShow.id,
-                userId: userId,
-                userName: userName,
-                commentText: commentText,
-                isDanmaku: false, // คอมเมนต์แบบปกติ
-                createdAt: serverTimestamp()
-            };
+                try {
+                    await addDoc(getCollectionRef("comments"), newComment);
+                    commentInput.value = ''; // Clear input
+                    userNameInput.value = userName; // Preserve current user name
+                } catch (error) {
+                    console.error("Error posting comment:", error);
+                    console.log("Error posting comment. Please try again.");
+                }
+            });
+        }
 
-            try {
-                await addDoc(getCollectionRef("comments"), newComment);
-                document.getElementById('comment-input-main').value = ''; // Clear input
-                document.getElementById('comment-user-name-main').value = userName; // Preserve current user name
-            } catch (error) {
-                console.error("Error posting comment:", error);
-                console.log("Error posting comment. Please try again.");
-            }
-        });
-        
-
-        // (NEW) ฟังก์ชันสำหรับตั้ง Listener คอมเมนต์ (และใช้สำหรับ Danmaku)
+        // (NEW) ฟังก์ชันสำหรับตั้ง Listener คอมเมนต์
         function setupCommentListener(showId) {
+            // (FIX) เพิ่มการตรวจสอบว่า commentsContainer มีอยู่จริง
+            if (!commentsContainer) return;
+            
             const commentsQuery = query(
                 getCollectionRef("comments"), 
                 where("showId", "==", showId), 
@@ -693,292 +369,20 @@
             
             onSnapshot(commentsQuery, (snapshot) => {
                 commentsContainer.innerHTML = ''; // Clear old comments
-                allComments = []; // (NEW) รีเซ็ต Danmaku Comment List
-                
                 if (snapshot.empty) {
                     commentsContainer.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีคอมเมนต์ แสดงความคิดเห็นแรกของคุณสิ!</p>`;
-                    stopDanmakuFlow(); // (NEW) หยุด Danmaku ถ้าไม่มีคอมเมนต์
                     return;
                 }
                 
                 snapshot.forEach((doc) => {
                     const comment = doc.data();
                     commentsContainer.innerHTML += createCommentElement(comment);
-                    // (NEW) เพิ่มเฉพาะคอมเมนต์ที่เป็น Danmaku หรือคอมเมนต์ที่ไม่มี isDanmaku flag เข้าไปใน Danmaku List
-                    if (comment.isDanmaku === true || comment.isDanmaku === undefined) { 
-                        allComments.push(comment); 
-                    }
                 });
-                
-                // (NEW) เริ่ม Danmaku Flow ถ้าเปิดใช้งานอยู่
-                if (danmakuEnabled) {
-                     startDanmakuFlow(allComments);
-                }
-                
             }, (error) => {
                 console.error("Error listening to comments:", error);
                 commentsContainer.innerHTML = `<p class="text-red-500 p-4">ไม่สามารถโหลดคอมเมนต์ได้</p>`;
-                stopDanmakuFlow(); // (NEW) หยุด Danmaku เมื่อเกิดข้อผิดพลาด
             });
         }
-        
-        // (NEW) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player (ไม่มีการเปลี่ยนแปลง)
-        function syncEpisodeListHeight() {
-            // ... (โค้ด syncEpisodeListHeight เหมือนเดิม)
-            const videoWrapper = document.querySelector('.video-aspect-wrapper');
-            const episodeListContent = document.getElementById('episode-list-container');
-            
-            if (!videoWrapper || !episodeListContent) return;
-
-            // ตรวจสอบว่าอยู่บนหน้าจอขนาดใหญ่ (lg: ขึ้นไป) ก่อนดำเนินการ
-            if (window.innerWidth < 1024) {
-                 episodeListContent.style.maxHeight = 'initial';
-                 episodeListContent.style.overflowY = 'initial';
-                 episodeListContent.style.paddingRight = '0';
-                 return;
-            }
-
-            const videoHeight = videoWrapper.offsetHeight;
-            const headerAndPaddingOffset = 65; 
-            const listMaxHeight = videoHeight - headerAndPaddingOffset;
-
-            episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; 
-            episodeListContent.style.overflowY = 'auto';
-            episodeListContent.style.paddingRight = '8px'; 
-        }
-
-        // แสดงรายละเอียดซีรีส์ (ไม่มีการเปลี่ยนแปลง)
-        function renderShowDetails(show) {
-            showTitleEl.textContent = show.title;
-            showDescEl.textContent = show.description || "ไม่มีคำอธิบาย";
-        }
-
-        // แสดงปุ่มรายการตอน (ไม่มีการเปลี่ยนแปลง)
-        function renderEpisodeList(episodes) {
-            episodeListContainer.innerHTML = ''; 
-            if (episodes.length === 0) {
-                episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่พบตอน</p>`;
-                return;
-            }
-            
-            episodeListContainer.className = 'flex flex-wrap gap-2'; 
-            
-            episodes.forEach((ep, index) => {
-                const button = document.createElement('button');
-                button.className = "ep-button w-12 h-12 flex-shrink-0 bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200";
-                button.textContent = ep.episodeNumber || (index + 1);
-                button.dataset.episodeId = ep.id;
-                
-                button.addEventListener('click', () => {
-                    playEpisode(ep);
-                });
-                
-                episodeListContainer.appendChild(button);
-            });
-            
-            syncEpisodeListHeight(); 
-        }
-        
-        /**
-         * แสดงรายการ "อนิเมะที่คุณอาจจะชอบ" (ไม่มีการเปลี่ยนแปลง)
-         */
-        async function renderRelatedList(tags) {
-             // ... (โค้ด renderRelatedList เหมือนเดิม)
-            relatedListContainer.innerHTML = `<p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>`;
-            
-            try {
-                let relatedQuery;
-                let relatedShows = [];
-                const maxDisplay = 15; 
-
-                if (tags && tags.length > 0) {
-                    relatedQuery = query(getCollectionRef("shows"), where("tags", "array-contains-any", tags));
-                    const querySnapshot = await getDocs(relatedQuery);
-                    
-                    querySnapshot.forEach((doc) => {
-                        if (currentShow && doc.id !== currentShow.id) { 
-                            relatedShows.push({ id: doc.id, ...doc.data() });
-                        }
-                    });
-                } else {
-                    relatedQuery = query(getCollectionRef("shows"), orderBy("viewCount", "desc"), limit(maxDisplay));
-                    const querySnapshot = await getDocs(relatedQuery);
-                    
-                    querySnapshot.forEach((doc) => {
-                        relatedShows.push({ id: doc.id, ...doc.data() });
-                    });
-                }
-
-                relatedShows = relatedShows.sort(() => 0.5 - Math.random()).slice(0, maxDisplay);
-                
-                if(relatedShows.length === 0) {
-                    relatedListContainer.innerHTML = `<p class="text-gray-400">ไม่พบซีรีส์ที่เกี่ยวข้อง</p>`;
-                    return;
-                }
-                
-                relatedListContainer.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4';
-                relatedListContainer.innerHTML = ''; 
-
-                relatedShows.forEach(show => {
-                    relatedListContainer.innerHTML += createRelatedCard(show);
-                });
-
-            } catch (error) {
-                console.error("Error fetching related shows:", error);
-                relatedListContainer.innerHTML = `<p class="text-red-400">เกิดข้อผิดพลาดในการโหลดเรื่องแนะนำ</p>`;
-            }
-        }
-        
-        /**
-         * สร้าง Card สำหรับ Related Shows (ไม่มีการเปลี่ยนแปลง)
-         */
-        function createRelatedCard(show) {
-            const title = show.title || "N/A";
-            const isDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
-            
-            let displayTitle = title;
-            const dubBadge = isDub ? `<div class="dub-badge">พากย์ไทย</div>` : '';
-            
-            return `
-                <a href="player.html?id=${show.id}" class="block group">
-                    <div class="aspect-[2/3] rounded-lg overflow-hidden mb-2 relative">
-                        ${dubBadge}
-                        <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
-                             alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                    </div>
-                    <div class="text-white min-h-10">
-                        <h4 class="font-bold related-card-title text-sm">${displayTitle}</h4> 
-                    </div>
-                </a>
-            `;
-        }
-
-        // แสดงรายการ 10 อันดับยอดนิยม (ไม่มีการเปลี่ยนแปลง)
-        async function renderTop10List() {
-             // ... (โค้ด renderTop10List เหมือนเดิม)
-            top10ListContainer.innerHTML = '';
-            
-            try {
-                const top10Query = query(
-                    getCollectionRef("shows"), 
-                    orderBy("viewCount", "desc"), 
-                    limit(10)
-                );
-                const querySnapshot = await getDocs(top10Query);
-                
-                let rank = 1;
-                querySnapshot.forEach((doc) => {
-                    const show = { id: doc.id, ...doc.data() };
-                    top10ListContainer.innerHTML += createTop10Card(show, rank);
-                    rank++;
-                });
-
-                if (querySnapshot.size === 0) {
-                    top10ListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่พบข้อมูล 10 อันดับยอดนิยม</p>`;
-                }
-                
-                top10ListContainer.classList.add('space-y-3');
-                top10ListContainer.classList.remove('max-h-96', 'overflow-y-auto', 'pr-2'); 
-                
-            } catch (error) {
-                console.error("Error fetching top 10 shows:", error);
-                top10ListContainer.innerHTML = `<p class="text-red-400 p-4">เกิดข้อผิดพลาดในการโหลดอันดับ</p>`;
-            }
-        }
-
-        /**
-         * สร้าง Card สำหรับ Top 10 ในรูปแบบใหม่ (ไม่มีการเปลี่ยนแปลง)
-         */
-        function createTop10Card(show, rank) {
-             // ... (โค้ด createTop10Card เหมือนเดิม)
-            let rankClass = '';
-            if (rank === 1) rankClass = 'rank-1';
-            else if (rank === 2) rankClass = 'rank-2';
-            else if (rank === 3) rankClass = 'rank-3';
-
-            const title = show.title || "N/A";
-            const isDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
-            
-            let displayTitle = title;
-            let dubBadge = '';
-            if (isDub) {
-                 displayTitle = displayTitle.replace(/\s*\(พากย์ไทย\)\s*$/, '').trim();
-                 dubBadge = ' <span class="text-sm text-red-400 font-medium">(พากย์ไทย)</span>';
-            }
-            
-            return `
-                <a href="player.html?id=${show.id}" class="top10-item hover:shadow-lg">
-                    <span class="rank-badge-lg ${rankClass}">${rank}</span>
-                    
-                    <img src="${show.thumbnailUrl || 'https://placehold.co/60x80/333/fff?text=Img'}" 
-                         alt="${title}" class="rounded-md top10-thumbnail shadow-md">
-                    
-                    <div class="top10-content flex-grow">
-                        <h4 class="font-bold text-white line-clamp-2 text-base leading-snug">${displayTitle}${dubBadge}</h4>
-                    </div>
-                </a>
-            `;
-        }
-
-
-        // ฟังก์ชันเล่นวิดีโอ (ไม่มีการเปลี่ยนแปลง)
-        function playEpisode(episode) {
-             // ... (โค้ด playEpisode เหมือนเดิม)
-            console.log(`Playing: ${episode.title}`, episode.embedCode);
-            
-            playerEmbedDiv.innerHTML = ''; 
-            
-            if (episode.embedCode && episode.embedCode.trim().startsWith('http')) {
-                let videoUrlStr = episode.embedCode;
-
-                try {
-                    const videoUrl = new URL(videoUrlStr);
-                    videoUrl.searchParams.set('autoplay', '1');
-                    videoUrlStr = videoUrl.href;
-                } catch (e) {
-                    console.warn("Could not parse URL to add autoplay, trying string append:", e);
-                    if (videoUrlStr.includes('?')) {
-                        videoUrlStr += '&autoplay=1';
-                    } else {
-                        videoUrlStr += '?autoplay=1';
-                    }
-                }
-
-                const iframe = document.createElement('iframe');
-                iframe.src = videoUrlStr; 
-                iframe.setAttribute('frameborder', '0');
-                iframe.setAttribute('allow', 'autoplay; fullscreen'); 
-                iframe.setAttribute('webkitallowfullscreen', 'true');
-                iframe.setAttribute('mozallowfullscreen', 'true');
-                iframe.setAttribute('allowfullscreen', 'true');
-                
-                playerEmbedDiv.appendChild(iframe);
-
-            } else if (episode.embedCode) {
-                playerEmbedDiv.innerHTML = episode.embedCode;
-            } else {
-                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
-            }
-            
-            showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
-            
-            document.querySelectorAll('.ep-button').forEach(btn => {
-                if (btn.dataset.episodeId === episode.id) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeFirebase(); 
-            // (NEW) Attach resize listener
-            window.addEventListener('resize', () => {
-                 syncEpisodeListHeight();
-                 syncDanmakuControls(); // (NEW) Sync Danmaku area on resize
-            });
-        });
         
         // (NEW) สร้าง HTML Element สำหรับคอมเมนต์เดียว
         function createCommentElement(comment) {
@@ -1013,6 +417,297 @@
                 </div>
             `;
         }
+
+        // (NEW) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player
+        function syncEpisodeListHeight() {
+            // 1. หาความสูงของ Video Player Wrapper
+            const videoWrapper = document.querySelector('.video-aspect-wrapper');
+            const episodeListContent = document.getElementById('episode-list-container');
+            
+            if (!videoWrapper || !episodeListContent) return;
+
+            // ตรวจสอบว่าอยู่บนหน้าจอขนาดใหญ่ (lg: ขึ้นไป) ก่อนดำเนินการ
+            if (window.innerWidth < 1024) {
+                 episodeListContent.style.maxHeight = 'initial';
+                 episodeListContent.style.overflowY = 'initial';
+                 episodeListContent.style.paddingRight = '0';
+                 return;
+            }
+
+            const videoHeight = videoWrapper.offsetHeight;
+            
+            // 2. คำนวณความสูงที่เหลือสำหรับเนื้อหารายการตอน (Episode List Content)
+            // HeaderAndPaddingOffset = 65px (ค่าประมาณความสูงของ h3 + mb-4 + pb-2 + p-4 ของ section)
+            const headerAndPaddingOffset = 65; 
+            const listMaxHeight = videoHeight - headerAndPaddingOffset;
+
+            // 3. กำหนด Max-Height ให้กับ Episode List Container
+            episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
+            episodeListContent.style.overflowY = 'auto';
+            episodeListContent.style.paddingRight = '8px'; // pr-2
+        }
+
+        // แสดงรายละเอียดซีรีส์
+        function renderShowDetails(show) {
+            showTitleEl.textContent = show.title;
+            showDescEl.textContent = show.description || "ไม่มีคำอธิบาย";
+        }
+
+        // แสดงปุ่มรายการตอน
+        function renderEpisodeList(episodes) {
+            episodeListContainer.innerHTML = ''; 
+            if (episodes.length === 0) {
+                episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่พบตอน</p>`;
+                return;
+            }
+            
+            // (MODIFIED) Remove fixed max-height and overflow classes here.
+            episodeListContainer.className = 'flex flex-wrap gap-2'; 
+            
+            episodes.forEach((ep, index) => {
+                const button = document.createElement('button');
+                button.className = "ep-button w-12 h-12 flex-shrink-0 bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200";
+                button.textContent = ep.episodeNumber || (index + 1);
+                button.dataset.episodeId = ep.id;
+                
+                button.addEventListener('click', () => {
+                    playEpisode(ep);
+                });
+                
+                episodeListContainer.appendChild(button);
+            });
+            
+            // (NEW) Call sync height after rendering buttons
+            syncEpisodeListHeight(); 
+        }
+        
+        /**
+         * (MODIFIED) แสดงรายการ "อนิเมะที่คุณอาจจะชอบ" ในรูปแบบ Grid Card
+         */
+        async function renderRelatedList(tags) {
+            relatedListContainer.innerHTML = `<p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>`;
+            
+            try {
+                let relatedQuery;
+                let relatedShows = [];
+                // (MODIFIED) 15 items (3 rows * 5 columns)
+                const maxDisplay = 15; 
+
+                if (tags && tags.length > 0) {
+                    // 1. ถ้ามี Tags ให้ค้นหาซีรีส์ที่มี tag ตรงกัน (ดึงทั้งหมด)
+                    relatedQuery = query(getCollectionRef("shows"), where("tags", "array-contains-any", tags));
+                    const querySnapshot = await getDocs(relatedQuery);
+                    
+                    querySnapshot.forEach((doc) => {
+                        // กรองเรื่องปัจจุบันออก
+                        if (currentShow && doc.id !== currentShow.id) { 
+                            relatedShows.push({ id: doc.id, ...doc.data() });
+                        }
+                    });
+                } else {
+                    // 2. ถ้าไม่มี Tags (หน้า Error) ให้ดึงเรื่องแนะนำทั่วไป (เรียงตาม ViewCount)
+                    // (MODIFIED) จำกัดเป็น maxDisplay (15)
+                    relatedQuery = query(getCollectionRef("shows"), orderBy("viewCount", "desc"), limit(maxDisplay));
+                    const querySnapshot = await getDocs(relatedQuery);
+                    
+                    querySnapshot.forEach((doc) => {
+                        relatedShows.push({ id: doc.id, ...doc.data() });
+                    });
+                }
+
+                // สุ่มและจำกัด 15 รายการ (3 แถว x 5 คอลัมน์)
+                // (MODIFIED) Always use maxDisplay (15) for slicing
+                relatedShows = relatedShows.sort(() => 0.5 - Math.random()).slice(0, maxDisplay);
+                
+                if(relatedShows.length === 0) {
+                    // (MODIFIED) ข้อความแสดงผลเมื่อไม่พบ
+                    relatedListContainer.innerHTML = `<p class="text-gray-400">ไม่พบซีรีส์ที่เกี่ยวข้อง</p>`;
+                    return;
+                }
+                
+                // (MODIFIED) ตั้งค่า Container ให้เป็น Grid 2-5 คอลัมน์ (Responsive)
+                // grid-cols-2 (mobile), md:grid-cols-3 (tablet), lg:grid-cols-5 (desktop)
+                relatedListContainer.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4';
+                relatedListContainer.innerHTML = ''; // Clear loading text
+
+                relatedShows.forEach(show => {
+                    relatedListContainer.innerHTML += createRelatedCard(show);
+                });
+
+            } catch (error) {
+                console.error("Error fetching related shows:", error);
+                relatedListContainer.innerHTML = `<p class="text-red-400">เกิดข้อผิดพลาดในการโหลดเรื่องแนะนำ</p>`;
+            }
+        }
+        
+        /**
+         * (NEW) สร้าง Card สำหรับ Related Shows ในรูปแบบ Grid (คล้าย index.html)
+         */
+        function createRelatedCard(show) {
+            const title = show.title || "N/A";
+            const isDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
+            
+            // Format ชื่อเรื่อง
+            let displayTitle = title;
+            const dubBadge = isDub ? `<div class="dub-badge">พากย์ไทย</div>` : '';
+            
+            // ** ใช้โครงสร้าง Card Grid แบบเดียวกับใน index.html **
+            return `
+                <a href="player.html?id=${show.id}" class="block group">
+                    <!-- 1. ส่วนภาพ (Image Aspect Ratio Container) -->
+                    <div class="aspect-[2/3] rounded-lg overflow-hidden mb-2 relative">
+                        ${dubBadge}
+                        <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
+                             alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                    </div>
+                    <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
+                    <div class="text-white min-h-10">
+                        <h4 class="font-bold related-card-title text-sm">${displayTitle}</h4> 
+                    </div>
+                </a>
+            `;
+        }
+
+        // แสดงรายการ 10 อันดับยอดนิยม (ไม่มีการเปลี่ยนแปลงหลัก)
+        async function renderTop10List() {
+            top10ListContainer.innerHTML = '';
+            
+            try {
+                // Query: เรียงตาม viewCount จากมากไปน้อย และจำกัด 10 รายการ (ใช้ logic เดียวกับ index.html)
+                const top10Query = query(
+                    getCollectionRef("shows"), 
+                    orderBy("viewCount", "desc"), 
+                    limit(10)
+                );
+                const querySnapshot = await getDocs(top10Query);
+                
+                let rank = 1;
+                querySnapshot.forEach((doc) => {
+                    const show = { id: doc.id, ...doc.data() };
+                    // ใช้ createTop10Card ที่ปรับปรุงใหม่
+                    top10ListContainer.innerHTML += createTop10Card(show, rank);
+                    rank++;
+                });
+
+                if (querySnapshot.size === 0) {
+                    top10ListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่พบข้อมูล 10 อันดับยอดนิยม</p>`;
+                }
+                
+                // (MODIFIED) ลบ max-h-96 และ overflow-y-auto เพื่อให้แสดงครบ 10 รายการ
+                top10ListContainer.classList.add('space-y-3');
+                top10ListContainer.classList.remove('max-h-96', 'overflow-y-auto', 'pr-2'); 
+                
+            } catch (error) {
+                console.error("Error fetching top 10 shows:", error);
+                top10ListContainer.innerHTML = `<p class="text-red-400 p-4">เกิดข้อผิดพลาดในการโหลดอันดับ</p>`;
+            }
+        }
+
+        /**
+         * สร้าง Card สำหรับ Top 10 ในรูปแบบใหม่: มีป้ายอันดับตัวเลขใหญ่ ไม่มีดาว/คะแนน
+         */
+        function createTop10Card(show, rank) {
+            // (MODIFIED) ใช้ CSS Class สำหรับสีอันดับ
+            let rankClass = '';
+            if (rank === 1) rankClass = 'rank-1';
+            else if (rank === 2) rankClass = 'rank-2';
+            else if (rank === 3) rankClass = 'rank-3';
+
+            const title = show.title || "N/A";
+            const isDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
+            
+            // Format ชื่อเรื่อง: ตัด [พากย์ไทย] ออกจากชื่อหลัก
+            let displayTitle = title;
+            let dubBadge = '';
+            if (isDub) {
+                 displayTitle = displayTitle.replace(/\s*\(พากย์ไทย\)\s*$/, '').trim(); // ลบ (พากย์ไทย) ที่ท้ายชื่อ
+                 // (MODIFIED) เปลี่ยนเป็นแค่ Tag Text เล็กๆ แทน Rating
+                 dubBadge = ' <span class="text-sm text-red-400 font-medium">(พากย์ไทย)</span>';
+            }
+            
+            // ** ปรับโครงสร้าง HTML เพื่อใส่ป้ายอันดับและลบส่วน Rating ออก **
+            return `
+                <a href="player.html?id=${show.id}" class="top10-item hover:shadow-lg">
+                    <!-- 1. ป้ายอันดับตัวเลขใหญ่ -->
+                    <span class="rank-badge-lg ${rankClass}">${rank}</span>
+                    
+                    <!-- 2. Thumbnail/Cover Image -->
+                    <img src="${show.thumbnailUrl || 'https://placehold.co/60x80/333/fff?text=Img'}" 
+                         alt="${title}" class="rounded-md top10-thumbnail shadow-md">
+                    
+                    <!-- 3. Content (Title) -->
+                    <div class="top10-content flex-grow">
+                        <!-- Title (Line Clamp 2) + Dub Badge -->
+                        <h4 class="font-bold text-white line-clamp-2 text-base leading-snug">${displayTitle}${dubBadge}</h4>
+                        
+                        <!-- (REMOVED) ลบส่วน Rating ออกไป -->
+                        
+                    </div>
+                </a>
+            `;
+        }
+
+
+        // ฟังก์ชันเล่นวิดีโอ (ไม่มีการเปลี่ยนแปลง)
+        function playEpisode(episode) {
+            console.log(`Playing: ${episode.title}`, episode.embedCode);
+            
+            playerEmbedDiv.innerHTML = ''; 
+            
+            if (episode.embedCode && episode.embedCode.trim().startsWith('http')) {
+                // กรณีเป็น URL (เช่น archive.org/embed/)
+                let videoUrlStr = episode.embedCode;
+
+                // พยายามเพิ่ม autoplay=1
+                try {
+                    const videoUrl = new URL(videoUrlStr);
+                    videoUrl.searchParams.set('autoplay', '1');
+                    videoUrlStr = videoUrl.href;
+                } catch (e) {
+                    console.warn("Could not parse URL to add autoplay, trying string append:", e);
+                    if (videoUrlStr.includes('?')) {
+                        videoUrlStr += '&autoplay=1';
+                    } else {
+                        videoUrlStr += '?autoplay=1';
+                    }
+                }
+
+                const iframe = document.createElement('iframe');
+                iframe.src = videoUrlStr; 
+                iframe.setAttribute('frameborder', '0');
+                iframe.setAttribute('allow', 'autoplay; fullscreen'); 
+                iframe.setAttribute('webkitallowfullscreen', 'true');
+                iframe.setAttribute('mozallowfullscreen', 'true');
+                iframe.setAttribute('allowfullscreen', 'true');
+                
+                playerEmbedDiv.appendChild(iframe);
+
+            } else if (episode.embedCode) {
+                // กรณีเป็น <iframe> tag (HTML string)
+                playerEmbedDiv.innerHTML = episode.embedCode;
+            } else {
+                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
+            }
+            
+            // อัปเดตชื่อเรื่องหลัก
+            showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
+            
+            // อัปเดตปุ่มที่ active
+            document.querySelectorAll('.ep-button').forEach(btn => {
+                if (btn.dataset.episodeId === episode.id) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebase(); 
+            // (NEW) Attach resize listener
+            window.addEventListener('resize', syncEpisodeListHeight);
+            // Removed Tab logic as we are no longer using tabs.
+        });
 
     </script>
 
@@ -1050,96 +745,21 @@
     <!-- Content (Hidden by default) -->
     <div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
         
-        <!-- FLEX CONTAINER หลัก -->
+        <!-- FLEX CONTAINER หลัก: เปลี่ยนจาก lg:flex-row เป็น flex-wrap เพื่อควบคุม order ได้ง่ายขึ้นบน Desktop -->
+        <!-- เราจะจัดเรียง 4 องค์ประกอบหลักใน container นี้ -->
         <div class="flex flex-wrap gap-6">
             
             <!-- 1. Player & Info (วิดีโอและรายละเอียด) -->
-            <!-- Order 1 บน Mobile, Order 1 ซ้ายบนบน Desktop -->
             <div class="w-full lg:w-[calc(66.666%-12px)] order-1 lg:order-1">
-                
                 <!-- Responsive Video Player Wrapper -->
-                <div class="video-aspect-wrapper rounded-lg overflow-hidden relative">
-                    
-                    <!-- Danmaku Container (Bullet Comments) -->
-                    <div id="danmaku-container">
-                        <!-- Comment elements will be injected here -->
-                    </div>
-                    
-                    <!-- Video Embed -->
+                <div class="video-aspect-wrapper rounded-lg overflow-hidden mb-4">
                     <div id="video-player-embed">
                         <!-- Initial Loading state for player -->
                         <div class="w-full h-full flex items-center justify-center bg-black">
                             <p class="text-gray-400">กำลังโหลดวิดีโอ...</p>
                         </div>
                     </div>
-                </div> <!-- End video-aspect-wrapper -->
-                
-                <!-- (NEW) Danmaku Input Bar (อยู่ใต้ Video Player) -->
-                <div class="danmaku-input-container flex items-center space-x-3 rounded-b-lg mb-4">
-                     <!-- 1. Form Input -->
-                     <form id="danmaku-input-form" class="flex flex-1 space-x-3">
-                         <!-- Name Input (ซ่อนบน Mobile) -->
-                         <input type="text" id="danmaku-user-name" placeholder="ชื่อผู้ใช้" 
-                                class="hidden sm:block w-32 bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required>
-                         
-                         <!-- Comment Input -->
-                         <input type="text" id="danmaku-input" placeholder="คลิกเพื่อส่ง ข้อความลอย..." 
-                                class="flex-1 bg-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" required>
-                         
-                         <!-- Send Button -->
-                         <button type="submit" id="danmaku-send-btn" 
-                                 class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 flex-shrink-0">
-                             ส่ง
-                         </button>
-                     </form>
-                     
-                     <!-- 2. Settings Button and Modal -->
-                     <div class="relative">
-                         <!-- Trigger Button -->
-                         <button id="danmaku-settings-trigger" 
-                                 class="p-1.5 z-20 text-white bg-black/40 hover:bg-black/60 rounded-full transition-colors duration-200">
-                             <i class="ri-settings-3-line text-lg"></i>
-                         </button>
-                         
-                         <!-- Settings Modal (Pop-up) -->
-                         <div id="danmaku-settings-modal" class="danmaku-modal p-4 space-y-4 hidden">
-                             <h4 class="text-lg font-bold text-white border-b border-gray-600 pb-2">ตั้งค่าคอมเมนต์ลอย</h4>
-                             
-                             <!-- Toggle Button -->
-                             <button id="danmaku-toggle-btn" 
-                                     class="w-full flex items-center justify-center space-x-2 text-sm text-white py-2 px-3 rounded-lg transition-colors duration-200 bg-green-600">
-                                  <i class="ri-toggle-fill text-xl"></i> <span>ปิดคอมเมนต์ลอย</span>
-                             </button>
-
-                             <!-- Font Size Slider -->
-                             <div>
-                                  <label class="block text-xs font-medium text-gray-400 mb-1">ขนาดตัวอักษร (Size)</label>
-                                  <div class="flex items-center space-x-2">
-                                      <i class="ri-font-size-2 text-white"></i>
-                                      <input type="range" id="danmaku-size-slider" min="10" max="30" step="2" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-sm focus:ring-green-500">
-                                  </div>
-                             </div>
-
-                             <!-- Opacity Slider -->
-                             <div>
-                                  <label class="block text-xs font-medium text-gray-400 mb-1">ความโปร่งใส (Opacity)</label>
-                                  <div class="flex items-center space-x-2">
-                                      <i class="ri-contrast-2-line text-white"></i>
-                                      <input type="range" id="danmaku-opacity-slider" min="20" max="100" step="5" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-sm focus:ring-green-500">
-                                  </div>
-                             </div>
-                             
-                             <!-- Area Slider -->
-                             <div>
-                                 <label class="block text-xs font-medium text-gray-400 mb-1">พื้นที่แสดง (Area)</label>
-                                 <div class="flex items-center space-x-2">
-                                     <i class="ri-aspect-ratio-line text-white"></i>
-                                     <input type="range" id="danmaku-area-slider" min="50" max="100" step="5" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-sm focus:ring-green-500">
-                                 </div>
-                             </div>
-                         </div>
-                     </div> <!-- End Settings Button/Modal -->
-                </div> <!-- End danmaku-input-container -->
+                </div>
                 
                 <!-- Show Info -->
                 <div class="text-white mb-6">
@@ -1154,7 +774,6 @@
             </div>
             
             <!-- 2. รายการตอน (Episodes List) - ลำดับ 2 บนมือถือ -->
-            <!-- Order 2 บน Mobile, Order 2 ขวาบนบน Desktop -->
             <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-2 lg:order-2">
                 <section class="bg-gray-800 rounded-lg p-4">
                     <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
@@ -1166,7 +785,6 @@
             </div>
             
             <!-- 3. อนิเมะที่คุณอาจจะชอบ (Related Shows) - ลำดับ 3 บนมือถือ -->
-            <!-- Order 3 บน Mobile, Order 3 ซ้ายล่างบน Desktop -->
             <div class="w-full lg:w-[calc(66.666%-12px)] order-3 lg:order-3">
                 <section class="bg-gray-800 rounded-lg p-4 mb-6">
                     <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">อนิเมะที่คุณอาจจะชอบ</h3>
@@ -1175,33 +793,17 @@
                         <p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>
                     </div>
                 </section>
-            </div>
-            
-            <!-- 4. 10 อันดับอนิเมะยอดนิยม (Top 10 List) - ลำดับ 4 บนมือถือ -->
-            <!-- Order 4 บน Mobile, Order 4 ขวาล่างบน Desktop -->
-            <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-4 lg:order-4">
-                <section class="bg-gray-800 rounded-lg p-4">
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">10 อันดับอนิเมะยอดนิยม</h3>
-                    <div id="top10-list-container" class="flex flex-col space-y-1">
-                        <!-- Top 10 cards injected by JS -->
-                        <p class="text-gray-400">กำลังโหลด 10 อันดับ...</p>
-                    </div>
-                </section>
-            </div>
-            
-            <!-- 5. ระบบความคิดเห็น (Comments) - ลำดับ 5 บนมือถือ/ล่างสุด -->
-            <!-- Order 5 บน Mobile, Order 5 ล่างสุดบน Desktop (กินพื้นที่เต็มบรรทัด) -->
-            <div class="w-full order-5 lg:order-5">
+                
+                <!-- (NEW) SECTION: ระบบคอมเมนต์ -->
                 <section class="bg-gray-800 rounded-lg p-4 mb-6">
                     <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">ความคิดเห็น (Comments)</h3>
                     
                     <!-- Form ส่งคอมเมนต์ -->
                     <form id="comment-form" class="mb-6 space-y-3">
-                        <!-- (MODIFIED ID) เพื่อไม่ให้ซ้ำกับ Danmaku Input -->
-                        <input type="text" id="comment-user-name-main" placeholder="ชื่อผู้ใช้ (อัตโนมัติ)" 
+                        <input type="text" id="comment-user-name" placeholder="ชื่อผู้ใช้ (อัตโนมัติ)" 
                                class="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required>
                                
-                        <textarea id="comment-input-main" rows="3" placeholder="พิมพ์ความคิดเห็นของคุณ (แบบปกติ)" 
+                        <textarea id="comment-input" rows="3" placeholder="พิมพ์ความคิดเห็นของคุณ..." 
                                   class="w-full bg-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
                                   
                         <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
@@ -1212,6 +814,17 @@
                     <!-- แสดงรายการคอมเมนต์ -->
                     <div id="comments-container" class="divide-y divide-gray-700 border border-gray-700 rounded-lg overflow-hidden">
                         <p class="text-gray-400 p-4">กำลังโหลดความคิดเห็น...</p>
+                    </div>
+                </section>
+            </div>
+            
+            <!-- 4. 10 อันดับอนิเมะยอดนิยม (Top 10 List) - ลำดับ 4 บนมือถือ -->
+            <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-4 lg:order-4">
+                <section class="bg-gray-800 rounded-lg p-4">
+                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">10 อันดับอนิเมะยอดนิยม</h3>
+                    <div id="top10-list-container" class="flex flex-col space-y-1">
+                        <!-- Top 10 cards injected by JS -->
+                        <p class="text-gray-400">กำลังโหลด 10 อันดับ...</p>
                     </div>
                 </section>
             </div>
