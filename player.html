@@ -214,6 +214,8 @@
             console.log("Loading global content (Top 10)...");
             // NOTE: เราจะเรียก renderTop10List ที่นี่
             await renderTop10List();
+            // (NEW) Call sync height after showing content
+            syncEpisodeListHeight(); 
         }
 
 
@@ -300,7 +302,38 @@
                 // ซ่อน Loading และแสดงเนื้อหา (ถ้ายังไม่ได้ทำในเงื่อนไข showId)
                 loadingPlayer.classList.add('hidden');
                 playerContentWrapper.classList.remove('hidden');
+                // (NEW) Call sync height after showing content
+                syncEpisodeListHeight(); 
             }
+        }
+
+        // (NEW) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player
+        function syncEpisodeListHeight() {
+            // 1. หาความสูงของ Video Player Wrapper
+            const videoWrapper = document.querySelector('.video-aspect-wrapper');
+            const episodeListContent = document.getElementById('episode-list-container');
+            
+            if (!videoWrapper || !episodeListContent) return;
+
+            // ตรวจสอบว่าอยู่บนหน้าจอขนาดใหญ่ (lg: ขึ้นไป) ก่อนดำเนินการ
+            if (window.innerWidth < 1024) {
+                 episodeListContent.style.maxHeight = 'initial';
+                 episodeListContent.style.overflowY = 'initial';
+                 episodeListContent.style.paddingRight = '0';
+                 return;
+            }
+
+            const videoHeight = videoWrapper.offsetHeight;
+            
+            // 2. คำนวณความสูงที่เหลือสำหรับเนื้อหารายการตอน (Episode List Content)
+            // HeaderAndPaddingOffset = 65px (ค่าประมาณความสูงของ h3 + mb-4 + pb-2 + p-4 ของ section)
+            const headerAndPaddingOffset = 65; 
+            const listMaxHeight = videoHeight - headerAndPaddingOffset;
+
+            // 3. กำหนด Max-Height ให้กับ Episode List Container
+            episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
+            episodeListContent.style.overflowY = 'auto';
+            episodeListContent.style.paddingRight = '8px'; // pr-2
         }
 
         // แสดงรายละเอียดซีรีส์
@@ -317,8 +350,8 @@
                 return;
             }
             
-            // Set max-height for scrolling
-            episodeListContainer.className = 'flex flex-wrap gap-2 max-h-56 overflow-y-auto pr-2'; 
+            // (MODIFIED) Remove fixed max-height and overflow classes here.
+            episodeListContainer.className = 'flex flex-wrap gap-2'; 
             
             episodes.forEach((ep, index) => {
                 const button = document.createElement('button');
@@ -332,6 +365,9 @@
                 
                 episodeListContainer.appendChild(button);
             });
+            
+            // (NEW) Call sync height after rendering buttons
+            syncEpisodeListHeight(); 
         }
         
         /**
@@ -554,6 +590,8 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             initializeFirebase(); 
+            // (NEW) Attach resize listener
+            window.addEventListener('resize', syncEpisodeListHeight);
             // Removed Tab logic as we are no longer using tabs.
         });
 
