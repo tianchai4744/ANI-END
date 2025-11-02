@@ -32,28 +32,18 @@
             width: 100%;
             height: 100%; 
             background-color: #000;
-            display: flex; 
+            display: flex; /* (NEW) สำหรับจัดวาง video หรือ iframe */
             align-items: center;
             justify-content: center;
         }
 
         /* 3. กล่องหลาน (Grandchild - ตัว Video/Iframe) - ขยายเต็มกล่องลูก */
-        #video-player-embed video,
-        #video-player-embed iframe { 
+        #video-player-embed iframe {
             width: 100%;
             height: 100%;
             min-width: initial !important; 
         }
         
-        /* Style for loading indicator inside player */
-        #video-loading-text {
-            color: #fff;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 10px 20px;
-            border-radius: 8px;
-            z-index: 10;
-        }
-
         /* Removed Tab-related CSS */
         .ep-button.active { background-color: #00b87c; color: #fff; }
         
@@ -189,7 +179,6 @@
         let db, auth, userId;
         let currentShow = null;
         let currentEpisodes = [];
-        let currentBlobUrl = null; // (NEW) For cleaning up previous Blob URL
 
         // UI Elements
         const playerEmbedDiv = document.getElementById('video-player-embed');
@@ -201,139 +190,22 @@
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
 
-        // (NEW) Function to clean up previous Blob URL
-        function cleanupPreviousVideo() {
-            if (currentBlobUrl) {
-                URL.revokeObjectURL(currentBlobUrl);
-                currentBlobUrl = null;
-                console.log("Previous Blob URL revoked.");
-            }
-        }
+        // (REMOVED: getArchiveItemId)
+        // (REMOVED: playCustomVideo)
 
-        // (NEW) Function to extract Archive.org Item Identifier
-        function getArchiveItemId(url) {
-            try {
-                const urlObj = new URL(url);
-                const match = urlObj.pathname.match(/\/(?:embed|details)\/([a-zA-Z0-9_-]+)/);
-                if (match && match[1]) {
-                    return match[1];
-                }
-            } catch (e) {
-                console.warn("Invalid URL format:", e);
-                const idMatch = url.match(/archive\.org\/(?:embed|details)\/([a-zA-Z0-9_-]+)/);
-                if (idMatch && idMatch[1]) {
-                    return idMatch[1];
-                }
-            }
-            return null;
-        }
-        
-        // (NEW) Function to fetch video file and create Blob URL
-        async function fetchAndCreateBlobUrl(url) {
-            console.log(`Fetching video data from: ${url}`);
-            try {
-                // IMPORTANT: The 'no-cors' mode is intentionally NOT used here. 
-                // We rely on Archive.org or browser's ability to handle CORS for media files.
-                // Using 'no-cors' prevents reading the response status and the Blob data itself.
-                const response = await fetch(url);
-
-                if (!response.ok) {
-                    console.error(`Fetch failed with status: ${response.status}`);
-                    // Throw error to trigger retry/fallback logic
-                    throw new Error(`Failed to fetch video: HTTP ${response.status}`);
-                }
-                
-                // Get the video data as a Blob
-                const videoBlob = await response.blob();
-                
-                // Create a local object URL (Blob URL) that bypasses CORS restrictions
-                const blobUrl = URL.createObjectURL(videoBlob);
-                return blobUrl;
-
-            } catch (error) {
-                console.error(`Error during fetch or Blob creation: ${error.message}`);
-                throw error; // Re-throw to signal failure to the caller
-            }
-        }
-
-
-        // (NEW) Function: Custom HTML5 Video Player (Primary Attempt)
-        async function playCustomVideo(itemId, episodeTitle, fallbackEmbedCode) {
-            cleanupPreviousVideo(); // Clean up any old Blob URLs
-
-            const possibleUrls = [
-                `https://archive.org/download/${itemId}/${itemId}.mp4`, 
-                `https://archive.org/download/${itemId}/${itemId}_h264.mp4`,
-                `https://archive.org/download/${itemId}/${itemId}_512kb.mp4`, 
-            ];
-            
-            playerEmbedDiv.innerHTML = `<div id="video-loading-text">กำลังโหลดวิดีโอ...</div>`;
-            
-            let blobUrl = null;
-            let successUrl = null;
-
-            // 1. Try to fetch and create Blob URL for possible video files
-            for (const mp4Url of possibleUrls) {
-                try {
-                    // Try to fetch the video file
-                    blobUrl = await fetchAndCreateBlobUrl(mp4Url);
-                    successUrl = mp4Url;
-                    console.log(`Blob URL created successfully for: ${mp4Url}`);
-                    break; // Exit loop on success
-                } catch (e) {
-                    console.warn(`Failed to fetch ${mp4Url}. Trying next URL...`);
-                }
-            }
-            
-            // 2. Fallback if all attempts failed
-            if (!blobUrl) {
-                console.warn("All direct fetch attempts failed. Switching to iframe fallback.");
-                embedVideo(fallbackEmbedCode); // Fallback to iframe embed
-                return;
-            }
-
-            // 3. Render the Custom Player using the Blob URL
-            playerEmbedDiv.innerHTML = `
-                <video 
-                    id="custom-video-player"
-                    controls 
-                    autoplay 
-                    playsinline
-                    class="w-full h-full object-cover"
-                >
-                    <source src="${blobUrl}" type="video/mp4">
-                    <p class="text-white p-4">เบราว์เซอร์ของคุณไม่รองรับวิดีโอ HTML5.</p>
-                </video>
-            `;
-            
-            currentBlobUrl = blobUrl; // Store for cleanup
-            const videoElement = document.getElementById('custom-video-player');
-            
-            if (!videoElement) return;
-
-            // 4. Autoplay Logic (Attempt to play with sound)
-            const playPromise = videoElement.play();
-            
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    console.log("Autoplay successful (with sound) via Blob URL.");
-                }).catch(error => {
-                    // This often happens on mobile, video is paused until user interaction
-                    console.warn("Autoplay was prevented. Video is loaded but paused. User must click play button.", error);
-                });
-            }
-        }
-        
-        // (NEW) Function to handle the Iframe embed (ใช้เมื่อ Custom Player ล้มเหลว)
+        // (MODIFIED) Function to handle the Iframe embed (เดิมคือ playIframeFallback)
         function embedVideo(embedCode) {
-            console.log("Falling back to standard iframe embed.");
+            console.log("Using standard iframe embed.");
             
+            // 1. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
             if (embedCode.trim().startsWith('http')) {
                 let videoUrlStr = embedCode;
                 
+                // พยายามเพิ่ม autoplay=1
                 try {
                     const videoUrl = new URL(videoUrlStr);
                     videoUrl.searchParams.set('autoplay', '1');
+                    // (NEW) ลบ muted=0 ออก เพื่อให้เบราว์เซอร์จัดการเสียง
                     videoUrlStr = videoUrl.href;
                 } catch (e) {
                     console.warn("Could not parse URL to add params, trying string append:", e);
@@ -343,19 +215,35 @@
                 const iframe = document.createElement('iframe');
                 iframe.src = videoUrlStr; 
                 iframe.setAttribute('frameborder', '0');
+                // (MODIFIED) อนุญาต autoplay; fullscreen
                 iframe.setAttribute('allow', 'autoplay; fullscreen'); 
                 iframe.setAttribute('webkitallowfullscreen', 'true');
                 iframe.setAttribute('mozallowfullscreen', 'true');
                 iframe.setAttribute('allowfullscreen', 'true');
                 
-                playerEmbedDiv.innerHTML = ''; 
+                playerEmbedDiv.innerHTML = ''; // Clear previous content
                 playerEmbedDiv.appendChild(iframe);
                 
             } else if (embedCode) {
-                // กรณีเป็น HTML string
+                // 2. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
                 let finalEmbedCode = embedCode;
+                // พยายามเพิ่ม autoplay และลบ muted ออก
                 if (!finalEmbedCode.includes('autoplay')) {
                     finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay `);
+                }
+                finalEmbedCode = finalEmbedCode.replace(/muted/g, ''); 
+
+                // พยายามเพิ่มพารามิเตอร์ใน src
+                if (finalEmbedCode.includes('src="')) {
+                    finalEmbedCode = finalEmbedCode.replace(/src="([^"]*)"/i, (match, src) => {
+                        if (!src.includes('autoplay=')) {
+                            src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
+                        }
+                        if (src.includes('muted=1')) {
+                             src = src.replace('muted=1', 'muted=0'); // Change muted=1 to muted=0
+                        }
+                        return `src="${src}"`;
+                    });
                 }
                 playerEmbedDiv.innerHTML = finalEmbedCode;
                 
@@ -364,8 +252,7 @@
             }
         }
 
-        
-        
+
         async function initializeFirebase() {
             try {
                 const app = initializeApp(firebaseConfig); 
@@ -683,7 +570,7 @@
                 
             } catch (error) {
                 console.error("Error fetching top 10 shows:", error);
-                top10ListContainer.innerHTML = `<p class="text-red-400">เกิดข้อผิดพลาดในการโหลดอันดับ</p>`;
+                top10ListContainer.innerHTML = `<p class="text-red-400 p-4">เกิดข้อผิดพลาดในการโหลดอันดับ</p>`;
             }
         }
 
@@ -732,23 +619,14 @@
         }
 
 
-        // ฟังก์ชันเล่นวิดีโอ (ใช้ Custom Player ก่อน แล้วค่อย Fallback)
+        // ฟังก์ชันเล่นวิดีโอ (กลับไปใช้ Embed Video)
         function playEpisode(episode) {
             console.log(`Playing: ${episode.title}`, episode.embedCode);
             
             playerEmbedDiv.innerHTML = ''; 
             
-            // 1. ตรวจสอบว่าเป็น Archive.org URL หรือไม่
-            const itemId = getArchiveItemId(episode.embedCode);
-            
-            if (itemId) {
-                // (PRIMARY LOGIC) ใช้ Custom HTML5 Video Player
-                playCustomVideo(itemId, episode.title, episode.embedCode);
-                
-            } else {
-                // (FALLBACK) ถ้าไม่ใช่ Archive.org หรือเป็น Embed HTML string อื่นๆ
-                embedVideo(episode.embedCode);
-            }
+            // ใช้ฟังก์ชัน embedVideo ที่สร้างไว้
+            embedVideo(episode.embedCode);
             
             // อัปเดตชื่อเรื่องหลัก
             showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
@@ -765,12 +643,9 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             initializeFirebase(); 
+            // (NEW) Attach resize listener
             window.addEventListener('resize', syncEpisodeListHeight);
         });
-
-        // (NEW) Add cleanup on page unload to prevent memory leaks from Blob URLs
-        window.addEventListener('beforeunload', cleanupPreviousVideo);
-
 
     </script>
 
