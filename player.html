@@ -142,7 +142,7 @@
         import { 
             getFirestore, doc, getDoc, onSnapshot, collection, query, where, getDocs,
             setLogLevel,
-            updateDoc, increment, orderBy, limit // (REMOVED: addDoc, serverTimestamp)
+            updateDoc, increment, orderBy, limit, addDoc, serverTimestamp // (NEW) เพิ่ม addDoc, serverTimestamp
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config เนื่องจาก Canvas ไม่ได้ให้ global vars มาในโหมดนี้ ***)
@@ -171,7 +171,12 @@
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
 
-        // (REMOVED: Comment UI Elements)
+        // (NEW) Comment UI Elements
+        const commentForm = document.getElementById('comment-form');
+        // (FIX) ต้องผูกตัวแปร UI Elements ให้ถูกต้อง
+        const commentInput = document.getElementById('comment-input');
+        const commentsContainer = document.getElementById('comments-container');
+        const userNameInput = document.getElementById('comment-user-name');
         
         async function initializeFirebase() {
             try {
@@ -183,9 +188,14 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
-                        
+                        // (NEW) ตั้งชื่อผู้ใช้เริ่มต้น (สามารถเปลี่ยนได้)
+                        // (FIX) ตรวจสอบว่า userNameInput พร้อมใช้งานก่อนกำหนดค่า
+                        if (userNameInput) {
+                            userNameInput.value = `User-${userId.substring(0, 6)}`; 
+                        }
                         console.log("User Authenticated (Anonymous):", userId);
-                        
+                        // (MODIFIED) เรียก loadContent เพื่อโหลดเนื้อหาที่เกี่ยวข้องกับ Show ID
+                        // และเรียก loadGlobalContent เพื่อโหลดรายการที่ไม่ต้องใช้ Show ID
                         await loadContent(); 
                         await loadGlobalContent();
                     } else {
@@ -214,9 +224,9 @@
         // (NEW) ฟังก์ชันสำหรับโหลดเนื้อหาที่ไม่ขึ้นกับ Show ID (เช่น Top 10)
         async function loadGlobalContent() {
             console.log("Loading global content (Top 10)...");
-            
+            // NOTE: เราจะเรียก renderTop10List ที่นี่
             await renderTop10List();
-            
+            // (NEW) Call sync height after showing content
             syncEpisodeListHeight(); 
         }
 
@@ -229,7 +239,7 @@
                 
                 if (!showId) {
                     playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบ ID ของซีรีส์</p>`;
-                    
+                    // (NEW) ในกรณีที่ไม่พบ ID ให้แสดง UI หลักทันที แต่เนื้อหาวิดีโอว่างเปล่า
                     playerContentWrapper.classList.remove('hidden');
                     loadingPlayer.classList.add('hidden');
                     
@@ -238,7 +248,8 @@
                     showDescEl.textContent = "โปรดกลับไปที่หน้าแรกเพื่อเลือกซีรีส์ที่ถูกต้อง";
                     episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่สามารถโหลดรายการตอนได้</p>`;
                     
-                    // หากไม่มี showId เราจะไม่สามารถหา Related List ได้
+                    // (NEW) หากไม่มี showId เราจะไม่สามารถหา Related List ได้
+                    // ให้โหลด Related List โดยไม่มี Tag กรอง (เพื่อแสดงเรื่องแนะนำทั่วไป)
                     await renderRelatedList([]);
 
                     return; // หยุดการโหลดข้อมูลเฉพาะซีรีส์
@@ -250,7 +261,7 @@
 
                 if (!showSnap.exists()) {
                     playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบข้อมูลซีรีส์</p>`;
-                    
+                    // (NEW) แสดง UI หลักเมื่อพบข้อผิดพลาด
                     playerContentWrapper.classList.remove('hidden');
                     loadingPlayer.classList.add('hidden');
                     return;
@@ -285,7 +296,7 @@
                 
                 // 4. Render UI เฉพาะซีรีส์นี้
                 renderEpisodeList(currentEpisodes);
-                
+                // (NEW) เรียก renderRelatedList ที่นี่ เพราะต้องใช้ currentShow.tags
                 await renderRelatedList(currentShow.tags || []); 
 
                 // 5. เล่นตอนแรก (ถ้ามี)
@@ -295,26 +306,117 @@
                     playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับซีรีส์นี้</p>`;
                 }
                 
-                // (REMOVED: setupCommentListener call)
+                // (NEW) ตั้ง Listener สำหรับคอมเมนต์หลังจากโหลด showId สำเร็จ
+                setupCommentListener(showId); 
                 
             } catch (error) {
                 console.error("Error loading content:", error);
                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">เกิดข้อผิดพลาดในการโหลด</p>`;
             } finally {
-                
+                // ซ่อน Loading และแสดงเนื้อหา (ถ้ายังไม่ได้ทำในเงื่อนไข showId)
                 loadingPlayer.classList.add('hidden');
                 playerContentWrapper.classList.remove('hidden');
-                
+                // (NEW) Call sync height after showing content
                 syncEpisodeListHeight(); 
             }
         }
 
-        // (REMOVED: commentForm.addEventListener)
+        // (NEW) ฟังก์ชันสำหรับจัดการการส่งคอมเมนต์
+        // (FIX) เพิ่มการตรวจสอบว่า commentForm มีอยู่จริง
+        if (commentForm) {
+            commentForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                // (FIX) ใช้ตัวแปร commentInput และ userNameInput ที่ถูกผูกกับ DOM แล้ว
+                const commentText = commentInput.value.trim();
+                const userName = userNameInput.value.trim() || `User-${userId.substring(0, 6)}`;
+                
+                if (!commentText || !currentShow || !userId) {
+                    console.warn("Cannot post comment: Missing text, show ID, or user ID.");
+                    return;
+                }
+                
+                const newComment = {
+                    showId: currentShow.id,
+                    userId: userId,
+                    userName: userName,
+                    commentText: commentText,
+                    createdAt: serverTimestamp()
+                };
 
-        // (REMOVED: setupCommentListener function)
+                try {
+                    await addDoc(getCollectionRef("comments"), newComment);
+                    commentInput.value = ''; // Clear input
+                    userNameInput.value = userName; // Preserve current user name
+                } catch (error) {
+                    console.error("Error posting comment:", error);
+                    console.log("Error posting comment. Please try again.");
+                }
+            });
+        }
+
+        // (NEW) ฟังก์ชันสำหรับตั้ง Listener คอมเมนต์
+        function setupCommentListener(showId) {
+            // (FIX) เพิ่มการตรวจสอบว่า commentsContainer มีอยู่จริง
+            if (!commentsContainer) return;
+            
+            const commentsQuery = query(
+                getCollectionRef("comments"), 
+                where("showId", "==", showId), 
+                orderBy("createdAt", "desc"),
+                limit(50) // จำกัดจำนวนคอมเมนต์ที่แสดง
+            );
+            
+            onSnapshot(commentsQuery, (snapshot) => {
+                commentsContainer.innerHTML = ''; // Clear old comments
+                if (snapshot.empty) {
+                    commentsContainer.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีคอมเมนต์ แสดงความคิดเห็นแรกของคุณสิ!</p>`;
+                    return;
+                }
+                
+                snapshot.forEach((doc) => {
+                    const comment = doc.data();
+                    commentsContainer.innerHTML += createCommentElement(comment);
+                });
+            }, (error) => {
+                console.error("Error listening to comments:", error);
+                commentsContainer.innerHTML = `<p class="text-red-500 p-4">ไม่สามารถโหลดคอมเมนต์ได้</p>`;
+            });
+        }
         
-        // (REMOVED: createCommentElement function)
-
+        // (NEW) สร้าง HTML Element สำหรับคอมเมนต์เดียว
+        function createCommentElement(comment) {
+            const date = comment.createdAt ? new Date(comment.createdAt.toMillis()) : new Date();
+            const formattedTime = date.toLocaleString('th-TH', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            
+            // ใช้ SVG icon สำหรับ user avatar
+            const userAvatar = `
+                <svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.98 5.98 0 0010 16a5.979 5.979 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd"></path>
+                </svg>
+            `;
+            
+            return `
+                <div class="flex items-start space-x-3 p-4 border-b border-gray-700 last:border-b-0">
+                    <div class="flex-shrink-0">
+                        ${userAvatar}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-semibold text-white">${comment.userName}</span>
+                            <span class="text-xs text-gray-500">${formattedTime}</span>
+                        </div>
+                        <p class="text-gray-300 break-words">${comment.commentText}</p>
+                    </div>
+                </div>
+            `;
+        }
 
         // (NEW) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player
         function syncEpisodeListHeight() {
@@ -692,7 +794,28 @@
                     </div>
                 </section>
                 
-                <!-- (REMOVED) SECTION: ระบบคอมเมนต์ -->
+                <!-- (NEW) SECTION: ระบบคอมเมนต์ -->
+                <section class="bg-gray-800 rounded-lg p-4 mb-6">
+                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">ความคิดเห็น (Comments)</h3>
+                    
+                    <!-- Form ส่งคอมเมนต์ -->
+                    <form id="comment-form" class="mb-6 space-y-3">
+                        <input type="text" id="comment-user-name" placeholder="ชื่อผู้ใช้ (อัตโนมัติ)" 
+                               class="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                               
+                        <textarea id="comment-input" rows="3" placeholder="พิมพ์ความคิดเห็นของคุณ..." 
+                                  class="w-full bg-gray-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
+                                  
+                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
+                            ส่งความคิดเห็น
+                        </button>
+                    </form>
+
+                    <!-- แสดงรายการคอมเมนต์ -->
+                    <div id="comments-container" class="divide-y divide-gray-700 border border-gray-700 rounded-lg overflow-hidden">
+                        <p class="text-gray-400 p-4">กำลังโหลดความคิดเห็น...</p>
+                    </div>
+                </section>
             </div>
             
             <!-- 4. 10 อันดับอนิเมะยอดนิยม (Top 10 List) - ลำดับ 4 บนมือถือ -->
