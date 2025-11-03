@@ -239,6 +239,61 @@
             const appId = firebaseConfig.projectId;
             return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
         }
+        
+        /**
+         * (NEW) ฟังก์ชันสำรอง: แปลง URL ธรรมดาให้เป็น Embed Code (Copy จาก admin.html)
+         * ฟังก์ชันนี้ใช้เป็น Fallback ในกรณีที่ข้อมูลใน Firebase ยังเป็น URL ธรรมดา
+         * @param {string} inputUrl The URL or embed code from Firebase.
+         * @returns {string} The final embed code (iframe HTML string).
+         */
+        function convertToEmbedCode(inputUrl) {
+            const url = inputUrl ? inputUrl.trim() : '';
+            
+            // 1. If it's already an iframe, return as is.
+            if (url.startsWith('<iframe') || url.startsWith('<IFRAME')) {
+                return url;
+            }
+
+            // Standard iframe attributes for auto-conversion
+            const iframeAttrs = 'width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen';
+            
+            let embedSrc = '';
+            
+            // 2. Check for supported platforms
+
+            // 2.1 Ok.ru
+            if (url.includes('ok.ru/video/')) {
+                // Convert ok.ru/video/ to ok.ru/videoembed/
+                embedSrc = url.replace('ok.ru/video/', 'ok.ru/videoembed/');
+                // Add common parameters (nochat=1 is often required)
+                embedSrc += embedSrc.includes('?') ? '&nochat=1' : '?nochat=1';
+                
+            } 
+            // 2.2 YouTube (Standard video link, e.g., https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+            else if (url.includes('youtube.com/watch?v=') || url.includes('youtu.be/')) {
+                 const videoIdMatch = url.match(/(?:\?v=|youtu\.be\/|embed\/)([^&]+)/);
+                 if (videoIdMatch && videoIdMatch[1]) {
+                     embedSrc = `https://www.youtube.com/embed/${videoIdMatch[1]}?autoplay=1&rel=0`;
+                 }
+            } 
+            // 2.3 General Link (Assume it's a direct iframe source that can be embedded, e.g. Archive.org embed link)
+            else if (url.startsWith('http')) {
+                embedSrc = url;
+            }
+
+            // 3. Construct the final iframe if a valid SRC was found
+            if (embedSrc) {
+                // Ensure protocol is present for safety, default to https if not specified
+                if (!embedSrc.startsWith('http')) {
+                    embedSrc = 'https:' + (embedSrc.startsWith('//') ? embedSrc : '//' + embedSrc);
+                }
+                // Use a minimal iframe wrapper with dynamic attributes
+                return `<iframe src="${embedSrc}" ${iframeAttrs}></iframe>`;
+            }
+
+            // 4. If no conversion was possible, return original input (which is null or non-iframe string)
+            return url;
+        }
 
         /**
          * (NEW) สร้าง Card สำหรับ Related Shows ในรูปแบบ Grid (คล้าย index.html)
@@ -442,6 +497,7 @@
         function embedVideo(embedCode) {
             console.log("Loading iframe for playback.");
             
+            // ใช้โค้ดที่ผ่านการแปลงมาแล้ว (ตอนนี้มันควรจะขึ้นต้นด้วย <iframe)
             if (!embedCode || !embedCode.trim().startsWith('<iframe')) {
                  playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ข้อผิดพลาด: Embed Code ไม่ใช่ iframe กรุณาตรวจสอบ Admin Panel</p>`;
                  return;
@@ -675,8 +731,9 @@
         function playEpisode(episode, isUserClick = false) {
             console.log(`Preparing: ${episode.title}. User Click: ${isUserClick}`);
             
-            // 1. เก็บ Embed Code ไว้ใน State
-            currentEmbedCode = episode.embedCode;
+            // 1. (MODIFIED) แปลง Embed Code ก่อนนำไปใช้งาน
+            const rawEmbedCode = episode.embedCode;
+            currentEmbedCode = convertToEmbedCode(rawEmbedCode); // ใช้ฟังก์ชันแปลงสำรอง
             
             // 2. อัปเดตชื่อเรื่องหลัก
             showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
@@ -693,6 +750,12 @@
             // 4. จัดการ Player
             playerEmbedDiv.innerHTML = ''; // ล้าง Player
             
+            // 5. หากโค้ดที่แปลงแล้วยังไม่ใช่ iframe แสดงว่ามีปัญหาด้านแหล่งที่มา ให้แสดงข้อผิดพลาดทันที
+            if (!currentEmbedCode || !currentEmbedCode.trim().startsWith('<iframe')) {
+                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ข้อผิดพลาด: Embed Code ไม่ถูกต้อง กรุณาตรวจสอบ Admin Panel และใช้ลิงก์/โค้ดที่สามารถฝังได้</p>`;
+                 return;
+            }
+
             if (isUserClick) {
                  // หากผู้ใช้คลิกปุ่มตอน ให้โหลด iframe ทันที (ไม่ต้องผ่าน placeholder/lazy load)
                  // (NEW) แสดงสถานะโหลดก่อน
