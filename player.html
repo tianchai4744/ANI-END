@@ -190,8 +190,45 @@
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
 
-        // (REMOVED: getArchiveItemId)
-        // (REMOVED: playCustomVideo)
+        /**
+         * (NEW) แปลงลิงก์วิดีโอ (URL) หรือโค้ด Embed ที่ไม่สมบูรณ์ให้เป็นโค้ด Embed ที่พร้อมใช้งาน
+         * @param {string} inputCode โค้ดที่ผู้ใช้กรอก (URL หรือ iframe tag)
+         * @returns {string} โค้ด Embed ที่พร้อมใช้งาน
+         */
+        function convertToEmbedCode(inputCode) {
+            if (!inputCode || inputCode.trim() === '') {
+                return '';
+            }
+            const trimmedCode = inputCode.trim();
+
+            // 1. ถ้าเป็น iframe อยู่แล้ว ให้คืนค่าเดิม
+            if (trimmedCode.startsWith('<iframe') || trimmedCode.startsWith('<IFRAME')) {
+                return trimmedCode;
+            }
+            
+            // 2. ถ้าเป็น YouTube watch URL
+            if (trimmedCode.includes('youtube.com/watch?v=')) {
+                try {
+                    const url = new URL(trimmedCode);
+                    const videoId = url.searchParams.get('v');
+                    if (videoId) {
+                        // Return the YouTube embed URL
+                        return `https://www.youtube.com/embed/${videoId}?rel=0`;
+                    }
+                } catch (e) {
+                    console.warn("YouTube URL parsing failed:", e);
+                }
+            }
+            
+            // 3. ถ้าเป็น URL ทั่วไปอื่นๆ (เช่น Archive.org link, หรือ YouTube embed link ตรงๆ) ให้คืนค่าเดิม
+            if (trimmedCode.startsWith('http')) {
+                return trimmedCode;
+            }
+
+            // กรณีอื่นๆ
+            return trimmedCode;
+        }
+
 
         // (MODIFIED) Function to handle the Iframe embed (เดิมคือ playIframeFallback)
         function embedVideo(embedCode) {
@@ -570,7 +607,7 @@
                 
             } catch (error) {
                 console.error("Error fetching top 10 shows:", error);
-                top10ListContainer.innerHTML = `<p class="text-red-400 p-4">เกิดข้อผิดพลาดในการโหลดอันดับ</p>`;
+                top10ListContainer.innerHTML = `<p class="text-red-400">เกิดข้อผิดพลาดในการโหลดอันดับ</p>`;
             }
         }
 
@@ -625,8 +662,11 @@
             
             playerEmbedDiv.innerHTML = ''; 
             
+            // (MODIFIED) แปลงโค้ดวิดีโอให้เป็นรูปแบบ Embed ที่พร้อมใช้งาน
+            const finalEmbedCode = convertToEmbedCode(episode.embedCode); 
+            
             // ใช้ฟังก์ชัน embedVideo ที่สร้างไว้
-            embedVideo(episode.embedCode);
+            embedVideo(finalEmbedCode);
             
             // อัปเดตชื่อเรื่องหลัก
             showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
