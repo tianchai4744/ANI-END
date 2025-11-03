@@ -18,7 +18,7 @@
         /* 1. กล่องแม่ (Parent) - สร้างกรอบ 16:9 */
         .video-aspect-wrapper {
             position: relative;
-            padding-bottom: 56.25%; /* 16:9 Aspect Ratio (100% / 16 * 9) */
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
             height: 0;
             overflow: hidden;
             background-color: #000;
@@ -32,23 +32,19 @@
             width: 100%;
             height: 100%; 
             background-color: #000;
-            display: flex; 
+            display: flex; /* (NEW) สำหรับจัดวาง video หรือ iframe */
             align-items: center;
             justify-content: center;
         }
 
         /* 3. กล่องหลาน (Grandchild - ตัว Video/Iframe) - ขยายเต็มกล่องลูก */
         #video-player-embed iframe {
-            /* (FIXED) ใช้ inset: 0 เพื่อบังคับให้ iframe ยึดขอบบน/ล่างอย่างสมบูรณ์ */
-            position: absolute; 
-            inset: 0; /* Shorthand for top: 0; right: 0; bottom: 0; left: 0; */
-            
             width: 100%;
             height: 100%;
-            display: block; /* แก้ปัญหาช่องว่างด้านล่างที่อาจเกิดจาก inline element */
             min-width: initial !important; 
         }
         
+        /* Removed Tab-related CSS */
         .ep-button.active { background-color: #00b87c; color: #fff; }
         
         /* Style สำหรับ Thumbnail ในส่วน Related/Grid View */
@@ -194,63 +190,65 @@
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
 
-        // (MODIFIED) Function to handle the Iframe embed 
+        // (REMOVED: getArchiveItemId)
+        // (REMOVED: playCustomVideo)
+
+        // (MODIFIED) Function to handle the Iframe embed (เดิมคือ playIframeFallback)
         function embedVideo(embedCode) {
-            console.log("Using standard iframe embed (Final attempt to fix mobile offset).");
+            console.log("Using standard iframe embed.");
             
-            playerEmbedDiv.innerHTML = ''; // Clear previous content
-
-            if (!embedCode) {
-                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
-                 return;
-            }
-            
-            let iframeElement = null;
-
-            // 2. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
-            if (embedCode.trim().startsWith('http') && !embedCode.trim().toLowerCase().includes('<iframe')) {
+            // 1. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
+            if (embedCode.trim().startsWith('http')) {
                 let videoUrlStr = embedCode;
                 
                 // พยายามเพิ่ม autoplay=1
                 try {
                     const videoUrl = new URL(videoUrlStr);
                     videoUrl.searchParams.set('autoplay', '1');
+                    // (NEW) ลบ muted=0 ออก เพื่อให้เบราว์เซอร์จัดการเสียง
                     videoUrlStr = videoUrl.href;
                 } catch (e) {
                     console.warn("Could not parse URL to add params, trying string append:", e);
                     videoUrlStr += (videoUrlStr.includes('?') ? '&' : '?') + 'autoplay=1';
                 }
 
-                iframeElement = document.createElement('iframe');
-                iframeElement.src = videoUrlStr; 
+                const iframe = document.createElement('iframe');
+                iframe.src = videoUrlStr; 
+                iframe.setAttribute('frameborder', '0');
+                // (MODIFIED) อนุญาต autoplay; fullscreen
+                iframe.setAttribute('allow', 'autoplay; fullscreen'); 
+                iframe.setAttribute('webkitallowfullscreen', 'true');
+                iframe.setAttribute('mozallowfullscreen', 'true');
+                iframe.setAttribute('allowfullscreen', 'true');
+                
+                playerEmbedDiv.innerHTML = ''; // Clear previous content
+                playerEmbedDiv.appendChild(iframe);
                 
             } else if (embedCode) {
-                // 3. กรณีเป็น <iframe> tag (HTML string) อื่นๆ (ใช้โค้ดที่แปลงจาก Admin Panel)
+                // 2. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
                 let finalEmbedCode = embedCode;
+                // พยายามเพิ่ม autoplay และลบ muted ออก
+                if (!finalEmbedCode.includes('autoplay')) {
+                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay `);
+                }
+                finalEmbedCode = finalEmbedCode.replace(/muted/g, ''); 
+
+                // พยายามเพิ่มพารามิเตอร์ใน src
+                if (finalEmbedCode.includes('src="')) {
+                    finalEmbedCode = finalEmbedCode.replace(/src="([^"]*)"/i, (match, src) => {
+                        if (!src.includes('autoplay=')) {
+                            src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
+                        }
+                        if (src.includes('muted=1')) {
+                             src = src.replace('muted=1', 'muted=0'); // Change muted=1 to muted=0
+                        }
+                        return `src="${src}"`;
+                    });
+                }
+                playerEmbedDiv.innerHTML = finalEmbedCode;
                 
-                // สร้าง DOM element จาก HTML string (เพื่อหลีกเลี่ยงการใช้ innerHTML กับโค้ดทั้งหมด)
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = finalEmbedCode;
-                iframeElement = tempDiv.querySelector('iframe');
-                
-            } 
-            
-            if (iframeElement) {
-                // ตั้งค่า attributes ที่จำเป็น (สำหรับทั้ง URL และ Embed Code)
-                iframeElement.removeAttribute('width');
-                iframeElement.removeAttribute('height');
-                iframeElement.setAttribute('frameborder', '0');
-                iframeElement.setAttribute('allow', 'autoplay; fullscreen'); 
-                iframeElement.setAttribute('webkitallowfullscreen', 'true');
-                iframeElement.setAttribute('mozallowfullscreen', 'true');
-                iframeElement.setAttribute('allowfullscreen', 'true');
-                
-                // 4. เพิ่ม iframe เข้าไปใน Player Div โดยตรง
-                playerEmbedDiv.appendChild(iframeElement);
             } else {
-                // ถ้าไม่มี iframe element (เช่น raw embed code ที่ไม่สมบูรณ์)
-                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบโค้ดวิดีโอที่ถูกต้องสำหรับตอนนี้</p>`;
-                return;
+                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
             }
         }
 
@@ -358,10 +356,6 @@
                 currentEpisodes = [];
                 episodesSnapshot.forEach((doc) => {
                     currentEpisodes.push({ id: doc.id, ...doc.data() });
-                    
-                    // ** เพิ่มการตรวจสอบ Embed Code ที่นี่ **
-                    // Log เพื่อดูว่า Embed Code มีปัญหาอะไรที่อาจทำให้เกิดการเลื่อนหรือไม่
-                    // console.log(`Episode ${doc.data().episodeNumber} Embed Code:`, doc.data().embedCode);
                 });
                 
                 // 3. เรียงลำดับตอน
@@ -576,7 +570,7 @@
                 
             } catch (error) {
                 console.error("Error fetching top 10 shows:", error);
-                top10ListContainer.innerHTML = `<p class="text-red-400">เกิดข้อผิดพลาดในการโหลดอันดับ</p>`;
+                top10ListContainer.innerHTML = `<p class="text-red-400 p-4">เกิดข้อผิดพลาดในการโหลดอันดับ</p>`;
             }
         }
 
