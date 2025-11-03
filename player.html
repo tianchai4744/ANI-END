@@ -447,6 +447,16 @@
                  return;
             }
 
+            // (NEW) แสดงสถานะ "กำลังโหลดวิดีโอภายนอก..." ชั่วคราว
+             playerEmbedDiv.innerHTML = `
+                <div class="absolute inset-0 flex items-center justify-center bg-black/80 z-30">
+                    <p class="text-gray-400 flex items-center">
+                        <i class="ri-loader-4-line animate-spin mr-2"></i>
+                        กำลังโหลดวิดีโอภายนอก...
+                    </p>
+                </div>
+            `;
+            
             // 1. หากโค้ดเป็น URL ธรรมดา (ไม่ควรเกิดขึ้นหลังแก้ admin.html แต่ป้องกันไว้)
             if (embedCode.trim().startsWith('http')) {
                 // Since admin.html should convert URLs, this is a fallback.
@@ -475,8 +485,32 @@
                 finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation allow-pointer-lock" `);
             }
             
-            // C. ใส่โค้ด iframe เข้าไปใน DOM
-            playerEmbedDiv.innerHTML = finalEmbedCode;
+            // C. สร้าง Iframe Element และโหลดมัน
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = finalEmbedCode;
+            const iframeEl = tempDiv.querySelector('iframe');
+            
+            if (iframeEl) {
+                // (NEW) เมื่อ iframe โหลดสำเร็จ (หรือโหลดเฟรม) ค่อยล้างสถานะ loading
+                iframeEl.onload = () => {
+                    console.log("Iframe loaded.");
+                    // เราไม่ต้องล้าง playerEmbedDiv ตรงนี้ เพราะมันจะถูกแทนที่
+                    // แต่เราอาจจะล้างแค่ข้อความ loading ชั่วคราวออกไป
+                    const loadingOverlay = playerEmbedDiv.querySelector('.absolute.inset-0.bg-black\\/80');
+                    if(loadingOverlay) loadingOverlay.remove();
+                };
+                
+                // (MODIFIED) ล้าง div เพื่อเตรียมใส่ iframe และข้อความ loading
+                playerEmbedDiv.innerHTML = ''; 
+                
+                // (MODIFIED) ใส่ iframe เข้าไปใน DOM 
+                // เนื่องจากเราใส่ loading overlay ไปแล้ว เราจะใส่ iframe เข้าไปตามหลัง
+                playerEmbedDiv.appendChild(iframeEl);
+                
+            } else {
+                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ข้อผิดพลาด: ไม่สามารถสร้าง Iframe Element ได้</p>`;
+            }
+            
         }
 
 
@@ -495,7 +529,10 @@
                 embedVideo(currentEmbedCode);
                 
                 // 4. ลบ Placeholder ออกจาก DOM
-                playerEmbedDiv.removeChild(placeholder);
+                const placeholderToRemove = document.getElementById('video-placeholder');
+                if (placeholderToRemove) {
+                    playerEmbedDiv.removeChild(placeholderToRemove);
+                }
                 
                 // (Optional: Focus on iframe for autoplay if browser allows)
                 const iframe = playerEmbedDiv.querySelector('iframe');
@@ -518,7 +555,10 @@
                         
                         console.log("User Authenticated (Anonymous):", userId);
                         
+                        // (MODIFIED) โหลดเนื้อหาหลัก (วิดีโอ) เป็นอันดับแรก
                         await loadContent(); 
+                        
+                        // (MODIFIED) โหลดเนื้อหาส่วนอื่น (Top 10, Related) เป็นอันดับถัดไป
                         await loadGlobalContent();
                     } else {
                         await signIn(); // ถ้ายังไม่ล็อกอิน ให้ล็อกอินก่อน
@@ -689,18 +729,30 @@
                  
                  const placeholder = document.createElement('div');
                  placeholder.id = 'video-placeholder';
-                 placeholder.style.backgroundImage = `url('${currentShow.thumbnailUrl || 'https://placehold.co/1280x720/1f2937/a0aec0?text=Click+to+Play+Video'}')`;
-
-                 const playButton = document.createElement('div');
-                 playButton.id = 'play-button';
-                 playButton.innerHTML = '<i class="ri-play-fill"></i>';
-
-                 placeholder.appendChild(playButton);
                  
-                 // แนบ Event Listener เข้ากับ Placeholder
-                 placeholder.addEventListener('click', loadIframeAndPlay);
+                 // (MODIFIED) แสดงข้อความ "กำลังเตรียมตัวเล่น" ก่อนแสดง Placeholder ถ้าเป็นโหลดครั้งแรก
+                 playerEmbedDiv.innerHTML = `
+                     <div class="w-full h-full flex items-center justify-center bg-black">
+                         <p class="text-gray-400">กำลังเตรียมตัวเล่นวิดีโอ...</p>
+                     </div>
+                 `;
                  
-                 playerEmbedDiv.appendChild(placeholder);
+                 // หน่วงเวลาเล็กน้อยเพื่อแสดงข้อความ loading
+                 setTimeout(() => {
+                    playerEmbedDiv.innerHTML = ''; // ล้างข้อความ loading
+                    placeholder.style.backgroundImage = `url('${currentShow.thumbnailUrl || 'https://placehold.co/1280x720/1f2937/a0aec0?text=Click+to+Play+Video'}')`;
+
+                    const playButton = document.createElement('div');
+                    playButton.id = 'play-button';
+                    playButton.innerHTML = '<i class="ri-play-fill"></i>';
+
+                    placeholder.appendChild(playButton);
+                    
+                    // แนบ Event Listener เข้ากับ Placeholder
+                    placeholder.addEventListener('click', loadIframeAndPlay);
+                    
+                    playerEmbedDiv.appendChild(placeholder);
+                 }, 100); // หน่วง 100ms
             }
         }
 
