@@ -225,8 +225,8 @@
                 iframe.setAttribute('webkitallowfullscreen', 'true');
                 iframe.setAttribute('mozallowfullscreen', 'true');
                 iframe.setAttribute('allowfullscreen', 'true');
-                // (NEW) เปิด sandbox เต็มรูปแบบเพื่อลดข้อจำกัดของเบราว์เซอร์
-                iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation allow-pointer-lock');
+                // (NEW) เพิ่ม sandbox เพื่อลดข้อจำกัดของเบราว์เซอร์ (อาจไม่ได้ผลเสมอไป)
+                // iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms');
                 
                 playerEmbedDiv.innerHTML = ''; // Clear previous content
                 playerEmbedDiv.appendChild(iframe);
@@ -247,12 +247,6 @@
                 } else if (!finalEmbedCode.includes('fullscreen')) {
                      finalEmbedCode = finalEmbedCode.replace(/allow="([^"]*)"/i, `allow="$1 fullscreen"`);
                 }
-                
-                // (NEW) ตรวจสอบและเพิ่ม sandbox ถ้ายังไม่มี (จำเป็นสำหรับบางแพลตฟอร์มที่ฝังมาแบบเต็ม)
-                if (!finalEmbedCode.includes('sandbox=')) {
-                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation allow-pointer-lock" `);
-                }
-
 
                 // พยายามเพิ่มพารามิเตอร์ใน src
                 if (finalEmbedCode.includes('src="')) {
@@ -377,11 +371,6 @@
                 currentEpisodes = [];
                 episodesSnapshot.forEach((doc) => {
                     currentEpisodes.push({ id: doc.id, ...doc.data() });
-                    
-                    // ตรวจสอบและพิมพ์ Embed Code ลงใน Console สำหรับการ Debug 
-                    if (doc.data().embedCode) {
-                        console.log(`Embed Code for Episode ${doc.data().episodeNumber}: ${doc.data().embedCode}`);
-                    }
                 });
                 
                 // 3. เรียงลำดับตอน
