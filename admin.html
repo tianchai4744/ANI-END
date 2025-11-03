@@ -62,14 +62,14 @@
         
         const episodeListView = document.getElementById('episode-list-view');
         const showListView = document.getElementById('show-list-view');
-        const bannerListView = document.getElementById('banner-list-view'); // (NEW)
+        const bannerListView = document.getElementById('banner-list-view'); 
         const episodeTableBody = document.getElementById('episode-table-body');
         const showTableBody = document.getElementById('show-table-body');
-        const bannerTableBody = document.getElementById('banner-table-body'); // (NEW)
+        const bannerTableBody = document.getElementById('banner-table-body'); 
         
         const showEpisodeListBtn = document.getElementById('show-episode-list-btn');
         const showShowListBtn = document.getElementById('show-show-list-btn');
-        const showBannerListBtn = document.getElementById('show-banner-list-btn'); // (NEW)
+        const showBannerListBtn = document.getElementById('show-banner-list-btn'); 
 
         // Modal: Episode
         const episodeModal = document.getElementById('episode-modal');
@@ -90,12 +90,12 @@
         const showTitleInput = document.getElementById('show-title');
         const showDescInput = document.getElementById('show-description');
         const showThumbnailInput = document.getElementById('show-thumbnail');
-        const showViewCountInput = document.getElementById('show-view-count'); // (NEW)
+        const showViewCountInput = document.getElementById('show-view-count'); 
         const closeShowModalBtn = document.getElementById('close-show-modal');
         const addShowBtn = document.getElementById('add-show-btn');
         const deleteShowBtn = document.getElementById('delete-show-btn');
 
-        // (NEW) Modal: Banner
+        // Modal: Banner
         const bannerModal = document.getElementById('banner-modal');
         const bannerModalTitle = document.getElementById('banner-modal-title');
         const bannerForm = document.getElementById('banner-form');
@@ -189,7 +189,7 @@
                 const showSelectHtml = '<option value="">-- เลือกซีรีส์ --</option>';
                 
                 let episodeOptions = showSelectHtml;
-                let bannerOptions = showSelectHtml; // (NEW)
+                let bannerOptions = showSelectHtml; 
 
                 snapshot.forEach((doc) => {
                     const data = doc.data();
@@ -209,11 +209,11 @@
                     `;
                     const option = `<option value="${doc.id}">${data.title}</option>`;
                     episodeOptions += option;
-                    bannerOptions += option; // (NEW)
+                    bannerOptions += option; 
                 });
                 
                 episodeShowSelect.innerHTML = episodeOptions;
-                bannerShowSelect.innerHTML = bannerOptions; // (NEW)
+                bannerShowSelect.innerHTML = bannerOptions; 
 
                 console.log("Shows loaded:", shows.length);
             }, (error) => console.error("Error listening to shows:", error));
@@ -240,7 +240,7 @@
                 console.log("Episodes loaded:", snapshot.size);
             }, (error) => console.error("Error listening to episodes:", error));
 
-            // (NEW) 3. Listen to Banners
+            // 3. Listen to Banners
             const bannerQuery = query(getCollectionRef("banners"));
             onSnapshot(bannerQuery, (snapshot) => {
                 bannerTableBody.innerHTML = '';
@@ -268,11 +268,11 @@
         function switchView(viewId) {
             episodeListView.classList.add('hidden');
             showListView.classList.add('hidden');
-            bannerListView.classList.add('hidden'); // (NEW)
+            bannerListView.classList.add('hidden'); 
 
             showEpisodeListBtn.classList.remove('bg-gray-900', 'text-white');
             showShowListBtn.classList.remove('bg-gray-900', 'text-white');
-            showBannerListBtn.classList.remove('bg-gray-900', 'text-white'); // (NEW)
+            showBannerListBtn.classList.remove('bg-gray-900', 'text-white'); 
 
             if (viewId === 'episode') {
                 episodeListView.classList.remove('hidden');
@@ -287,7 +287,7 @@
         }
         showEpisodeListBtn.addEventListener('click', () => switchView('episode'));
         showShowListBtn.addEventListener('click', () => switchView('show'));
-        showBannerListBtn.addEventListener('click', () => switchView('banner')); // (NEW)
+        showBannerListBtn.addEventListener('click', () => switchView('banner')); 
 
 
         // --- Show (ซีรีส์) Modal Logic ---
@@ -296,7 +296,7 @@
             if (mode === 'add') {
                 showModalTitle.textContent = "เพิ่มเรื่องใหม่";
                 showForm.reset();
-                showViewCountInput.value = 0; // (NEW)
+                showViewCountInput.value = 0; 
                 document.querySelectorAll('.show-tag-option').forEach(checkbox => {
                     checkbox.checked = false;
                 });
@@ -306,7 +306,7 @@
                 showTitleInput.value = showData.title || '';
                 showDescInput.value = showData.description || '';
                 showThumbnailInput.value = showData.thumbnailUrl || '';
-                showViewCountInput.value = showData.viewCount || 0; // (NEW)
+                showViewCountInput.value = showData.viewCount || 0; 
                 
                 const tags = showData.tags || [];
                 document.querySelectorAll('.show-tag-option').forEach(checkbox => {
@@ -335,7 +335,7 @@
                 title: showTitleInput.value,
                 description: showDescInput.value,
                 thumbnailUrl: showThumbnailInput.value,
-                viewCount: parseInt(showViewCountInput.value, 10) || 0, // (NEW)
+                viewCount: parseInt(showViewCountInput.value, 10) || 0, 
                 tags: tagsArray,
                 updatedAt: serverTimestamp()
             };
@@ -346,7 +346,7 @@
                     await updateDoc(docRef, showData);
                 } else {
                     showData.createdAt = serverTimestamp();
-                    showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; // (NEW) ตรวจสอบว่ามีค่าตอนสร้าง
+                    showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
                     await addDoc(getCollectionRef("shows"), showData);
                 }
                 showForm.reset();
@@ -381,6 +381,66 @@
                 }
             }
         });
+        
+        // --- NEW: URL to Embed Code Converter Function ---
+        function convertToEmbedCode(input) {
+            if (!input || input.trim().toLowerCase().startsWith('<iframe')) {
+                // If input is empty or already an iframe, return as is
+                return input.trim();
+            }
+
+            try {
+                // Use a default iframe template structure, with dynamic src
+                const defaultIframeStart = `<iframe src="`;
+                const defaultIframeEnd = `" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+                
+                const url = new URL(input.trim());
+                const hostname = url.hostname.replace('www.', '');
+                let embedSrc = '';
+
+                // --- Ok.ru (Odnoklassniki) ---
+                // Example URL: https://ok.ru/video/7229912320757
+                if (hostname.includes('ok.ru')) {
+                    const videoIdMatch = url.pathname.match(/\/video\/(\d+)/);
+                    if (videoIdMatch) {
+                        const videoId = videoIdMatch[1];
+                        embedSrc = `//ok.ru/videoembed/${videoId}?nochat=1&autoplay=1`;
+                    }
+                }
+                
+                // --- YouTube ---
+                // Example URL: https://www.youtube.com/watch?v=VIDEO_ID
+                // Example URL: https://youtu.be/VIDEO_ID
+                else if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
+                    let videoId = url.searchParams.get('v');
+                    if (!videoId && hostname.includes('youtu.be')) {
+                        // Handle short links
+                        videoId = url.pathname.substring(1);
+                    }
+                    if (videoId) {
+                        // Use standard YouTube embed format with autoplay.
+                        embedSrc = `https://www.youtube.com/embed/${videoId}?rel=0&autoplay=1`;
+                    }
+                }
+                
+                // --- Fallback: Direct URL ---
+                // If it's a URL but doesn't match a known pattern, use the original URL
+                // The player will still try to wrap it in an iframe. We'll add autoplay for good measure.
+                if (!embedSrc) {
+                    url.searchParams.set('autoplay', '1');
+                    embedSrc = url.href;
+                }
+
+                return defaultIframeStart + embedSrc + defaultIframeEnd;
+
+            } catch (e) {
+                console.error("Invalid URL format or conversion error:", e);
+                // If it's not a valid URL (e.g., malformed or just random text), return the original input
+                return input.trim();
+            }
+        }
+        // --- END NEW FUNCTION ---
+
 
         // --- Episode (ตอน) Modal Logic ---
         function openEpisodeModal(mode, episodeData = {}, episodeId = null) {
@@ -404,10 +464,15 @@
         
         episodeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // --- MODIFIED: Convert URL to Embed Code before saving ---
+            const rawEmbedInput = episodeEmbedInput.value;
+            const embedCodeToSave = convertToEmbedCode(rawEmbedInput);
+
             const episodeData = {
                 title: episodeTitleInput.value,
                 episodeNumber: parseInt(episodeNumberInput.value, 10) || 0,
-                embedCode: episodeEmbedInput.value, 
+                embedCode: embedCodeToSave, // ใช้โค้ดที่แปลงแล้ว
                 showId: episodeShowSelect.value,
                 updatedAt: serverTimestamp()
             };
@@ -425,8 +490,12 @@
                     episodeData.createdAt = serverTimestamp();
                     await addDoc(getCollectionRef("episodes"), episodeData);
                 }
-                episodeForm.reset();
+                // ไม่ต้อง reset form เพราะต้องการให้ค่า embed code ที่ถูกแปลงแล้วยังคงแสดงในช่องกรอก
                 episodeModal.classList.remove('flex');
+                
+                // (Optional: อัปเดตช่องกรอกด้วยโค้ดที่ถูกแปลง เพื่อให้ผู้ใช้เห็นว่ามีการแปลงเกิดขึ้น)
+                episodeEmbedInput.value = embedCodeToSave; 
+
             } catch (error) {
                 console.error("Error saving episode: ", error);
             }
@@ -458,7 +527,7 @@
             }
         });
 
-        // (NEW) --- Banner Modal Logic ---
+        // --- Banner Modal Logic ---
         function openBannerModal(mode, bannerData = {}, bannerId = null) {
             currentEditingId = bannerId;
             if (mode === 'add') {
@@ -723,7 +792,7 @@
                     
                     <div>
                         <label for="episode-embed-code" class="block text-sm font-medium text-gray-300 mb-1">ลิงก์วิดีโอ (URL) หรือ Embed Code *</label>
-                        <textarea id="episode-embed-code" rows="4" placeholder="https://archive.org/embed/... หรือ <iframe ...></iframe>" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
+                        <textarea id="episode-embed-code" rows="4" placeholder="เช่น https://ok.ru/video/7229912320757 หรือ https://youtu.be/..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
                     </div>
 
                 </div>
