@@ -684,9 +684,8 @@
             playerEmbedDiv.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-black"><p class="text-gray-400">กำลังโหลดวิดีโอภายนอก...</p></div>';
             
             // หน่วงเวลาเล็กน้อยเพื่อให้ข้อความแสดงผล ก่อนเริ่มโหลด iframe
-            setTimeout(() => {
-                embedVideo(currentEmbedCode);
-            }, 100); 
+            // (MODIFIED) ลบ setTimeout ออกเพื่อให้ embedVideo ถูกเรียกทันที
+            embedVideo(currentEmbedCode);
             // ----------------------------------------
         }
 
