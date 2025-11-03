@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ANI-END - รับชม</title>
+    <title>WeTV Clone - รับชม</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Remixicon Icons -->
@@ -49,7 +49,10 @@
             min-width: initial !important; 
         }
         
-        .ep-button.active { background-color: #00b87c; color: #fff; }
+        .ep-button.active { 
+            background-color: #00b87c !important; /* (FIX) Added !important */
+            color: #fff !important; /* (FIX) Added !important */
+        }
         
         /* Style สำหรับ Thumbnail ในส่วน Related/Grid View */
         .related-card-title {
@@ -759,3 +762,4 @@
     
 </body>
 </html>
+
