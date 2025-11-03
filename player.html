@@ -59,6 +59,16 @@
             -webkit-line-clamp: 2; 
             -webkit-box-orient: vertical;
         }
+
+        /* (NEW FIX) สไตล์สำหรับบังคับจำกัดจำนวนบรรทัดของ Description */
+        #show-description {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2; /* จำกัดที่ 2 บรรทัด */
+            -webkit-box-orient: vertical;
+        }
+        /* END NEW FIX */
         
         /* Style สำหรับ Thumbnail ในส่วน Top 10 */
         .top10-thumbnail {
@@ -712,9 +722,9 @@
                     <!-- <div class="flex items-center space-x-4 text-gray-400 text-sm mb-4">
                         <span><i class="ri-thumb-up-line text-green-500"></i> 9.5</span>
                         <span>1.2 พันล้านวิว</span>
-                        <span>2024</span>
                     </div> -->
                     <!-- END DELETION -->
+                    <!-- (MODIFIED: line-clamp-2 ยังคงอยู่) -->
                     <p id="show-description" class="text-gray-300 line-clamp-2">...</p>
                 </div>
             </div>
