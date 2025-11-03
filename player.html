@@ -55,7 +55,7 @@
             z-index: 20; /* ให้อยู่เหนือ iframe */
             transition: opacity 0.3s;
         }
-        
+
         /* 3. กล่องหลาน (Grandchild - ตัว Video/Iframe) - ขยายเต็มกล่องลูก */
         #video-player-embed iframe {
             width: 100%;
@@ -312,65 +312,6 @@
             `;
         }
         
-        /**
-         * (MODIFIED) แสดงรายการ "อนิเมะที่คุณอาจจะชอบ" ในรูปแบบ Grid Card
-         */
-        async function renderRelatedList(tags) {
-            relatedListContainer.innerHTML = `<p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>`;
-            
-            try {
-                let relatedQuery;
-                let relatedShows = [];
-                // (MODIFIED) 15 items (3 rows * 5 columns)
-                const maxDisplay = 15; 
-
-                if (tags && tags.length > 0) {
-                    // 1. ถ้ามี Tags ให้ค้นหาซีรีส์ที่มี tag ตรงกัน (ดึงทั้งหมด)
-                    relatedQuery = query(getCollectionRef("shows"), where("tags", "array-contains-any", tags));
-                    const querySnapshot = await getDocs(relatedQuery);
-                    
-                    querySnapshot.forEach((doc) => {
-                        // กรองเรื่องปัจจุบันออก
-                        if (currentShow && doc.id !== currentShow.id) { 
-                            relatedShows.push({ id: doc.id, ...doc.data() });
-                        }
-                    });
-                } else {
-                    // 2. ถ้าไม่มี Tags (หน้า Error) ให้ดึงเรื่องแนะนำทั่วไป (เรียงตาม ViewCount)
-                    // (MODIFIED) จำกัดเป็น maxDisplay (15)
-                    relatedQuery = query(getCollectionRef("shows"), orderBy("viewCount", "desc"), limit(maxDisplay));
-                    const querySnapshot = await getDocs(relatedQuery);
-                    
-                    querySnapshot.forEach((doc) => {
-                        relatedShows.push({ id: doc.id, ...doc.data() });
-                    });
-                }
-
-                // สุ่มและจำกัด 15 รายการ (3 แถว x 5 คอลัมน์)
-                // (MODIFIED) Always use maxDisplay (15) for slicing
-                relatedShows = relatedShows.sort(() => 0.5 - Math.random()).slice(0, maxDisplay);
-                
-                if(relatedShows.length === 0) {
-                    // (MODIFIED) ข้อความแสดงผลเมื่อไม่พบ
-                    relatedListContainer.innerHTML = `<p class="text-gray-400">ไม่พบซีรีส์ที่เกี่ยวข้อง</p>`;
-                    return;
-                }
-                
-                // (MODIFIED) ตั้งค่า Container ให้เป็น Grid 2-5 คอลัมน์ (Responsive)
-                // grid-cols-2 (mobile), md:grid-cols-3 (tablet), lg:grid-cols-5 (desktop)
-                relatedListContainer.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4';
-                relatedListContainer.innerHTML = ''; // Clear loading text
-
-                relatedShows.forEach(show => {
-                    relatedListContainer.innerHTML += createRelatedCard(show);
-                });
-
-            } catch (error) {
-                console.error("Error fetching related shows:", error);
-                relatedListContainer.innerHTML = `<p class="text-red-400">เกิดข้อผิดพลาดในการโหลดเรื่องแนะนำ</p>`;
-            }
-        }
-        
         // (NEW) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player
         function syncEpisodeListHeight() {
             // 1. หาความสูงของ Video Player Wrapper
@@ -436,21 +377,28 @@
         }
 
         /**
-         * Function to handle the Iframe embed (Now loads the iframe when called)
+         * (MODIFIED) Function to handle the Iframe embed (Now loads the iframe when called)
          * @param {string} embedCode The full HTML iframe string (expected from admin.html conversion).
          */
         function embedVideo(embedCode) {
             console.log("Loading iframe for playback.");
             
-            if (!embedCode || !embedCode.trim().startsWith('<iframe')) {
-                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ข้อผิดพลาด: Embed Code ไม่ใช่ iframe กรุณาตรวจสอบ Admin Panel</p>`;
+            if (!embedCode) {
+                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบ Embed Code สำหรับตอนนี้</p>`;
                  return;
             }
 
-            // 1. ถ้าเป็น <iframe> tag (HTML string) 
+            // 1. หากโค้ดเป็น URL ธรรมดา (ไม่ควรเกิดขึ้นหลังแก้ admin.html แต่ป้องกันไว้)
+            if (embedCode.trim().startsWith('http')) {
+                // Since admin.html should convert URLs, this is a fallback.
+                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ข้อผิดพลาด: Embed Code ไม่ใช่ iframe กรุณาตรวจสอบ Admin Panel</p>`;
+                 return;
+            }
+            
+            // 2. ถ้าเป็น <iframe> tag (HTML string) 
             let finalEmbedCode = embedCode;
             
-            // --- Post-processing iframe for compatibility ---
+            // --- (NEW) Post-processing iframe for compatibility ---
             
             // A. เพิ่ม Autoplay ถ้ายังไม่มี
             if (!finalEmbedCode.includes('autoplay')) {
@@ -474,46 +422,27 @@
 
 
         /**
-         * (MODIFIED) ฟังก์ชันจัดการการโหลด iframe จริง เมื่อผู้ใช้คลิกปุ่ม Play
+         * (NEW) ฟังก์ชันจัดการการโหลด iframe จริง เมื่อผู้ใช้คลิกปุ่ม Play
          */
         function loadIframeAndPlay() {
             const placeholder = document.getElementById('video-placeholder');
             
-            // 1. (NEW) แสดงสถานะการโหลดก่อน
-            if (placeholder) {
-                // ลบ Play Button ออก
-                const playButton = document.getElementById('play-button');
-                if (playButton) placeholder.removeChild(playButton);
-
-                // เปลี่ยนข้อความใน Placeholder
-                placeholder.innerHTML = '<p class="text-xl text-white font-bold">กำลังโหลดวิดีโอภายนอก...</p>';
-                placeholder.style.backgroundColor = '#000'; // เปลี่ยนเป็นสีดำเพื่อความชัดเจน
-                placeholder.style.backgroundImage = 'none';
-
-                // 2. ซ่อน Placeholder ด้วย fade out (เพิ่ม Transition ให้ข้อความก่อน fade)
-                setTimeout(() => {
-                    placeholder.style.opacity = '0';
-                }, 100); // แสดงข้อความโหลด 100ms ก่อนเริ่ม fade out
-
-                // 3. รอให้ Fade Out เสร็จ แล้วค่อยใส่ iframe
-                setTimeout(() => {
-                    // 4. ใส่ iframe ที่เก็บไว้ใน currentEmbedCode
-                    embedVideo(currentEmbedCode);
-                    
-                    // 5. ลบ Placeholder ออกจาก DOM
-                    if (playerEmbedDiv.contains(placeholder)) {
-                        playerEmbedDiv.removeChild(placeholder);
-                    }
-                    
-                    // (Optional: Focus on iframe for autoplay if browser allows)
-                    const iframe = playerEmbedDiv.querySelector('iframe');
-                    if (iframe) iframe.focus();
-                    
-                }, 400); // 100ms (Load text) + 300ms (Transition)
-            } else {
-                 // Fallback: ถ้าไม่มี Placeholder ให้โหลดทันที
-                 embedVideo(currentEmbedCode);
-            }
+            // 1. ซ่อน Placeholder ด้วย fade out
+            placeholder.style.opacity = '0';
+            
+            // 2. รอให้ Fade Out เสร็จ แล้วค่อยใส่ iframe
+            setTimeout(() => {
+                // 3. ใส่ iframe ที่เก็บไว้ใน currentEmbedCode
+                embedVideo(currentEmbedCode);
+                
+                // 4. ลบ Placeholder ออกจาก DOM
+                playerEmbedDiv.removeChild(placeholder);
+                
+                // (Optional: Focus on iframe for autoplay if browser allows)
+                const iframe = playerEmbedDiv.querySelector('iframe');
+                if (iframe) iframe.focus();
+                
+            }, 300); // 300ms เท่ากับระยะ transition
         }
 
 
@@ -530,7 +459,6 @@
                         
                         console.log("User Authenticated (Anonymous):", userId);
                         
-                        // (MODIFIED) ให้ความสำคัญกับการโหลดเนื้อหาหลักก่อน
                         await loadContent(); 
                         await loadGlobalContent();
                     } else {
@@ -621,7 +549,7 @@
 
                 // 5. เล่นตอนแรก (ถ้ามี)
                 if (currentEpisodes.length > 0) {
-                    playEpisode(currentEpisodes[0], false); // Show placeholder
+                    playEpisode(currentEpisodes[0], false); // (MODIFIED) Don't play immediately, show placeholder
                 } else {
                     playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับซีรีส์นี้</p>`;
                 }
@@ -662,7 +590,7 @@
                 button.dataset.episodeId = ep.id;
                 
                 button.addEventListener('click', () => {
-                    playEpisode(ep, true); // Play immediately on click
+                    playEpisode(ep, true); // (MODIFIED) Play immediately on click
                 });
                 
                 episodeListContainer.appendChild(button);
@@ -694,17 +622,11 @@
             playerEmbedDiv.innerHTML = ''; // ล้าง Player
             
             if (isUserClick) {
-                 // หากผู้ใช้คลิกปุ่มตอน ให้โหลด iframe ทันที (ไม่ต้องผ่าน placeholder/lazy load)
-                 // (NEW) แสดงสถานะโหลดก่อน
-                 playerEmbedDiv.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-black"><p class="text-gray-400">กำลังโหลดวิดีโอภายนอก...</p></div>';
-                 
-                 // หน่วงเวลาเล็กน้อยเพื่อให้ข้อความแสดงผล ก่อนเริ่มโหลด iframe
-                 setTimeout(() => {
-                     embedVideo(currentEmbedCode);
-                 }, 100); 
+                 // หากผู้ใช้คลิกปุ่มตอน ให้โหลด iframe ทันที
+                 embedVideo(currentEmbedCode);
                  
             } else {
-                 // หากเป็นการโหลดครั้งแรก (หรือการเปลี่ยนตอนแบบไม่คลิกปุ่ม) ให้แสดง Placeholder
+                 // หากเป็นการโหลดครั้งแรก ให้แสดง Placeholder
                  
                  const placeholder = document.createElement('div');
                  placeholder.id = 'video-placeholder';
