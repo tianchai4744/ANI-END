@@ -156,6 +156,15 @@
              }
         }
 
+        /* (NEW) Hide scrollbar for horizontal episode list */
+        #episode-list-container::-webkit-scrollbar {
+            display: none; /* Hide scrollbar for WebKit */
+        }
+        #episode-list-container {
+            -ms-overflow-style: none;  /* Hide scrollbar for IE and Edge */
+            scrollbar-width: none;  /* Hide scrollbar for Firefox */
+        }
+
 
     </style>
 </head>
@@ -408,12 +417,12 @@
 
             // ตรวจสอบว่าอยู่บนหน้าจอขนาดใหญ่ (lg: ขึ้นไป) ก่อนดำเนินการ
             if (window.innerWidth < 1024) {
+                 // On mobile, reset max-height (Tailwind classes will handle overflow)
                  episodeListContent.style.maxHeight = 'initial';
-                 episodeListContent.style.overflowY = 'initial';
-                 episodeListContent.style.paddingRight = '0';
                  return;
             }
 
+            // On Desktop:
             const videoHeight = videoWrapper.offsetHeight;
             
             // 2. คำนวณความสูงที่เหลือสำหรับเนื้อหารายการตอน (Episode List Content)
@@ -421,10 +430,8 @@
             const headerAndPaddingOffset = 65; 
             const listMaxHeight = videoHeight - headerAndPaddingOffset;
 
-            // 3. กำหนด Max-Height ให้กับ Episode List Container
+            // 3. กำหนด Max-Height ให้กับ Episode List Container (let Tailwind handle overflow)
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
-            episodeListContent.style.overflowY = 'auto';
-            episodeListContent.style.paddingRight = '8px'; // pr-2
         }
 
         // แสดงรายละเอียดซีรีส์
@@ -441,8 +448,10 @@
                 return;
             }
             
-            // (MODIFIED) Remove fixed max-height and overflow classes here.
-            episodeListContainer.className = 'flex flex-wrap gap-2'; 
+            // (MODIFIED) Responsive classes:
+            // Mobile: flex-nowrap (horizontal scroll) with padding-bottom
+            // Desktop (lg): flex-wrap (vertical scroll) with padding-right
+            episodeListContainer.className = 'flex gap-2 pb-3 lg:pb-0 flex-nowrap overflow-x-auto overflow-y-hidden lg:flex-wrap lg:overflow-y-auto lg:overflow-x-hidden lg:pr-2'; 
             
             episodes.forEach((ep, index) => {
                 const button = document.createElement('button');
@@ -762,4 +771,5 @@
     
 </body>
 </html>
+
 
