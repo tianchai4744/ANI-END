@@ -357,19 +357,23 @@
             showDescEl.textContent = desc;
             
             // 1. ตรวจสอบว่าต้องซ่อน/แสดงปุ่มหรือไม่ (Description ยาวเกิน 2 บรรทัด)
-            // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า DOM ถูกวาดเสร็จสมบูรณ์ก่อนการวัดค่า
+            
+            const descEl = document.getElementById('show-description');
+            const btn = document.getElementById('toggle-description-btn');
+            
+            // Step 1: ลบการจำกัดความสูงออกชั่วคราวเพื่อให้วัดค่าได้แม่นยำ
+            descEl.classList.remove('truncated'); 
+            btn.classList.add('hidden'); // ซ่อนปุ่มก่อน
+
+            // Step 2: ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า DOM ถูกวาดเสร็จสมบูรณ์ก่อนการวัดค่า
             requestAnimationFrame(() => { 
-                const descEl = document.getElementById('show-description');
-                const btn = document.getElementById('toggle-description-btn');
-                
-                // คำนวณความสูงเมื่อไม่มีการจำกัด (เพื่อให้ได้ความสูงจริง)
                 const originalHeight = descEl.scrollHeight; 
                 
-                // 48px คือ max-height ที่เรากำหนดสำหรับ 2 บรรทัด
-                // ใช้ค่า 50px เป็นเกณฑ์ที่ปลอดภัยกว่า 48px เพื่อให้แน่ใจว่าข้อความยาวกว่า 2 บรรทัดจริง
+                // 50px คือเกณฑ์สำหรับข้อความที่ยาวเกิน 2 บรรทัด
                 if (originalHeight > 50) { 
                     btn.classList.remove('hidden'); // แสดงปุ่ม
-                    toggleDescription(false); // ซ่อนข้อความเริ่มต้น (เหลือ 2 บรรทัด)
+                    // Step 3: บังคับให้แสดงแค่ 2 บรรทัด (เรียกใช้ toggleDescription(false))
+                    toggleDescription(false); 
                 } else {
                     btn.classList.add('hidden'); // ซ่อนปุ่มถ้าข้อความสั้น
                     descEl.classList.remove('truncated'); // ตรวจสอบให้แน่ใจว่าไม่มีการตัดข้อความ
@@ -785,7 +789,7 @@
                     <div id="description-container" class="mb-2">
                         <!-- (MODIFIED) ลบคลาส line-clamp-2 ออกจาก HTML และใช้ CSS/JS จัดการแทน -->
                         <p id="show-description" class="text-gray-300"></p> 
-                        <button id="toggle-description-btn" class="text-green-500 hover:text-green-400 text-sm font-bold mt-1 flex items-center space-x-1" data-expanded="false">
+                        <button id="toggle-description-btn" class="text-green-500 hover:text-green-400 text-sm font-bold mt-1 flex items-center space-x-1 hidden" data-expanded="false">
                             <!-- เนื้อหาจะถูกแทรกด้วย JS -->
                             <i class="ri-arrow-down-s-line"></i> 
                             <span>ดูเพิ่มเติม</span>
