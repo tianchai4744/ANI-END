@@ -62,10 +62,21 @@
 
         /* (MODIFIED CSS) กำหนดความสูงสูงสุด (Max Height) สำหรับ 2 บรรทัด */
         #show-description.truncated {
-            /* 1.3em คือ line-height โดยประมาณ, 2 บรรทัด * 1.3em = 2.6em.
-               ใช้ค่าที่ปลอดภัยเช่น 3.0em หรือ 48px เพื่อให้ครอบคลุม 2 บรรทัด */
-            max-height: 48px; /* ค่าประมาณ 2 บรรทัด (2 * 1.5rem / 2) */
+            /* 48px คือค่าที่ปลอดภัยสำหรับ 2 บรรทัดของ text-gray-300 */
+            max-height: 48px; 
             overflow: hidden;
+        }
+        
+        /* (NEW CSS) สไตล์สำหรับปุ่ม "ดูเพิ่มเติม" */
+        #toggle-description-btn {
+            color: #10b981; /* Green-500 */
+            font-weight: 700;
+            cursor: pointer;
+            transition: color 0.2s;
+            padding: 2px 0;
+        }
+        #toggle-description-btn:hover {
+            color: #059669; /* Green-600 */
         }
         /* END MODIFIED CSS */
         
@@ -273,11 +284,13 @@
 
             if (isExpanded) {
                 descEl.classList.remove('truncated');
-                button.innerHTML = '<i class="ri-arrow-up-s-line"></i> ย่อหน้า';
+                // (MODIFIED) เพิ่ม class 'mr-1'
+                button.innerHTML = '<i class="ri-arrow-up-s-line mr-1"></i> ย่อหน้า'; 
                 button.dataset.expanded = 'true';
             } else {
                 descEl.classList.add('truncated');
-                button.innerHTML = '<i class="ri-arrow-down-s-line"></i> ดูเพิ่มเติม';
+                // (MODIFIED) เพิ่ม class 'mr-1'
+                button.innerHTML = '<i class="ri-arrow-down-s-line mr-1"></i> ดูเพิ่มเติม'; 
                 button.dataset.expanded = 'false';
             }
         }
@@ -345,16 +358,22 @@
             const desc = show.description || "ไม่มีคำอธิบาย";
             showDescEl.textContent = desc;
             
-            // 1. ตรวจสอบว่าต้องซ่อนหรือไม่ (Description ยาวเกิน 2 บรรทัด)
+            // 1. ตรวจสอบว่าต้องซ่อน/แสดงปุ่มหรือไม่ (Description ยาวเกิน 2 บรรทัด)
             // ต้องให้ DOM render ข้อความก่อน จึงจะวัดความสูงที่แท้จริงได้
             setTimeout(() => {
-                const descHeight = showDescEl.scrollHeight;
+                const descEl = document.getElementById('show-description');
+                const btn = document.getElementById('toggle-description-btn');
+                
+                // คำนวณความสูงเมื่อไม่มีการจำกัด (เพื่อให้ได้ความสูงจริง)
+                const originalHeight = descEl.scrollHeight; 
+                
                 // 48px คือ max-height ที่เรากำหนดสำหรับ 2 บรรทัด
-                if (descHeight > 48) { 
-                    descriptionContainer.classList.remove('hidden');
-                    toggleDescription(false); // ซ่อนข้อความเริ่มต้น
+                if (originalHeight > 48) { 
+                    btn.classList.remove('hidden'); // แสดงปุ่ม
+                    toggleDescription(false); // ซ่อนข้อความเริ่มต้น (เหลือ 2 บรรทัด)
                 } else {
-                    descriptionContainer.classList.add('hidden'); // ซ่อนปุ่มถ้าข้อความสั้น
+                    btn.classList.add('hidden'); // ซ่อนปุ่มถ้าข้อความสั้น
+                    descEl.classList.remove('truncated'); // ตรวจสอบให้แน่ใจว่าไม่มีการตัดข้อความ
                 }
             }, 50); 
         }
@@ -415,8 +434,10 @@
                 currentEpisodes = [];
                 episodesSnapshot.forEach((doc) => {
                     currentEpisodes.push({ id: doc.id, ...doc.data() });
+                    // *** บรรทัดที่ถูกแก้ไข ***
                 });
-                
+                // ... (ส่วนที่เหลือของฟังก์ชัน loadContent)
+
                 // 3. เรียงลำดับตอน
                 currentEpisodes.sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0));
                 
@@ -767,7 +788,7 @@
                     <div id="description-container" class="mb-2">
                         <!-- (MODIFIED) ลบคลาส line-clamp-2 ออกจาก HTML และใช้ CSS/JS จัดการแทน -->
                         <p id="show-description" class="text-gray-300"></p> 
-                        <button id="toggle-description-btn" class="text-green-500 hover:text-green-400 text-sm font-bold mt-1 flex items-center space-x-1" data-expanded="false">
+                        <button id="toggle-description-btn" class="text-green-500 hover:text-green-400 text-sm font-bold mt-1 flex items-center space-x-1 hidden" data-expanded="false">
                             <!-- เนื้อหาจะถูกแทรกด้วย JS -->
                             <i class="ri-arrow-down-s-line"></i> 
                             <span>ดูเพิ่มเติม</span>
