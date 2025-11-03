@@ -41,30 +41,14 @@
         #video-player-embed iframe {
             width: 100%;
             height: 100%;
-            /* (MODIFIED) ลบการปรับ CSS Cropping ออกไป */
-            position: initial; 
-            top: initial; 
-            height: 100%; 
+            /* (FIXED) กลับไปใช้ Absolute positioning เพื่อให้แสดงผลเต็มกรอบ 16:9 อย่างถูกต้อง */
+            position: absolute; 
+            top: 0; 
+            left: 0;
+            /* height: 100%; ถูกกำหนดไว้ที่บรรทัดบนแล้ว */
             min-width: initial !important; 
         }
         
-        /* (REMOVED) CSS สำหรับการซ่อนแถบเมนู Player ภายนอก */
-        /* .masked-player {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            overflow: hidden; 
-        } */
-        
-        /* (REMOVED) ขยับ iframe ขึ้นไปด้านบนและเพิ่มความสูงเพื่อซ่อนแถบเมนูด้านบน */
-        /* .masked-player iframe {
-            position: absolute;
-            top: -2.5em; 
-            left: 0;
-            width: 100%;
-            height: calc(100% + 2.5em); 
-        } */
-
         .ep-button.active { background-color: #00b87c; color: #fff; }
         
         /* Style สำหรับ Thumbnail ในส่วน Related/Grid View */
@@ -221,10 +205,6 @@
                  return;
             }
             
-            // 1. (REMOVED) ลบการสร้าง Wrapper สำหรับ Masking/Cropping ออกไป
-            // const maskedPlayerDiv = document.createElement('div');
-            // maskedPlayerDiv.className = 'masked-player'; 
-
             let iframeElement = null;
 
             // 2. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
