@@ -193,7 +193,6 @@
         const top10ListContainer = document.getElementById('top10-list-container'); 
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
-        const toggleDescBtn = document.getElementById('toggle-desc-btn'); // (NEW)
 
         // (MODIFIED) Function to handle the Iframe embed 
         function embedVideo(embedCode) {
@@ -317,10 +316,9 @@
                     loadingPlayer.classList.add('hidden');
                     
                     // Clear show-specific UI
-                    // (FIX) Check if elements exist before setting textContent
-                    if (showTitleEl) showTitleEl.textContent = "ไม่พบซีรีส์";
-                    if (showDescEl) showDescEl.textContent = "โปรดกลับไปที่หน้าแรกเพื่อเลือกซีรีส์ที่ถูกต้อง";
-                    if (episodeListContainer) episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่สามารถโหลดรายการตอนได้</p>`;
+                    showTitleEl.textContent = "ไม่พบซีรีส์";
+                    showDescEl.textContent = "โปรดกลับไปที่หน้าแรกเพื่อเลือกซีรีส์ที่ถูกต้อง";
+                    episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่สามารถโหลดรายการตอนได้</p>`;
                     
                     // หากไม่มี showId เราจะไม่สามารถหา Related List ได้
                     await renderRelatedList([]);
@@ -386,11 +384,11 @@
                 
             } catch (error) {
                 console.error("Error loading content:", error);
-                if (playerEmbedDiv) playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">เกิดข้อผิดพลาดในการโหลด</p>`;
+                playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">เกิดข้อผิดพลาดในการโหลด</p>`;
             } finally {
                 
-                if (loadingPlayer) loadingPlayer.classList.add('hidden');
-                if (playerContentWrapper) playerContentWrapper.classList.remove('hidden');
+                loadingPlayer.classList.add('hidden');
+                playerContentWrapper.classList.remove('hidden');
                 
                 syncEpisodeListHeight(); 
             }
@@ -428,31 +426,12 @@
 
         // แสดงรายละเอียดซีรีส์
         function renderShowDetails(show) {
-            // (FIX) Check if elements exist
-            if (showTitleEl) showTitleEl.textContent = show.title;
-            if (showDescEl) showDescEl.textContent = show.description || "ไม่มีคำอธิบาย";
-            
-            // (NEW) รีเซ็ตสถานะปุ่มและคำอธิบาย
-            // (FIX) ตรวจสอบว่า toggleDescBtn ไม่ใช่ null ก่อน
-            if (toggleDescBtn && showDescEl) {
-                showDescEl.classList.add('line-clamp-2');
-                toggleDescBtn.textContent = 'ดูเพิ่มเติม...';
-                toggleDescBtn.classList.add('hidden');
-    
-                // (NEW) ตรวจสอบหลังจาก UI render สักครู่ว่าข้อความล้นหรือไม่
-                setTimeout(() => {
-                    // (FIX) ใช้ scrollHeight เทียบกับ offsetHeight เพื่อความแม่นยำ
-                    if (showDescEl.scrollHeight > showDescEl.offsetHeight) {
-                        toggleDescBtn.classList.remove('hidden'); // ถ้าล้น ให้แสดงปุ่ม
-                    }
-                    // ถ้าไม่ล้น ปุ่มจะยังคงถูกซ่อน
-                }, 100); // ให้เวลา 100ms เพื่อให้แน่ใจว่า render เสร็จ
-            }
+            showTitleEl.textContent = show.title;
+            showDescEl.textContent = show.description || "ไม่มีคำอธิบาย";
         }
 
         // แสดงปุ่มรายการตอน
         function renderEpisodeList(episodes) {
-            if (!episodeListContainer) return; // (FIX) Check if container exists
             episodeListContainer.innerHTML = ''; 
             if (episodes.length === 0) {
                 episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่พบตอน</p>`;
@@ -483,7 +462,6 @@
          * (MODIFIED) แสดงรายการ "อนิเมะที่คุณอาจจะชอบ" ในรูปแบบ Grid Card
          */
         async function renderRelatedList(tags) {
-            if (!relatedListContainer) return; // (FIX) Check if container exists
             relatedListContainer.innerHTML = `<p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>`;
             
             try {
@@ -569,7 +547,6 @@
 
         // แสดงรายการ 10 อันดับยอดนิยม (ไม่มีการเปลี่ยนแปลงหลัก)
         async function renderTop10List() {
-            if (!top10ListContainer) return; // (FIX) Check if container exists
             top10ListContainer.innerHTML = '';
             
             try {
@@ -650,7 +627,6 @@
 
         // ฟังก์ชันเล่นวิดีโอ (กลับไปใช้ Embed Video)
         function playEpisode(episode) {
-            if (!playerEmbedDiv) return; // (FIX) Check if element exists
             console.log(`Playing: ${episode.title}`, episode.embedCode);
             
             playerEmbedDiv.innerHTML = ''; 
@@ -659,7 +635,7 @@
             embedVideo(episode.embedCode);
             
             // อัปเดตชื่อเรื่องหลัก
-            if (showTitleEl) showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
+            showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
             
             // อัปเดตปุ่มที่ active
             document.querySelectorAll('.ep-button').forEach(btn => {
@@ -675,24 +651,6 @@
             initializeFirebase(); 
             // (NEW) Attach resize listener
             window.addEventListener('resize', syncEpisodeListHeight);
-            
-            // (NEW) Event listener สำหรับปุ่ม "ดูเพิ่มเติม"
-            // (FIX) ตรวจสอบว่า toggleDescBtn และ showDescEl ไม่ใช่ null ก่อน
-            if (toggleDescBtn && showDescEl) {
-                toggleDescBtn.addEventListener('click', () => {
-                    if (showDescEl.classList.contains('line-clamp-2')) {
-                        // ถ้ากำลังย่อ -> ขยาย
-                        showDescEl.classList.remove('line-clamp-2');
-                        toggleDescBtn.textContent = 'ย่อหน้า';
-                    } else {
-                        // ถ้ากำลังขยาย -> ย่อ
-                        showDescEl.classList.add('line-clamp-2');
-                        toggleDescBtn.textContent = 'ดูเพิ่มเติม...';
-                    }
-                });
-            } else {
-                console.warn("toggleDescBtn or showDescEl not found on DOMContentLoaded.");
-            }
         });
 
     </script>
@@ -747,18 +705,17 @@
                     </div>
                 </div>
                 
-                <!-- (FIX) Removed comments around the Show Info block -->
+                <!-- Show Info -->
                 <div class="text-white mb-6">
                     <h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
-                    
-                    <!-- (MODIFIED) Description wrapper -->
-                    <div class="relative">
-                        <p id="show-description" class="text-gray-300 line-clamp-2 transition-all duration-300">...</p>
-                        <!-- (NEW) Toggle Button -->
-                        <button id="toggle-desc-btn" class="text-green-400 hover:text-green-300 font-medium text-sm mt-1 hidden">
-                            ดูเพิ่มเติม...
-                        </button>
-                    </div>
+                    <!-- START DELETION: ลบ div แสดงคะแนน ยอดวิว และปี -->
+                    <!-- <div class="flex items-center space-x-4 text-gray-400 text-sm mb-4">
+                        <span><i class="ri-thumb-up-line text-green-500"></i> 9.5</span>
+                        <span>1.2 พันล้านวิว</span>
+                        <span>2024</span>
+                    </div> -->
+                    <!-- END DELETION -->
+                    <p id="show-description" class="text-gray-300 line-clamp-2">...</p>
                 </div>
             </div>
             
@@ -802,4 +759,3 @@
     
 </body>
 </html>
-
