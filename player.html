@@ -44,7 +44,25 @@
             min-width: initial !important; 
         }
         
-        /* Removed Tab-related CSS */
+        /* 4. (NEW) CSS สำหรับซ่อนเมนูที่ด้านบนของ Player (เช่น ชื่อวิดีโอ โลโก้ และปุ่มคัดลอกลิงก์) */
+        .masked-player {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            /* เราจะ 'ซ่อน' ส่วนบนของ iframe ประมาณ 5% ของความสูงโดยรวม */
+            overflow: hidden; 
+        }
+        
+        /* 5. (NEW) ขยับ iframe ขึ้นไปด้านบนเล็กน้อยเพื่อให้เนื้อหาวิดีโอเริ่มที่ขอบด้านบนของกล่อง */
+        .masked-player iframe {
+            position: absolute;
+            top: -5%; /* ขยับขึ้น 5% เพื่อซ่อนแถบเมนูด้านบน */
+            left: 0;
+            width: 100%;
+            /* ต้องปรับความสูงเพิ่มขึ้น 5% เพื่อให้วิดีโอเต็มกล่องเมื่อถูกขยับขึ้น */
+            height: 105%; 
+        }
+
         .ep-button.active { background-color: #00b87c; color: #fff; }
         
         /* Style สำหรับ Thumbnail ในส่วน Related/Grid View */
@@ -190,22 +208,29 @@
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
 
-        // (REMOVED: getArchiveItemId)
-        // (REMOVED: playCustomVideo)
-
-        // (MODIFIED) Function to handle the Iframe embed (เดิมคือ playIframeFallback)
+        // (MODIFIED) Function to handle the Iframe embed 
         function embedVideo(embedCode) {
             console.log("Using standard iframe embed.");
             
-            // 1. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
-            if (embedCode.trim().startsWith('http')) {
+            playerEmbedDiv.innerHTML = ''; // Clear previous content
+
+            if (!embedCode) {
+                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
+                 return;
+            }
+            
+            // 1. (NEW) สร้าง Wrapper สำหรับ Masking/Cropping (เพื่อซ่อนแถบเมนูด้านบน)
+            const maskedPlayerDiv = document.createElement('div');
+            maskedPlayerDiv.className = 'masked-player'; // ใช้ CSS ที่เพิ่มเข้าไป
+
+            // 2. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
+            if (embedCode.trim().startsWith('http') && !embedCode.trim().toLowerCase().includes('<iframe')) {
                 let videoUrlStr = embedCode;
                 
                 // พยายามเพิ่ม autoplay=1
                 try {
                     const videoUrl = new URL(videoUrlStr);
                     videoUrl.searchParams.set('autoplay', '1');
-                    // (NEW) ลบ muted=0 ออก เพื่อให้เบราว์เซอร์จัดการเสียง
                     videoUrlStr = videoUrl.href;
                 } catch (e) {
                     console.warn("Could not parse URL to add params, trying string append:", e);
@@ -215,41 +240,47 @@
                 const iframe = document.createElement('iframe');
                 iframe.src = videoUrlStr; 
                 iframe.setAttribute('frameborder', '0');
-                // (MODIFIED) อนุญาต autoplay; fullscreen
                 iframe.setAttribute('allow', 'autoplay; fullscreen'); 
                 iframe.setAttribute('webkitallowfullscreen', 'true');
                 iframe.setAttribute('mozallowfullscreen', 'true');
                 iframe.setAttribute('allowfullscreen', 'true');
                 
-                playerEmbedDiv.innerHTML = ''; // Clear previous content
-                playerEmbedDiv.appendChild(iframe);
+                maskedPlayerDiv.appendChild(iframe);
                 
             } else if (embedCode) {
-                // 2. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
+                // 3. กรณีเป็น <iframe> tag (HTML string) อื่นๆ (ใช้โค้ดที่แปลงจาก Admin Panel)
                 let finalEmbedCode = embedCode;
-                // พยายามเพิ่ม autoplay และลบ muted ออก
-                if (!finalEmbedCode.includes('autoplay')) {
-                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay `);
-                }
-                finalEmbedCode = finalEmbedCode.replace(/muted/g, ''); 
-
-                // พยายามเพิ่มพารามิเตอร์ใน src
-                if (finalEmbedCode.includes('src="')) {
-                    finalEmbedCode = finalEmbedCode.replace(/src="([^"]*)"/i, (match, src) => {
-                        if (!src.includes('autoplay=')) {
-                            src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
-                        }
-                        if (src.includes('muted=1')) {
-                             src = src.replace('muted=1', 'muted=0'); // Change muted=1 to muted=0
-                        }
-                        return `src="${src}"`;
-                    });
-                }
-                playerEmbedDiv.innerHTML = finalEmbedCode;
                 
+                // สร้าง DOM element จาก HTML string (เพื่อหลีกเลี่ยงการใช้ innerHTML กับโค้ดทั้งหมด)
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = finalEmbedCode;
+                const iframeElement = tempDiv.querySelector('iframe');
+                
+                if (iframeElement) {
+                     // ลบ width/height ที่กำหนดไว้
+                    iframeElement.removeAttribute('width');
+                    iframeElement.removeAttribute('height');
+                    
+                    // ตั้งค่า attributes ที่จำเป็น
+                    iframeElement.setAttribute('frameborder', '0');
+                    iframeElement.setAttribute('allow', 'autoplay; fullscreen'); 
+                    iframeElement.setAttribute('webkitallowfullscreen', 'true');
+                    iframeElement.setAttribute('mozallowfullscreen', 'true');
+                    iframeElement.setAttribute('allowfullscreen', 'true');
+                    
+                    maskedPlayerDiv.appendChild(iframeElement);
+                } else {
+                    // ถ้าไม่ใช่ iframe, แสดงผล raw embed code
+                    playerEmbedDiv.innerHTML = `<textarea class="w-full h-full bg-black text-red-500 p-4 font-mono text-sm" readonly>${embedCode}</textarea>`;
+                    return;
+                }
             } else {
                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
+                return;
             }
+
+            // 4. เพิ่ม Masked Wrapper เข้าไปใน Player Div
+            playerEmbedDiv.appendChild(maskedPlayerDiv);
         }
 
 
