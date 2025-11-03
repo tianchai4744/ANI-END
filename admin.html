@@ -137,64 +137,6 @@
                 loadingIndicator.textContent = "Error initializing app. Check console.";
             }
         }
-        
-        /**
-         * Converts a simple video URL (like ok.ru/video/...) into a standardized iframe embed code.
-         * If the input is already an iframe, it returns it unchanged.
-         * @param {string} inputUrl The URL or embed code from the user.
-         * @returns {string} The final embed code (iframe HTML string).
-         */
-        function convertToEmbedCode(inputUrl) {
-            const url = inputUrl.trim();
-            
-            // 1. If it's already an iframe, return as is.
-            if (url.startsWith('<iframe') || url.startsWith('<IFRAME')) {
-                return url;
-            }
-
-            // Standard iframe attributes for auto-conversion
-            const iframeAttrs = 'width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen';
-            
-            let embedSrc = '';
-            
-            // 2. Check for supported platforms
-
-            // 2.1 Ok.ru
-            if (url.includes('ok.ru/video/')) {
-                // Convert ok.ru/video/ to ok.ru/videoembed/
-                embedSrc = url.replace('ok.ru/video/', 'ok.ru/videoembed/');
-                // Add common parameters (nochat=1 is often required)
-                embedSrc += embedSrc.includes('?') ? '&nochat=1' : '?nochat=1';
-                console.log("Converted ok.ru link to embed SRC:", embedSrc);
-                
-            } 
-            // 2.2 YouTube (Standard video link, e.g., https://www.youtube.com/watch?v=dQw4w9WgXcQ)
-            else if (url.includes('youtube.com/watch?v=') || url.includes('youtu.be/')) {
-                 const videoIdMatch = url.match(/(?:\?v=|youtu\.be\/|embed\/)([^&]+)/);
-                 if (videoIdMatch && videoIdMatch[1]) {
-                     embedSrc = `https://www.youtube.com/embed/${videoIdMatch[1]}?autoplay=1&rel=0`;
-                     console.log("Converted YouTube link to embed SRC:", embedSrc);
-                 }
-            } 
-            // 2.3 General Link (Assume it's a direct iframe source that can be embedded, e.g. Archive.org embed link)
-            else if (url.startsWith('http')) {
-                embedSrc = url;
-            }
-
-            // 3. Construct the final iframe if a valid SRC was found
-            if (embedSrc) {
-                // Ensure protocol is present for safety, default to https if not specified
-                if (!embedSrc.startsWith('http')) {
-                    embedSrc = 'https:' + (embedSrc.startsWith('//') ? embedSrc : '//' + embedSrc);
-                }
-                // Use a minimal iframe wrapper with dynamic attributes
-                return `<iframe src="${embedSrc}" ${iframeAttrs}></iframe>`;
-            }
-
-            // 4. Return original input if no conversion was possible
-            return url;
-        }
-
 
         function showLoginView() {
             loadingIndicator.classList.add('hidden');
@@ -462,16 +404,10 @@
         
         episodeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            // (MODIFIED) 1. แปลงลิงก์ที่ผู้ใช้กรอกให้เป็น Embed Code ที่ใช้ได้
-            const rawInput = episodeEmbedInput.value;
-            const finalEmbedCode = convertToEmbedCode(rawInput);
-            
-            // (MODIFIED) 2. ใช้ finalEmbedCode ในการบันทึกข้อมูล
             const episodeData = {
                 title: episodeTitleInput.value,
                 episodeNumber: parseInt(episodeNumberInput.value, 10) || 0,
-                embedCode: finalEmbedCode, 
+                embedCode: episodeEmbedInput.value, 
                 showId: episodeShowSelect.value,
                 updatedAt: serverTimestamp()
             };
@@ -489,13 +425,7 @@
                     episodeData.createdAt = serverTimestamp();
                     await addDoc(getCollectionRef("episodes"), episodeData);
                 }
-                
-                // (NEW) ตรวจสอบว่าถ้าการแปลงเกิดขึ้น ให้ล้างฟอร์มใหม่ 
-                // แต่ถ้าผู้ใช้กรอกโค้ด iframe เดิมเข้าไป ให้คงค่าไว้เผื่อแก้ไข
-                if (finalEmbedCode !== rawInput) {
-                    episodeForm.reset();
-                }
-                
+                episodeForm.reset();
                 episodeModal.classList.remove('flex');
             } catch (error) {
                 console.error("Error saving episode: ", error);
@@ -793,7 +723,7 @@
                     
                     <div>
                         <label for="episode-embed-code" class="block text-sm font-medium text-gray-300 mb-1">ลิงก์วิดีโอ (URL) หรือ Embed Code *</label>
-                        <textarea id="episode-embed-code" rows="4" placeholder="กรอกแค่ URL วิดีโอ (เช่น https://ok.ru/video/...) หรือ Embed Code" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
+                        <textarea id="episode-embed-code" rows="4" placeholder="https://archive.org/embed/... หรือ <iframe ...></iframe>" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
                     </div>
 
                 </div>
