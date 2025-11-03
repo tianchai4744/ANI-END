@@ -59,26 +59,6 @@
             -webkit-line-clamp: 2; 
             -webkit-box-orient: vertical;
         }
-
-        /* (MODIFIED CSS) กำหนดความสูงสูงสุด (Max Height) สำหรับ 2 บรรทัด */
-        #show-description.truncated {
-            /* 48px คือค่าที่ปลอดภัยสำหรับ 2 บรรทัดของ text-gray-300 */
-            max-height: 48px; 
-            overflow: hidden;
-        }
-        
-        /* (NEW CSS) สไตล์สำหรับปุ่ม "ดูเพิ่มเติม" */
-        #toggle-description-btn {
-            color: #10b981; /* Green-500 */
-            font-weight: 700;
-            cursor: pointer;
-            transition: color 0.2s;
-            padding: 2px 0;
-        }
-        #toggle-description-btn:hover {
-            color: #059669; /* Green-600 */
-        }
-        /* END MODIFIED CSS */
         
         /* Style สำหรับ Thumbnail ในส่วน Top 10 */
         .top10-thumbnail {
@@ -213,7 +193,6 @@
         const top10ListContainer = document.getElementById('top10-list-container'); 
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
-        const descriptionContainer = document.getElementById('description-container'); // (NEW) Container สำหรับ Description และปุ่ม
 
         // (MODIFIED) Function to handle the Iframe embed 
         function embedVideo(embedCode) {
@@ -275,33 +254,6 @@
             }
         }
 
-        // (NEW) Function: สลับสถานะของคำอธิบาย (truncated/expanded)
-        function toggleDescription(isExpanded) {
-            const descEl = document.getElementById('show-description');
-            const button = document.getElementById('toggle-description-btn');
-            
-            if (!descEl || !button) return;
-
-            if (isExpanded) {
-                descEl.classList.remove('truncated');
-                button.innerHTML = '<i class="ri-arrow-up-s-line mr-1"></i> ย่อหน้า'; 
-                button.dataset.expanded = 'true';
-            } else {
-                descEl.classList.add('truncated');
-                button.innerHTML = '<i class="ri-arrow-down-s-line mr-1"></i> ดูเพิ่มเติม'; 
-                button.dataset.expanded = 'false';
-            }
-        }
-        
-        // (NEW) Event Listener สำหรับปุ่มดูเพิ่มเติม
-        document.addEventListener('click', (e) => {
-            if (e.target.id === 'toggle-description-btn' || e.target.closest('#toggle-description-btn')) {
-                const button = e.target.closest('#toggle-description-btn');
-                const isExpanded = button.dataset.expanded === 'true';
-                toggleDescription(!isExpanded);
-            }
-        });
-
 
         async function initializeFirebase() {
             try {
@@ -348,37 +300,6 @@
             await renderTop10List();
             
             syncEpisodeListHeight(); 
-        }
-
-        // (MODIFIED) อัปเดตการแสดงผล Description หลังจากโหลดข้อมูล
-        function renderShowDetails(show) {
-            showTitleEl.textContent = show.title;
-            const desc = show.description || "ไม่มีคำอธิบาย";
-            showDescEl.textContent = desc;
-            
-            // 1. ตรวจสอบว่าต้องซ่อน/แสดงปุ่มหรือไม่ (Description ยาวเกิน 2 บรรทัด)
-            
-            const descEl = document.getElementById('show-description');
-            const btn = document.getElementById('toggle-description-btn');
-            
-            // Step 1: ลบการจำกัดความสูงออกชั่วคราวเพื่อให้วัดค่าได้แม่นยำ
-            descEl.classList.remove('truncated'); 
-            btn.classList.add('hidden'); // ซ่อนปุ่มก่อน
-
-            // Step 2: ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า DOM ถูกวาดเสร็จสมบูรณ์ก่อนการวัดค่า
-            requestAnimationFrame(() => { 
-                const originalHeight = descEl.scrollHeight; 
-                
-                // 50px คือเกณฑ์สำหรับข้อความที่ยาวเกิน 2 บรรทัด
-                if (originalHeight > 50) { 
-                    btn.classList.remove('hidden'); // แสดงปุ่ม
-                    // Step 3: บังคับให้แสดงแค่ 2 บรรทัด (เรียกใช้ toggleDescription(false))
-                    toggleDescription(false); 
-                } else {
-                    btn.classList.add('hidden'); // ซ่อนปุ่มถ้าข้อความสั้น
-                    descEl.classList.remove('truncated'); // ตรวจสอบให้แน่ใจว่าไม่มีการตัดข้อความ
-                }
-            }); 
         }
 
 
@@ -428,7 +349,7 @@
                 }
 
                 currentShow = { id: showSnap.id, ...showSnap.data() };
-                renderShowDetails(currentShow); // (MODIFIED) เรียกใช้ตัวที่อัปเดตแล้ว
+                renderShowDetails(currentShow);
 
                 // 2. ดึงข้อมูลตอนทั้งหมดของซีรีส์นี้
                 const episodesQuery = query(getCollectionRef("episodes"), where("showId", "==", showId));
@@ -437,6 +358,10 @@
                 currentEpisodes = [];
                 episodesSnapshot.forEach((doc) => {
                     currentEpisodes.push({ id: doc.id, ...doc.data() });
+                    
+                    // ** เพิ่มการตรวจสอบ Embed Code ที่นี่ **
+                    // Log เพื่อดูว่า Embed Code มีปัญหาอะไรที่อาจทำให้เกิดการเลื่อนหรือไม่
+                    // console.log(`Episode ${doc.data().episodeNumber} Embed Code:`, doc.data().embedCode);
                 });
                 
                 // 3. เรียงลำดับตอน
@@ -497,6 +422,12 @@
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
             episodeListContent.style.overflowY = 'auto';
             episodeListContent.style.paddingRight = '8px'; // pr-2
+        }
+
+        // แสดงรายละเอียดซีรีส์
+        function renderShowDetails(show) {
+            showTitleEl.textContent = show.title;
+            showDescEl.textContent = show.description || "ไม่มีคำอธิบาย";
         }
 
         // แสดงปุ่มรายการตอน
@@ -784,18 +715,7 @@
                         <span>2024</span>
                     </div> -->
                     <!-- END DELETION -->
-                    
-                    <!-- (NEW) Description Container -->
-                    <div id="description-container" class="mb-2">
-                        <!-- (MODIFIED) ลบคลาส line-clamp-2 ออกจาก HTML และใช้ CSS/JS จัดการแทน -->
-                        <p id="show-description" class="text-gray-300"></p> 
-                        <button id="toggle-description-btn" class="text-green-500 hover:text-green-400 text-sm font-bold mt-1 flex items-center space-x-1 hidden" data-expanded="false">
-                            <!-- เนื้อหาจะถูกแทรกด้วย JS -->
-                            <i class="ri-arrow-down-s-line"></i> 
-                            <span>ดูเพิ่มเติม</span>
-                        </button>
-                    </div>
-
+                    <p id="show-description" class="text-gray-300 line-clamp-2">...</p>
                 </div>
             </div>
             
