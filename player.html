@@ -190,59 +190,70 @@
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
 
-        /**
-         * (NEW) แปลงลิงก์วิดีโอ (URL) หรือโค้ด Embed ที่ไม่สมบูรณ์ให้เป็นโค้ด Embed ที่พร้อมใช้งาน
-         * @param {string} inputCode โค้ดที่ผู้ใช้กรอก (URL หรือ iframe tag)
-         * @returns {string} โค้ด Embed ที่พร้อมใช้งาน
-         */
-        function convertToEmbedCode(inputCode) {
-            if (!inputCode || inputCode.trim() === '') {
-                return '';
-            }
-            const trimmedCode = inputCode.trim();
+        // (NEW) Function to convert specific video URLs (like ok.ru) into their embed iframe code.
+        function convertToEmbedCode(urlOrEmbedCode) {
+            urlOrEmbedCode = urlOrEmbedCode.trim();
 
-            // 1. ถ้าเป็น iframe อยู่แล้ว ให้คืนค่าเดิม
-            if (trimmedCode.startsWith('<iframe') || trimmedCode.startsWith('<IFRAME')) {
-                return trimmedCode;
-            }
-            
-            // 2. ถ้าเป็น YouTube watch URL
-            if (trimmedCode.includes('youtube.com/watch?v=')) {
-                try {
-                    const url = new URL(trimmedCode);
-                    const videoId = url.searchParams.get('v');
-                    if (videoId) {
-                        // Return the YouTube embed URL
-                        return `https://www.youtube.com/embed/${videoId}?rel=0`;
-                    }
-                } catch (e) {
-                    console.warn("YouTube URL parsing failed:", e);
+            // 1. Check if it's an ok.ru direct video URL (e.g., https://ok.ru/video/7229912320757)
+            if (urlOrEmbedCode.startsWith('http') && urlOrEmbedCode.includes('ok.ru/video/')) {
+                // Regex to capture the video ID (the number after /video/)
+                const match = urlOrEmbedCode.match(/ok\.ru\/video\/(\d+)/);
+                
+                if (match && match[1]) {
+                    const videoId = match[1];
+                    
+                    // Construct the required ok.ru embed iframe code
+                    // Ensure allow="autoplay; fullscreen" is included
+                    return `<iframe width="100%" height="100%" src="//ok.ru/videoembed/${videoId}?nochat=1&autoplay=1" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
                 }
             }
             
-            // 3. ถ้าเป็น URL ทั่วไปอื่นๆ (เช่น Archive.org link, หรือ YouTube embed link ตรงๆ) ให้คืนค่าเดิม
-            if (trimmedCode.startsWith('http')) {
-                return trimmedCode;
-            }
-
-            // กรณีอื่นๆ
-            return trimmedCode;
+            // If it's not a recognized URL or is already an embed code, return as is
+            return urlOrEmbedCode;
         }
 
 
-        // (MODIFIED) Function to handle the Iframe embed (เดิมคือ playIframeFallback)
+        // (MODIFIED) Function to handle the Iframe embed 
         function embedVideo(embedCode) {
             console.log("Using standard iframe embed.");
             
-            // 1. ถ้าเป็น URL ธรรมดา (ไม่ใช่ Embed HTML)
-            if (embedCode.trim().startsWith('http')) {
-                let videoUrlStr = embedCode;
+            // (NEW) Convert ok.ru link to embed code first
+            const videoSource = convertToEmbedCode(embedCode);
+            
+            // 1. ถ้าเป็น URL <iframe> HTML String (ไม่ว่าจะเป็นโค้ดเดิม หรือที่แปลงมาจาก ok.ru)
+            if (videoSource.trim().startsWith('<iframe')) {
+                let finalEmbedCode = videoSource;
+                
+                // พยายามเพิ่ม autoplay และลบ muted ออก
+                if (!finalEmbedCode.includes('autoplay')) {
+                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay `);
+                }
+                finalEmbedCode = finalEmbedCode.replace(/muted/g, ''); 
+
+                // พยายามเพิ่มพารามิเตอร์ใน src (สำหรับ iframe ที่อาจมาจากการแปลงหรือใส่มาเอง)
+                if (finalEmbedCode.includes('src="')) {
+                    finalEmbedCode = finalEmbedCode.replace(/src="([^"]*)"/i, (match, src) => {
+                        // Ensures autoplay=1 is in the URL source
+                        if (!src.includes('autoplay=')) {
+                            src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
+                        }
+                        if (src.includes('muted=1')) {
+                             src = src.replace('muted=1', 'muted=0'); // Change muted=1 to muted=0 if present
+                        }
+                        return `src="${src}"`;
+                    });
+                }
+                playerEmbedDiv.innerHTML = finalEmbedCode;
+
+            } 
+            // 2. ถ้าเป็น URL ธรรมดา (เช่น archive.org/embed/... หรือ URL อื่นๆ ที่ไม่ใช ok.ru)
+            else if (videoSource.trim().startsWith('http')) {
+                let videoUrlStr = videoSource;
                 
                 // พยายามเพิ่ม autoplay=1
                 try {
                     const videoUrl = new URL(videoUrlStr);
                     videoUrl.searchParams.set('autoplay', '1');
-                    // (NEW) ลบ muted=0 ออก เพื่อให้เบราว์เซอร์จัดการเสียง
                     videoUrlStr = videoUrl.href;
                 } catch (e) {
                     console.warn("Could not parse URL to add params, trying string append:", e);
@@ -252,7 +263,7 @@
                 const iframe = document.createElement('iframe');
                 iframe.src = videoUrlStr; 
                 iframe.setAttribute('frameborder', '0');
-                // (MODIFIED) อนุญาต autoplay; fullscreen
+                // อนุญาต autoplay; fullscreen
                 iframe.setAttribute('allow', 'autoplay; fullscreen'); 
                 iframe.setAttribute('webkitallowfullscreen', 'true');
                 iframe.setAttribute('mozallowfullscreen', 'true');
@@ -260,29 +271,6 @@
                 
                 playerEmbedDiv.innerHTML = ''; // Clear previous content
                 playerEmbedDiv.appendChild(iframe);
-                
-            } else if (embedCode) {
-                // 2. กรณีเป็น <iframe> tag (HTML string) อื่นๆ
-                let finalEmbedCode = embedCode;
-                // พยายามเพิ่ม autoplay และลบ muted ออก
-                if (!finalEmbedCode.includes('autoplay')) {
-                    finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe autoplay `);
-                }
-                finalEmbedCode = finalEmbedCode.replace(/muted/g, ''); 
-
-                // พยายามเพิ่มพารามิเตอร์ใน src
-                if (finalEmbedCode.includes('src="')) {
-                    finalEmbedCode = finalEmbedCode.replace(/src="([^"]*)"/i, (match, src) => {
-                        if (!src.includes('autoplay=')) {
-                            src += (src.includes('?') ? '&' : '?') + 'autoplay=1';
-                        }
-                        if (src.includes('muted=1')) {
-                             src = src.replace('muted=1', 'muted=0'); // Change muted=1 to muted=0
-                        }
-                        return `src="${src}"`;
-                    });
-                }
-                playerEmbedDiv.innerHTML = finalEmbedCode;
                 
             } else {
                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอสำหรับตอนนี้</p>`;
@@ -662,11 +650,8 @@
             
             playerEmbedDiv.innerHTML = ''; 
             
-            // (MODIFIED) แปลงโค้ดวิดีโอให้เป็นรูปแบบ Embed ที่พร้อมใช้งาน
-            const finalEmbedCode = convertToEmbedCode(episode.embedCode); 
-            
             // ใช้ฟังก์ชัน embedVideo ที่สร้างไว้
-            embedVideo(finalEmbedCode);
+            embedVideo(episode.embedCode);
             
             // อัปเดตชื่อเรื่องหลัก
             showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
