@@ -200,26 +200,16 @@
                 
                 // --- (MODIFIED) START: ปรับปรุงการจัดการ URL สำหรับ Ok.ru และอื่นๆ ---
                 try {
-                    // (NEW) ตรวจสอบและแปลง Ok.ru URL ธรรมดาให้เป็น Embed URL 
-                    if (videoUrlStr.includes('ok.ru/video/')) {
-                        videoUrlStr = videoUrlStr.replace('ok.ru/video/', 'ok.ru/videoembed/');
-                        console.log("Auto-converted ok.ru video URL to embed URL:", videoUrlStr);
-                    }
-
                     const videoUrl = new URL(videoUrlStr);
                     // 1.1 ตั้งค่า Autoplay
                     videoUrl.searchParams.set('autoplay', '1');
                     
-                    // 1.2 (NEW) เพิ่มพารามิเตอร์ 'allowfullscreen=true' 
+                    // 1.2 (NEW) เพิ่มพารามิเตอร์ 'allowfullscreen=true' (ok.ru sometimes needs this in URL)
                     videoUrl.searchParams.set('allowfullscreen', 'true'); 
                     
-                    // 1.3 (NEW) เพิ่มพารามิเตอร์ 'domain=' 
+                    // 1.3 (NEW) เพิ่มพารามิเตอร์ 'domain=' (บางแพลตฟอร์มอาจต้องการ domain ที่ฝัง)
+                    // เราใช้ window.location.host แทน (แต่ในสภาพแวดล้อม Canvas มักจะไม่ช่วย)
                     videoUrl.searchParams.set('domain', window.location.host);
-                    
-                    // 1.4 (NEW) เพิ่ม nochat=1 สำหรับ ok.ru
-                    if (videoUrlStr.includes('ok.ru/videoembed/')) {
-                         videoUrl.searchParams.set('nochat', '1');
-                    }
                     
                     videoUrlStr = videoUrl.href;
                 } catch (e) {
@@ -608,6 +598,50 @@
                 console.error("Error fetching top 10 shows:", error);
                 top10ListContainer.innerHTML = `<p class="text-red-400 p-4">เกิดข้อผิดพลาดในการโหลดอันดับ</p>`;
             }
+        }
+
+        /**
+         * สร้าง Card สำหรับ Top 10 ในรูปแบบใหม่: มีป้ายอันดับตัวเลขใหญ่ ไม่มีดาว/คะแนน
+         */
+        function createTop10Card(show, rank) {
+            // (MODIFIED) ใช้ CSS Class สำหรับสีอันดับ
+            let rankClass = '';
+            if (rank === 1) rankClass = 'rank-1';
+            else if (rank === 2) rankClass = 'rank-2';
+            else if (rank === 3) rankClass = 'rank-3';
+
+            const title = show.title || "N/A";
+            const isDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
+            
+            // Format ชื่อเรื่อง: ตัด [พากย์ไทย] ออกจากชื่อหลัก
+            let displayTitle = title;
+            let dubBadge = '';
+            if (isDub) {
+                 displayTitle = displayTitle.replace(/\s*\(พากย์ไทย\)\s*$/, '').trim(); // ลบ (พากย์ไทย) ที่ท้ายชื่อ
+                 // (MODIFIED) เปลี่ยนเป็นแค่ Tag Text เล็กๆ แทน Rating
+                 dubBadge = ' <span class="text-sm text-red-400 font-medium">(พากย์ไทย)</span>';
+            }
+            
+            // ** ปรับโครงสร้าง HTML เพื่อใส่ป้ายอันดับและลบส่วน Rating ออก **
+            return `
+                <a href="player.html?id=${show.id}" class="top10-item hover:shadow-lg">
+                    <!-- 1. ป้ายอันดับตัวเลขใหญ่ -->
+                    <span class="rank-badge-lg ${rankClass}">${rank}</span>
+                    
+                    <!-- 2. Thumbnail/Cover Image -->
+                    <img src="${show.thumbnailUrl || 'https://placehold.co/60x80/333/fff?text=Img'}" 
+                         alt="${title}" class="rounded-md top10-thumbnail shadow-md">
+                    
+                    <!-- 3. Content (Title) -->
+                    <div class="top10-content flex-grow">
+                        <!-- Title (Line Clamp 2) + Dub Badge -->
+                        <h4 class="font-bold text-white line-clamp-2 text-base leading-snug">${displayTitle}${dubBadge}</h4>
+                        
+                        <!-- (REMOVED) ลบส่วน Rating ออกไป -->
+                        
+                    </div>
+                </a>
+            `;
         }
 
 
