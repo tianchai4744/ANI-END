@@ -357,8 +357,8 @@
             showDescEl.textContent = desc;
             
             // 1. ตรวจสอบว่าต้องซ่อน/แสดงปุ่มหรือไม่ (Description ยาวเกิน 2 บรรทัด)
-            // ต้องให้ DOM render ข้อความก่อน จึงจะวัดความสูงที่แท้จริงได้
-            setTimeout(() => {
+            // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า DOM ถูกวาดเสร็จสมบูรณ์ก่อนการวัดค่า
+            requestAnimationFrame(() => { 
                 const descEl = document.getElementById('show-description');
                 const btn = document.getElementById('toggle-description-btn');
                 
@@ -366,14 +366,15 @@
                 const originalHeight = descEl.scrollHeight; 
                 
                 // 48px คือ max-height ที่เรากำหนดสำหรับ 2 บรรทัด
-                if (originalHeight > 48) { 
+                // ใช้ค่า 50px เป็นเกณฑ์ที่ปลอดภัยกว่า 48px เพื่อให้แน่ใจว่าข้อความยาวกว่า 2 บรรทัดจริง
+                if (originalHeight > 50) { 
                     btn.classList.remove('hidden'); // แสดงปุ่ม
                     toggleDescription(false); // ซ่อนข้อความเริ่มต้น (เหลือ 2 บรรทัด)
                 } else {
                     btn.classList.add('hidden'); // ซ่อนปุ่มถ้าข้อความสั้น
                     descEl.classList.remove('truncated'); // ตรวจสอบให้แน่ใจว่าไม่มีการตัดข้อความ
                 }
-            }, 50); 
+            }); 
         }
 
 
