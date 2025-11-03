@@ -55,7 +55,7 @@
             z-index: 20; /* ให้อยู่เหนือ iframe */
             transition: opacity 0.3s;
         }
-
+        
         /* 3. กล่องหลาน (Grandchild - ตัว Video/Iframe) - ขยายเต็มกล่องลูก */
         #video-player-embed iframe {
             width: 100%;
@@ -436,38 +436,21 @@
         }
 
         /**
-         * (MODIFIED) Function to handle the Iframe embed (Now loads the iframe when called)
+         * Function to handle the Iframe embed (Now loads the iframe when called)
          * @param {string} embedCode The full HTML iframe string (expected from admin.html conversion).
          */
         function embedVideo(embedCode) {
             console.log("Loading iframe for playback.");
             
-            if (!embedCode) {
-                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบ Embed Code สำหรับตอนนี้</p>`;
-                 return;
-            }
-
-            // (NEW) แสดงสถานะ "กำลังโหลดวิดีโอภายนอก..." ชั่วคราว
-             playerEmbedDiv.innerHTML = `
-                <div class="absolute inset-0 flex items-center justify-center bg-black/80 z-30">
-                    <p class="text-gray-400 flex items-center">
-                        <i class="ri-loader-4-line animate-spin mr-2"></i>
-                        กำลังโหลดวิดีโอภายนอก...
-                    </p>
-                </div>
-            `;
-            
-            // 1. หากโค้ดเป็น URL ธรรมดา (ไม่ควรเกิดขึ้นหลังแก้ admin.html แต่ป้องกันไว้)
-            if (embedCode.trim().startsWith('http')) {
-                // Since admin.html should convert URLs, this is a fallback.
+            if (!embedCode || !embedCode.trim().startsWith('<iframe')) {
                  playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ข้อผิดพลาด: Embed Code ไม่ใช่ iframe กรุณาตรวจสอบ Admin Panel</p>`;
                  return;
             }
-            
-            // 2. ถ้าเป็น <iframe> tag (HTML string) 
+
+            // 1. ถ้าเป็น <iframe> tag (HTML string) 
             let finalEmbedCode = embedCode;
             
-            // --- (NEW) Post-processing iframe for compatibility ---
+            // --- Post-processing iframe for compatibility ---
             
             // A. เพิ่ม Autoplay ถ้ายังไม่มี
             if (!finalEmbedCode.includes('autoplay')) {
@@ -485,60 +468,52 @@
                 finalEmbedCode = finalEmbedCode.replace(/<iframe\s/i, `<iframe sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation allow-pointer-lock" `);
             }
             
-            // C. สร้าง Iframe Element และโหลดมัน
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = finalEmbedCode;
-            const iframeEl = tempDiv.querySelector('iframe');
-            
-            if (iframeEl) {
-                // (NEW) เมื่อ iframe โหลดสำเร็จ (หรือโหลดเฟรม) ค่อยล้างสถานะ loading
-                iframeEl.onload = () => {
-                    console.log("Iframe loaded.");
-                    // เราไม่ต้องล้าง playerEmbedDiv ตรงนี้ เพราะมันจะถูกแทนที่
-                    // แต่เราอาจจะล้างแค่ข้อความ loading ชั่วคราวออกไป
-                    const loadingOverlay = playerEmbedDiv.querySelector('.absolute.inset-0.bg-black\\/80');
-                    if(loadingOverlay) loadingOverlay.remove();
-                };
-                
-                // (MODIFIED) ล้าง div เพื่อเตรียมใส่ iframe และข้อความ loading
-                playerEmbedDiv.innerHTML = ''; 
-                
-                // (MODIFIED) ใส่ iframe เข้าไปใน DOM 
-                // เนื่องจากเราใส่ loading overlay ไปแล้ว เราจะใส่ iframe เข้าไปตามหลัง
-                playerEmbedDiv.appendChild(iframeEl);
-                
-            } else {
-                 playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ข้อผิดพลาด: ไม่สามารถสร้าง Iframe Element ได้</p>`;
-            }
-            
+            // C. ใส่โค้ด iframe เข้าไปใน DOM
+            playerEmbedDiv.innerHTML = finalEmbedCode;
         }
 
 
         /**
-         * (NEW) ฟังก์ชันจัดการการโหลด iframe จริง เมื่อผู้ใช้คลิกปุ่ม Play
+         * (MODIFIED) ฟังก์ชันจัดการการโหลด iframe จริง เมื่อผู้ใช้คลิกปุ่ม Play
          */
         function loadIframeAndPlay() {
             const placeholder = document.getElementById('video-placeholder');
             
-            // 1. ซ่อน Placeholder ด้วย fade out
-            placeholder.style.opacity = '0';
-            
-            // 2. รอให้ Fade Out เสร็จ แล้วค่อยใส่ iframe
-            setTimeout(() => {
-                // 3. ใส่ iframe ที่เก็บไว้ใน currentEmbedCode
-                embedVideo(currentEmbedCode);
-                
-                // 4. ลบ Placeholder ออกจาก DOM
-                const placeholderToRemove = document.getElementById('video-placeholder');
-                if (placeholderToRemove) {
-                    playerEmbedDiv.removeChild(placeholderToRemove);
-                }
-                
-                // (Optional: Focus on iframe for autoplay if browser allows)
-                const iframe = playerEmbedDiv.querySelector('iframe');
-                if (iframe) iframe.focus();
-                
-            }, 300); // 300ms เท่ากับระยะ transition
+            // 1. (NEW) แสดงสถานะการโหลดก่อน
+            if (placeholder) {
+                // ลบ Play Button ออก
+                const playButton = document.getElementById('play-button');
+                if (playButton) placeholder.removeChild(playButton);
+
+                // เปลี่ยนข้อความใน Placeholder
+                placeholder.innerHTML = '<p class="text-xl text-white font-bold">กำลังโหลดวิดีโอภายนอก...</p>';
+                placeholder.style.backgroundColor = '#000'; // เปลี่ยนเป็นสีดำเพื่อความชัดเจน
+                placeholder.style.backgroundImage = 'none';
+
+                // 2. ซ่อน Placeholder ด้วย fade out (เพิ่ม Transition ให้ข้อความก่อน fade)
+                setTimeout(() => {
+                    placeholder.style.opacity = '0';
+                }, 100); // แสดงข้อความโหลด 100ms ก่อนเริ่ม fade out
+
+                // 3. รอให้ Fade Out เสร็จ แล้วค่อยใส่ iframe
+                setTimeout(() => {
+                    // 4. ใส่ iframe ที่เก็บไว้ใน currentEmbedCode
+                    embedVideo(currentEmbedCode);
+                    
+                    // 5. ลบ Placeholder ออกจาก DOM
+                    if (playerEmbedDiv.contains(placeholder)) {
+                        playerEmbedDiv.removeChild(placeholder);
+                    }
+                    
+                    // (Optional: Focus on iframe for autoplay if browser allows)
+                    const iframe = playerEmbedDiv.querySelector('iframe');
+                    if (iframe) iframe.focus();
+                    
+                }, 400); // 100ms (Load text) + 300ms (Transition)
+            } else {
+                 // Fallback: ถ้าไม่มี Placeholder ให้โหลดทันที
+                 embedVideo(currentEmbedCode);
+            }
         }
 
 
@@ -555,10 +530,8 @@
                         
                         console.log("User Authenticated (Anonymous):", userId);
                         
-                        // (MODIFIED) โหลดเนื้อหาหลัก (วิดีโอ) เป็นอันดับแรก
+                        // (MODIFIED) ให้ความสำคัญกับการโหลดเนื้อหาหลักก่อน
                         await loadContent(); 
-                        
-                        // (MODIFIED) โหลดเนื้อหาส่วนอื่น (Top 10, Related) เป็นอันดับถัดไป
                         await loadGlobalContent();
                     } else {
                         await signIn(); // ถ้ายังไม่ล็อกอิน ให้ล็อกอินก่อน
@@ -648,7 +621,7 @@
 
                 // 5. เล่นตอนแรก (ถ้ามี)
                 if (currentEpisodes.length > 0) {
-                    playEpisode(currentEpisodes[0], false); // (MODIFIED) Don't play immediately, show placeholder
+                    playEpisode(currentEpisodes[0], false); // Show placeholder
                 } else {
                     playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับซีรีส์นี้</p>`;
                 }
@@ -689,7 +662,7 @@
                 button.dataset.episodeId = ep.id;
                 
                 button.addEventListener('click', () => {
-                    playEpisode(ep, true); // (MODIFIED) Play immediately on click
+                    playEpisode(ep, true); // Play immediately on click
                 });
                 
                 episodeListContainer.appendChild(button);
@@ -721,38 +694,32 @@
             playerEmbedDiv.innerHTML = ''; // ล้าง Player
             
             if (isUserClick) {
-                 // หากผู้ใช้คลิกปุ่มตอน ให้โหลด iframe ทันที
-                 embedVideo(currentEmbedCode);
+                 // หากผู้ใช้คลิกปุ่มตอน ให้โหลด iframe ทันที (ไม่ต้องผ่าน placeholder/lazy load)
+                 // (NEW) แสดงสถานะโหลดก่อน
+                 playerEmbedDiv.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-black"><p class="text-gray-400">กำลังโหลดวิดีโอภายนอก...</p></div>';
+                 
+                 // หน่วงเวลาเล็กน้อยเพื่อให้ข้อความแสดงผล ก่อนเริ่มโหลด iframe
+                 setTimeout(() => {
+                     embedVideo(currentEmbedCode);
+                 }, 100); 
                  
             } else {
-                 // หากเป็นการโหลดครั้งแรก ให้แสดง Placeholder
+                 // หากเป็นการโหลดครั้งแรก (หรือการเปลี่ยนตอนแบบไม่คลิกปุ่ม) ให้แสดง Placeholder
                  
                  const placeholder = document.createElement('div');
                  placeholder.id = 'video-placeholder';
-                 
-                 // (MODIFIED) แสดงข้อความ "กำลังเตรียมตัวเล่น" ก่อนแสดง Placeholder ถ้าเป็นโหลดครั้งแรก
-                 playerEmbedDiv.innerHTML = `
-                     <div class="w-full h-full flex items-center justify-center bg-black">
-                         <p class="text-gray-400">กำลังเตรียมตัวเล่นวิดีโอ...</p>
-                     </div>
-                 `;
-                 
-                 // หน่วงเวลาเล็กน้อยเพื่อแสดงข้อความ loading
-                 setTimeout(() => {
-                    playerEmbedDiv.innerHTML = ''; // ล้างข้อความ loading
-                    placeholder.style.backgroundImage = `url('${currentShow.thumbnailUrl || 'https://placehold.co/1280x720/1f2937/a0aec0?text=Click+to+Play+Video'}')`;
+                 placeholder.style.backgroundImage = `url('${currentShow.thumbnailUrl || 'https://placehold.co/1280x720/1f2937/a0aec0?text=Click+to+Play+Video'}')`;
 
-                    const playButton = document.createElement('div');
-                    playButton.id = 'play-button';
-                    playButton.innerHTML = '<i class="ri-play-fill"></i>';
+                 const playButton = document.createElement('div');
+                 playButton.id = 'play-button';
+                 playButton.innerHTML = '<i class="ri-play-fill"></i>';
 
-                    placeholder.appendChild(playButton);
-                    
-                    // แนบ Event Listener เข้ากับ Placeholder
-                    placeholder.addEventListener('click', loadIframeAndPlay);
-                    
-                    playerEmbedDiv.appendChild(placeholder);
-                 }, 100); // หน่วง 100ms
+                 placeholder.appendChild(playButton);
+                 
+                 // แนบ Event Listener เข้ากับ Placeholder
+                 placeholder.addEventListener('click', loadIframeAndPlay);
+                 
+                 playerEmbedDiv.appendChild(placeholder);
             }
         }
 
