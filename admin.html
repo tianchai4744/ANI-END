@@ -382,7 +382,7 @@
             }
         });
         
-        // --- NEW: URL to Embed Code Converter Function ---
+        // --- MODIFIED: URL to Embed Code Converter Function ---
         function convertToEmbedCode(input) {
             if (!input || input.trim().toLowerCase().startsWith('<iframe')) {
                 // If input is empty or already an iframe, return as is
@@ -391,6 +391,7 @@
 
             try {
                 // Use a default iframe template structure, with dynamic src
+                // ใช้พารามิเตอร์ "allow" เพื่อเปิดใช้งานการเล่นอัตโนมัติและ fullscreen
                 const defaultIframeStart = `<iframe src="`;
                 const defaultIframeEnd = `" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
                 
@@ -399,18 +400,18 @@
                 let embedSrc = '';
 
                 // --- Ok.ru (Odnoklassniki) ---
-                // Example URL: https://ok.ru/video/7229912320757
-                if (hostname.includes('ok.ru')) {
+                // พยายามซ่อนชื่อวิดีโอ/ปุ่มแชร์ โดยใช้ disable_top_panel=1
+                if (hostname.includes('ok.ru') || hostname.includes('vk.com')) {
                     const videoIdMatch = url.pathname.match(/\/video\/(\d+)/);
                     if (videoIdMatch) {
                         const videoId = videoIdMatch[1];
-                        embedSrc = `//ok.ru/videoembed/${videoId}?nochat=1&autoplay=1`;
+                        // Ok.ru parameters: ?nochat=1 (ซ่อนแชท), disable_top_panel=1 (พยายามซ่อนส่วนหัว)
+                        embedSrc = `//ok.ru/videoembed/${videoId}?nochat=1&autoplay=1&disable_top_panel=1`;
                     }
                 }
                 
                 // --- YouTube ---
-                // Example URL: https://www.youtube.com/watch?v=VIDEO_ID
-                // Example URL: https://youtu.be/VIDEO_ID
+                // พยายามซ่อนข้อมูลผู้สร้าง/โลโก้เล็กๆ โดยใช้ rel=0 (ปิดวิดีโอแนะนำ) และ modestbranding=1 (ซ่อนโลโก้)
                 else if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
                     let videoId = url.searchParams.get('v');
                     if (!videoId && hostname.includes('youtu.be')) {
@@ -419,14 +420,14 @@
                     }
                     if (videoId) {
                         // Use standard YouTube embed format with autoplay.
-                        embedSrc = `https://www.youtube.com/embed/${videoId}?rel=0&autoplay=1`;
+                        // showinfo=0 และ modestbranding=1 เป็นพารามิเตอร์เก่าที่ยังคงควรใส่ไว้
+                        embedSrc = `https://www.youtube.com/embed/${videoId}?rel=0&autoplay=1&showinfo=0&modestbranding=1`;
                     }
                 }
                 
                 // --- Fallback: Direct URL ---
-                // If it's a URL but doesn't match a known pattern, use the original URL
-                // The player will still try to wrap it in an iframe. We'll add autoplay for good measure.
                 if (!embedSrc) {
+                    // หากเป็น URL ธรรมดาที่ไม่รู้จัก ให้ใช้ URL เดิมและเพิ่ม autoplay=1
                     url.searchParams.set('autoplay', '1');
                     embedSrc = url.href;
                 }
@@ -439,7 +440,7 @@
                 return input.trim();
             }
         }
-        // --- END NEW FUNCTION ---
+        // --- END MODIFIED FUNCTION ---
 
 
         // --- Episode (ตอน) Modal Logic ---
@@ -490,7 +491,7 @@
                     episodeData.createdAt = serverTimestamp();
                     await addDoc(getCollectionRef("episodes"), episodeData);
                 }
-                // ไม่ต้อง reset form เพราะต้องการให้ค่า embed code ที่ถูกแปลงแล้วยังคงแสดงในช่องกรอก
+                
                 episodeModal.classList.remove('flex');
                 
                 // (Optional: อัปเดตช่องกรอกด้วยโค้ดที่ถูกแปลง เพื่อให้ผู้ใช้เห็นว่ามีการแปลงเกิดขึ้น)
