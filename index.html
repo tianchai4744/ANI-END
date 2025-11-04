@@ -130,36 +130,6 @@
         gap: 4px;
      }
 
-     /* (NEW) ป้ายสถานะจบแล้ว (มุมล่างซ้าย) */
-     .status-badge-completed {
-        position: absolute;
-        bottom: 8px; 
-        left: 8px;
-        z-index: 10;
-        background-color: #059669; /* green-600 */
-        color: white;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 10px;
-        font-weight: 700;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-     }
-     
-     /* (FIXED: มุมล่างขวา) ป้ายบอกตอนล่าสุด */
-     .status-badge-episode {
-        position: absolute;
-        bottom: 8px; /* มุมล่างขวา */
-        right: 8px;
-        z-index: 10;
-        background-color: #4B5563; /* gray-600 */
-        color: white;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 10px;
-        font-weight: 700;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-     }
-     
  </style>
  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
 </head>
@@ -199,22 +169,19 @@
         let gridFilteredShows = []; // (NEW) All matching shows for the current tag
         let currentRenderedIndex = 0; // (NEW) The index up to which shows have been rendered
 
-        // (MODIFIED) เปลี่ยนทั้งหมดเป็น let และจะกำหนดค่าใน DOMContentLoaded
-        let homeView;
-        let gridViewContainer;
-        let gridViewTitle;
-        let gridViewContent;
-        let sectionsContainer;
-        let loadMoreButton;
+        const homeView = document.getElementById('home-view');
+        const gridViewContainer = document.getElementById('grid-view-container');
+        const gridViewTitle = document.getElementById('grid-view-title');
+        const gridViewContent = document.getElementById('grid-view-content');
+        const sectionsContainer = document.getElementById('sections-container');
+        const desktopNavLinks = document.getElementById('desktop-nav-links');
+        const mobileNavLinks = document.getElementById('mobile-nav-links');
+        const loadMoreButton = document.getElementById('load-more-btn'); // (NEW)
 
-        let searchInput;
-        let searchDropdown;
-        let mobileSearchInput;
-        let mobileSearchDropdown;
-        
-        let desktopNavLinks;
-        let mobileNavLinks;
-
+        const searchInput = document.getElementById('search-input');
+        const searchDropdown = document.getElementById('search-dropdown');
+        const mobileSearchInput = document.getElementById('mobile-search-input');
+        const mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
 
         async function initializeFirebase() {
             try {
@@ -253,7 +220,7 @@
         }
 
         async function setupListeners() {
-            // 1. Listener for Shows (ใช้ onSnapshot และฟิลด์ latestEpisodeNumber ที่ถูกอัปเดตจาก Admin)
+            // 1. Listener for Shows (ยังคงใช้ onSnapshot เพื่ออัพเดท allShows สำหรับ Carousel/Search)
             const showsQuery = query(getCollectionRef("shows"));
             onSnapshot(showsQuery, (snapshot) => {
                 allShows = [];
@@ -269,7 +236,6 @@
                 // (MODIFIED) ตรวจสอบว่าควร render หน้าไหน
                 if (currentPageId === 'home') {
                     console.log("Snapshot update: rendering HOME (Sections)");
-                    // (FIX) เรียก renderDynamicNav ก่อนเสมอ
                     renderDynamicNav('home'); 
                     renderSections(); // Render home content (carousels only)
                 } else if (currentPageId === 'search-results') {
@@ -306,12 +272,6 @@
         }
 
         function renderDynamicNav(activePageId = 'home') {
-            // (FIX) ตรวจสอบว่า Elements ถูกกำหนดค่าแล้วหรือไม่ (เนื่องจากอาจถูกเรียกใน setupListeners ก่อน DOMContentLoaded)
-            if (!desktopNavLinks || !mobileNavLinks) {
-                console.error("Navigation elements are not yet loaded or initialized.");
-                return;
-            }
-
             const homeLink = `<a href="#" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium ${activePageId === 'home' ? 'active text-green-500' : 'text-gray-300 hover:text-white hover:bg-gray-700'}">หน้าแรก</a>`;
             desktopNavLinks.innerHTML = homeLink;
             mobileNavLinks.innerHTML = `<a href="#" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium ${activePageId === 'home' ? 'active text-green-500' : 'text-gray-300 hover:text-white hover:bg-gray-700'}">หน้าแรก</a>`;
@@ -401,20 +361,19 @@
                 sectionsContainer.appendChild(createCarouselSection("อนิเมะพากย์ไทย", thaiDubShows, { swiperClass: 'swiper-7-up' }));
             }
 
-            // 5. "อนิเมะอัปเดตใหม่" (จัดเรียงตามวันที่สร้างใหม่ล่าสุด 20 เรื่อง)
+            // 5. "อนิเมะอัปเดตใหม่" (จัดเรียงตามวันที่ล่าสุด 20 เรื่อง)
             const latestShows = [...allShows]
                 .sort((a, b) => {
-                    // (MODIFIED) เปลี่ยนจาก b.updatedAt เป็น b.createdAt เพื่อเรียงตามเรื่องที่เพิ่มเข้ามาใหม่เท่านั้น
-                    const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
-                    const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
-                    return timeB - timeA; // เรียงจากเวลาสร้างล่าสุด (มากที่สุด) ไปยังเวลาเก่าที่สุด (น้อยที่สุด)
+                    const timeA = a.updatedAt ? a.updatedAt.toMillis() : 0;
+                    const timeB = b.updatedAt ? b.updatedAt.toMillis() : 0;
+                    return timeB - timeA; 
                 })
                 .slice(0, 20); 
 
             if (latestShows.length > 0) {
                  sectionsContainer.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up' }));
             } else {
-                sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลซีรีส์ในระบบ</p>`;
+                sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
             }
 
             // อัปเดต Swiper ที่มีอยู่สำหรับ Carousels
@@ -486,25 +445,6 @@
             <div class="dub-badge">
                 <i class="ri-volume-up-line"></i> พากย์ไทย
             </div>` : '';
-            
-        // 3. ป้ายสถานะจบแล้ว (มุมล่างซ้าย)
-        // ใช้ฟิลด์ isCompleted ที่ถูกอัปเดตจาก admin.html
-        const isCompleted = show.isCompleted === true;
-        const completedBadge = isCompleted ? `
-            <div class="status-badge-completed">จบแล้ว</div>
-        ` : '';
-        
-        // 4. ป้ายบอกตอนล่าสุด (มุมล่างขวา)
-        let episodeBadge = '';
-        // ใช้ฟิลด์ latestEpisodeNumber ที่ถูกอัปเดตจาก admin.html
-        const latestEpisode = show.latestEpisodeNumber || 0;
-        
-        // แสดงป้ายตอนล่าสุด ถ้า latestEpisode > 0
-        if (latestEpisode > 0) {
-            episodeBadge = `
-                <div class="status-badge-episode">ตอนที่ ${latestEpisode}</div>
-            `;
-        }
 
 
         return `
@@ -513,10 +453,8 @@
                     <div class="aspect-[2/3] rounded-lg overflow-hidden mb-2 relative">
                         ${rankBadge}
                         ${dubBadge}
-                        ${episodeBadge} <!-- ป้ายตอนล่าสุด (มุมล่างขวา) -->
                         <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
                              alt="${show.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                        ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) -->
                         <!-- (REMOVED) ลบ Gradient และ Title ที่อยู่ซ้อนทับภาพออก -->
                     </div>
                     <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
@@ -533,16 +471,10 @@
             currentGridTag = tag;
             gridViewTitle.textContent = tag;
             
-            // 1. Filter and Sort all shows on the client side
+            // 1. Filter and Sort all shows on the client side (since we cannot rely on Firestore indexes)
             gridFilteredShows = allShows
                 .filter(s => (s.tags || []).includes(tag))
-                // (MODIFIED) เปลี่ยนตรรกะการจัดเรียง: เรียงตาม 'updatedAt' จากมากไปน้อย (ล่าสุดก่อน)
-                .sort((a, b) => {
-                    // Firestore Timestamp ถูกแปลงเป็น Object ธรรมดาเมื่อโหลด
-                    const timeA = a.updatedAt ? a.updatedAt.toMillis() : 0;
-                    const timeB = b.updatedAt ? b.updatedAt.toMillis() : 0;
-                    return timeB - timeA; // เรียงจากเวลาล่าสุด (มากที่สุด) ไปยังเวลาเก่าที่สุด (น้อยที่สุด)
-                });
+                .sort((a, b) => (a.title || "").localeCompare(b.title || "")); // Sort by title for consistency
 
             currentRenderedIndex = 0; // Start rendering from the first item
             gridViewContent.innerHTML = '';
@@ -585,7 +517,7 @@
                 currentRenderedIndex = endIndex;
             } else if (currentRenderedIndex === 0) {
                  // No shows found at all
-                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบซีรีส์สำหรับ "${currentGridTag}"</p>`;
+                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
             }
 
             // Update Load More Button visibility
@@ -606,9 +538,14 @@
             initializeGridPaging(tag);
         }
         
-        // (MOVED & FIXED) Load More handler - ย้ายเข้า DOMContentLoaded แล้ว
-        // ลบ Event Listener ที่อยู่นอก DOMContentLoaded ออก
-        
+        // (MODIFIED) Load More handler
+        loadMoreButton.addEventListener('click', () => {
+             if (currentGridTag) {
+                 appendNextPage();
+             }
+        });
+
+
         // (FIX) เพิ่มการตรวจสอบ URL เพื่อหลีกเลี่ยง SecurityError เมื่อใช้ replaceState
         function isSecureEnvironment() {
             // ตรวจสอบว่า URL ไม่ได้ขึ้นต้นด้วย 'blob:' หรือ 'file:'
@@ -687,8 +624,7 @@
              mobileSearchDropdown.classList.add('hidden');
              if (query && mobileSearchInput.value) {
                  mobileSearchInput.value = '';
-                 // (FIX) เข้าถึง Element โดยตรงเนื่องจากอาจยังไม่ได้กำหนดค่าในตัวแปร
-                 document.getElementById('mobile-search-bar').style.display = 'none'; 
+                 document.getElementById('mobile-search-bar').style.display = 'none';
              }
              performSearch(query);
         }
@@ -721,63 +657,34 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            
-            // (MODIFIED) กำหนดค่าให้กับตัวแปร UI Elements ทั้งหมดภายใน DOMContentLoaded
-            homeView = document.getElementById('home-view');
-            gridViewContainer = document.getElementById('grid-view-container');
-            gridViewTitle = document.getElementById('grid-view-title');
-            gridViewContent = document.getElementById('grid-view-content');
-            sectionsContainer = document.getElementById('sections-container');
-            loadMoreButton = document.getElementById('load-more-btn'); 
+            initializeFirebase(); 
+            renderDynamicNav('home'); 
 
-            searchInput = document.getElementById('search-input');
-            searchDropdown = document.getElementById('search-dropdown');
-            mobileSearchInput = document.getElementById('mobile-search-input');
-            mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
-            
-            desktopNavLinks = document.getElementById('desktop-nav-links');
-            mobileNavLinks = document.getElementById('mobile-nav-links');
-
-            // Mobile Menu Elements
+            // Mobile Menu
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
             const mobileMenu = document.getElementById('mobile-menu');
             const mobileSearchBtn = document.getElementById('mobile-search-button');
             const mobileSearchBar = document.getElementById('mobile-search-bar');
             const mobileCloseSearchBtn = document.getElementById('mobile-close-search');
             
-            initializeFirebase(); 
-            // renderDynamicNav('home'); // ไม่ต้องเรียกซ้ำ เพราะ setupListeners จะเรียกเองหลังโหลดข้อมูลเสร็จ
-            
-            // (FIX) เพิ่มการตรวจสอบก่อนกำหนด Event Listeners
-            if (mobileMenuBtn && mobileMenu) {
-                mobileMenuBtn.addEventListener('click', () => {
-                    mobileMenu.classList.toggle('hidden');
-                    // (FIX) เข้าถึง Element โดยตรงเนื่องจาก mobileSearchBar ไม่ใช่ตัวแปร global
-                    const mobileSearchBarEl = document.getElementById('mobile-search-bar');
-                    if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
-                    searchDropdown.classList.add('hidden');
-                });
-            }
-            
-            if (mobileSearchBtn && mobileSearchBar && mobileMenu) {
-                mobileSearchBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    mobileSearchBar.style.display = 'flex';
-                    mobileMenu.classList.add('hidden'); 
-                    searchDropdown.classList.add('hidden');
-                });
-            }
-
-            if (mobileCloseSearchBtn && mobileSearchBar) {
-                mobileCloseSearchBtn.addEventListener('click', () => {
-                    mobileSearchBar.style.display = 'none';
-                    mobileSearchDropdown.classList.add('hidden');
-                });
-            }
+            mobileMenuBtn.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+                mobileSearchBar.style.display = 'none'; 
+                searchDropdown.classList.add('hidden');
+            });
+            mobileSearchBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                mobileSearchBar.style.display = 'flex';
+                mobileMenu.classList.add('hidden'); 
+                searchDropdown.classList.add('hidden');
+            });
+            mobileCloseSearchBtn.addEventListener('click', () => {
+                mobileSearchBar.style.display = 'none';
+                mobileSearchDropdown.classList.add('hidden');
+            });
             
             document.body.addEventListener('click', (e) => {
-                 // (FIX) ต้องเช็คว่า searchDropdown และ mobileSearchDropdown มีค่าก่อน
-                 if (searchDropdown && mobileSearchDropdown && !e.target.closest('.relative.search-container')) {
+                 if (!e.target.closest('.relative.search-container')) {
                       searchDropdown.classList.add('hidden');
                       mobileSearchDropdown.classList.add('hidden');
                  }
@@ -786,7 +693,7 @@
                     e.preventDefault();
                     const pageId = navLink.dataset.page;
                     showPage(pageId);
-                    if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                    if (!mobileMenu.classList.contains('hidden')) {
                         mobileMenu.classList.add('hidden');
                     }
                 }
@@ -794,22 +701,14 @@
 
             // Search Listeners
             const searchButton = document.getElementById('search-button');
-            if (searchInput) searchInput.addEventListener('input', handleSearchInput);
-            if (mobileSearchInput) mobileSearchInput.addEventListener('input', handleSearchInput);
-            if (searchButton && searchInput) searchButton.addEventListener('click', () => handleSearchSubmit(searchInput.value));
-            if (searchInput) searchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(searchInput.value));
-            if (mobileSearchInput) mobileSearchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(mobileSearchInput.value));
+            searchInput.addEventListener('input', handleSearchInput);
+            mobileSearchInput.addEventListener('input', handleSearchInput);
+            searchButton.addEventListener('click', () => handleSearchSubmit(searchInput.value));
+            searchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(searchInput.value));
+            mobileSearchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(mobileSearchInput.value));
 
-            // Load More Listener (MOVED HERE)
-            if (loadMoreButton) {
-                loadMoreButton.addEventListener('click', () => {
-                    if (currentGridTag) {
-                        appendNextPage();
-                    }
-                });
-            }
             
-            // (FIX) ตรรกะตรวจสอบ URL ตอนเริ่มโหลด (ย้ายมาไว้ด้านล่าง)
+            // (FIX) ตรรกะตรวจสอบ URL ตอนเริ่มโหลด
             const urlParams = new URLSearchParams(window.location.search);
             const pageFromUrl = urlParams.get('page');
             if (pageFromUrl) {
@@ -935,7 +834,7 @@
             
             <div id="sections-container">
                 <div class="loading-placeholder bg-gray-800 rounded-lg p-4">
-                        <p class="text-gray-400">กำลังโหลดซีรีส์...</p>
+                        <p class="text-gray-400">กำลังโหลดอนิเมะ...</p>
                 </div>
             </div>
         </div>
