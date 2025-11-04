@@ -443,28 +443,49 @@
 
             // 2. (NEW) รีเซ็ตสถานะปุ่มย่อ/ขยาย
             expandDescBtn.classList.add('hidden'); // ซ่อนปุ่มไว้ก่อน
-            showDescEl.classList.add('line-clamp-2'); // บังคับให้ย่อ 2 บรรทัด
+            showDescEl.classList.add('line-clamp-2'); // บังคับให้ย่อ 2 บรรทัด (เพื่อให้ได้ line-height ที่ถูกต้อง)
             expandDescBtn.dataset.expanded = 'false';
             expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
 
-            // 3. (NEW) ตรวจสอบว่าข้อความล้นหรือไม่
-            // ใช้ setTimeout เพื่อรอให้ Browser คำนวณความสูงหลัง Render
+            // 3. (MODIFIED) ตรวจสอบว่าข้อความล้นหรือไม่ (ใช้วิธีคำนวณบรรทัด)
             setTimeout(() => {
-                // scrollHeight คือ ความสูงจริงทั้งหมดของข้อความ
-                // clientHeight คือ ความสูงที่แสดงผลจริง (ที่ถูกจำกัดโดย line-clamp-2)
-                
-                // (FIX) เพิ่มการตรวจสอบเผื่อค่า clientHeight เป็น 0 หรือใกล้เคียง
-                const visibleHeight = showDescEl.clientHeight;
-                const totalHeight = showDescEl.scrollHeight;
+                try {
+                    const computedStyle = window.getComputedStyle(showDescEl);
+                    const lineHeightString = computedStyle.lineHeight;
+                    let lineHeight = parseFloat(lineHeightString);
 
-                if (totalHeight > visibleHeight && visibleHeight > 0) {
-                    // ถ้าความสูงจริง > ความสูงที่แสดง (แปลว่าข้อความล้น)
-                    expandDescBtn.classList.remove('hidden'); // แสดงปุ่ม "เพิ่มเติม"
-                } else {
-                    // ถ้าข้อความไม่ล้น (สั้นพอดี)
-                    showDescEl.classList.remove('line-clamp-2'); // เอา line-clamp ออก
+                    // Fallback: If 'line-height' is 'normal', estimate it.
+                    if (isNaN(lineHeight) || lineHeightString === 'normal') {
+                        const fontSize = parseFloat(computedStyle.fontSize);
+                        lineHeight = Math.floor(fontSize * 1.4); // 1.4 is a common 'normal' multiplier
+                    }
+                    
+                    const totalHeight = showDescEl.scrollHeight;
+                    
+                    // (FIX) ปัดเศษขึ้น (ceil) เพื่อความแม่นยำ
+                    const numberOfLines = Math.ceil(totalHeight / lineHeight);
+
+                    console.log(`Line Height: ${lineHeight}px, Total Height: ${totalHeight}px, Calculated Lines: ${numberOfLines}`);
+
+                    if (numberOfLines > 2) {
+                        // ถ้ามีมากกว่า 2 บรรทัด (แปลว่าข้อความล้น)
+                        expandDescBtn.classList.remove('hidden'); // แสดงปุ่ม "เพิ่มเติม"
+                    } else {
+                        // ถ้าข้อความไม่ล้น (สั้นพอดี 1-2 บรรทัด)
+                        showDescEl.classList.remove('line-clamp-2'); // เอา line-clamp ออก
+                    }
+                } catch (error) {
+                    console.error("Error calculating description lines:", error);
+                    // Fallback to old logic just in case
+                    const visibleHeight = showDescEl.clientHeight;
+                    const totalHeight = showDescEl.scrollHeight;
+                    if (totalHeight > visibleHeight && visibleHeight > 0) {
+                        expandDescBtn.classList.remove('hidden');
+                    } else {
+                        showDescEl.classList.remove('line-clamp-2');
+                    }
                 }
-            }, 100); // รอ 100ms
+            }, 300); // (MODIFIED) เพิ่ม delay เป็น 300ms เพื่อรอ layout
         }
 
 
