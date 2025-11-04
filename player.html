@@ -434,7 +434,7 @@
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
         }
 
-        // (MODIFIED) แสดงรายละเอียดซีรีส์ และตรวจสอบปุ่ม "เพิ่มเติม" (REVISED LOGIC 4.0)
+        // (MODIFIED) แสดงรายละเอียดซีรีส์ และตรวจสอบปุ่ม "เพิ่มเติม" (REVISED LOGIC 5.0 - Clone & Measure)
         function renderShowDetails(show) {
             // 1. ตั้งค่า Title และ Description
             showTitleEl.textContent = show.title;
@@ -442,26 +442,64 @@
             showDescEl.textContent = descriptionText;
 
             // 2. (REVISED) รีเซ็ตสถานะ
-            // - **บังคับใช้ line-clamp-2** เพื่อที่เราจะวัดความสูงเทียบกัน
-            showDescEl.classList.add('line-clamp-2'); 
-            // - ซ่อนปุ่มไว้ก่อน
+            showDescEl.classList.add('line-clamp-2'); // บังคับบีบไว้ก่อน
             expandDescBtn.classList.add('hidden'); 
             expandDescBtn.dataset.expanded = 'false';
             expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
 
-            // 3. (REVISED) ตรวจสอบว่าข้อความล้นหรือไม่
-            setTimeout(() => {
+            // 3. (REVISED) ตรวจสอบว่าข้อความล้นหรือไม่ (วิธี Clone & Measure)
+            // ให้เบราว์เซอร์มีเวลา render 1 frame ก่อนวัด
+            requestAnimationFrame(() => {
                 try {
-                    // clientHeight = ความสูงที่แสดงผล (ถูกจำกัดโดย line-clamp-2)
-                    const clampedHeight = showDescEl.clientHeight;
-                    // scrollHeight = ความสูงที่แท้จริงของเนื้อหาทั้งหมด
-                    const totalHeight = showDescEl.scrollHeight;
+                    const descContainer = document.getElementById('description-container');
+                    if (!descContainer) return; // Exit if container not found
 
-                    console.log(`(Clamped Check) Clamped Height: ${clampedHeight}px, Total Height: ${totalHeight}px`);
+                    // 3.1 สร้าง element จำลอง
+                    const tempDesc = document.createElement('p');
+                    
+                    // 3.2 คัดลอก text และ class ที่มีผลต่อขนาด
+                    tempDesc.textContent = descriptionText;
+                    tempDesc.className = showDescEl.className; // คัดลอก class ทั้งหมด
+                    tempDesc.classList.remove('line-clamp-2', 'transition-all', 'duration-200'); // เอา class ที่ไม่จำเป็น/รบกวนการวัดค่า ออก
+                    
+                    // 3.3 ตั้งค่าสไตล์ให้มันอยู่นอกจอ และบังคับความกว้างให้เท่าตัวจริง
+                    const containerWidth = descContainer.clientWidth;
+                    if (containerWidth === 0) {
+                         // ถ้า container กว้าง 0 (เช่น มันถูกซ่อน) ให้ยกเลิก
+                         console.warn("Description container has 0 width. Skipping line check.");
+                         return;
+                    }
+                    
+                    tempDesc.style.position = 'absolute';
+                    tempDesc.style.left = '-9999px';
+                    tempDesc.style.top = '0';
+                    tempDesc.style.width = `${containerWidth}px`; // **สำคัญมาก**
+                    tempDesc.style.visibility = 'hidden';
+                    
+                    // 3.4 เพิ่มเข้า DOM เพื่อวัด
+                    document.body.appendChild(tempDesc);
+                    
+                    // 3.5 วัดค่า
+                    const computedStyle = window.getComputedStyle(tempDesc);
+                    let lineHeight = parseFloat(computedStyle.lineHeight);
+                    if (isNaN(lineHeight) || computedStyle.lineHeight === 'normal') {
+                        const fontSize = parseFloat(computedStyle.fontSize);
+                        lineHeight = Math.floor(fontSize * 1.4); 
+                    }
+                    
+                    const totalHeight = tempDesc.scrollHeight;
+                    // (FIX) ปัดเศษขึ้น (ceil) เพื่อความแม่นยำ
+                    const numberOfLines = Math.ceil(totalHeight / lineHeight);
 
-                    // (FIX) เพิ่มการตรวจสอบเผื่อ totalHeight = 0 หรือค่าคลาดเคลื่อนเล็กน้อย (2px)
-                    if (totalHeight > 0 && totalHeight > (clampedHeight + 2)) {
-                        // ถ้าความสูงจริง > ความสูงที่ถูกบีบ (แปลว่าข้อความล้น)
+                    // 3.6 ลบ element จำลองทิ้ง
+                    document.body.removeChild(tempDesc);
+
+                    console.log(`(Clone Check) Container Width: ${containerWidth}px, Line Height: ${lineHeight}px, Total Height: ${totalHeight}px, Calculated Lines: ${numberOfLines}`);
+
+                    // 3.7 ใช้ตรรกะ
+                    if (numberOfLines > 2) {
+                        // ถ้ามีมากกว่า 2 บรรทัด (แปลว่าข้อความล้น)
+                        // line-clamp-2 ถูกเพิ่มไว้แล้วในขั้นตอนที่ 2
                         expandDescBtn.classList.remove('hidden'); // แสดงปุ่ม "เพิ่มเติม"
                     } else {
                         // ถ้าข้อความไม่ล้น (สั้นพอดี 1-2 บรรทัด)
@@ -470,8 +508,16 @@
                     }
                 } catch (error) {
                     console.error("Error calculating description lines:", error);
+                    // Fallback (ตรรกะเก่าสุด) ในกรณีที่วิธีใหม่ error
+                    const clampedHeight = showDescEl.clientHeight;
+                    const totalHeight = showDescEl.scrollHeight;
+                    if (totalHeight > 0 && totalHeight > (clampedHeight + 2)) {
+                        expandDescBtn.classList.remove('hidden');
+                    } else {
+                        showDescEl.classList.remove('line-clamp-2');
+                    }
                 }
-            }, 300); // เพิ่ม delay เพื่อรอ layout
+            }); // End requestAnimationFrame
         }
 
 
@@ -778,8 +824,8 @@
                     
                     <!-- (MODIFIED) Description Container -->
                     <div id="description-container">
-                        <!-- (REVISED) ลบ line-clamp-2 เริ่มต้นออก (JS จะจัดการเอง) -->
-                        <p id="show-description" class="text-gray-300 transition-all duration-200">...</p>
+                        <!-- (REVISED) เพิ่ม line-clamp-2 กลับไปเป็นค่าเริ่มต้น -->
+                        <p id="show-description" class="text-gray-300 transition-all duration-200 line-clamp-2">...</p>
                         
                         <!-- (NEW) Expand/Collapse Button -->
                         <button id="expand-desc-btn" class="text-green-400 hover:text-green-300 font-medium text-sm mt-1 hidden items-center">
