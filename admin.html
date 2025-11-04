@@ -49,7 +49,7 @@
 
 
         let db, auth, userId;
-        let shows = []; // เก็บข้อมูลซีรีส์ทั้งหมด
+        let shows = []; // เก็บข้อมูลอนิเมะทั้งหมด
         let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
 
         // UI Elements
@@ -181,12 +181,12 @@
         }
 
         async function setupListeners() {
-            // 1. Listen to Shows (ซีรีส์)
+            // 1. Listen to Shows (อนิเมะ)
             const showQuery = query(getCollectionRef("shows"));
             onSnapshot(showQuery, (snapshot) => {
                 shows = [];
                 showTableBody.innerHTML = '';
-                const showSelectHtml = '<option value="">-- เลือกซีรีส์ --</option>';
+                const showSelectHtml = '<option value="">-- เลือกอนิเมะ --</option>';
                 
                 let episodeOptions = showSelectHtml;
                 let bannerOptions = showSelectHtml; 
@@ -290,7 +290,7 @@
         showBannerListBtn.addEventListener('click', () => switchView('banner')); 
 
 
-        // --- Show (ซีรีส์) Modal Logic ---
+        // --- Show (อนิเมะ) Modal Logic ---
         function openShowModal(mode, showData = {}, showId = null) {
             currentEditingId = showId;
             if (mode === 'add') {
@@ -814,7 +814,7 @@
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <form id="show-form">
                 <div class="flex justify-between items-center p-5 border-b border-gray-700">
-                    <h3 id="show-modal-title" class="text-2xl font-bold text-white">เพิ่มซีรีส์ใหม่</h3>
+                    <h3 id="show-modal-title" class="text-2xl font-bold text-white">เพิ่มอนิเมะใหม่</h3>
                     <button type="button" id="close-show-modal" class="text-gray-400 hover:text-white">
                         <i class="ri-close-line text-2xl"></i>
                     </button>
