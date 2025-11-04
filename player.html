@@ -142,6 +142,36 @@
             font-weight: 700;
         }
         
+        /* (NEW) ป้ายสถานะจบแล้วสำหรับ Related Card (มุมล่างซ้าย) */
+        .status-badge-completed-related {
+            position: absolute;
+            bottom: 4px; /* มุมล่างซ้าย */
+            left: 4px;
+            z-index: 10;
+            background-color: #059669; /* green-600 */
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
+
+        /* (MODIFIED) ป้ายบอกตอนล่าสุดสำหรับ Related Card (มุมล่างขวา) */
+        .status-badge-episode-related {
+            position: absolute;
+            bottom: 4px; /* มุมล่างขวา */
+            right: 4px;
+            z-index: 10;
+            background-color: #4B5563; /* gray-600 */
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
+        
         /* (MODIFIED) ลบ media query เก่าที่แก้ไขปัญหา iframe ล้นจอออก */
         @media (max-width: 1023px) {
              .video-aspect-wrapper {
@@ -317,37 +347,37 @@
         }
 
 
-        // โหลดเนื้อหา (อนิเมะและตอน)
+        // โหลดเนื้อหา (ซีรีส์และตอน)
         async function loadContent() {
             try {
                 const urlParams = new URLSearchParams(window.location.search);
                 const showId = urlParams.get('id'); // ดึง ID จาก URL
                 
                 if (!showId) {
-                    playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบ ID ของอนิเมะ</p>`;
+                    playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบ ID ของซีรีส์</p>`;
                     
                     playerContentWrapper.classList.remove('hidden');
                     loadingPlayer.classList.add('hidden');
                     
                     // Clear show-specific UI
-                    showTitleEl.textContent = "ไม่พบอนิเมะ";
+                    showTitleEl.textContent = "ไม่พบซีรีส์";
                     // (MODIFIED) เรียก renderShowDetails เพื่อจัดการสถานะ Error
-                    renderShowDetails({ title: "ไม่พบอนิเมะ", description: "โปรดกลับไปที่หน้าแรกเพื่อเลือกอนิเมะที่ถูกต้อง" });
+                    renderShowDetails({ title: "ไม่พบซีรีส์", description: "โปรดกลับไปที่หน้าแรกเพื่อเลือกซีรีส์ที่ถูกต้อง" });
                     episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่สามารถโหลดรายการตอนได้</p>`;
                     
                     // หากไม่มี showId เราจะไม่สามารถหา Related List ได้
                     await renderRelatedList([]);
 
-                    return; // หยุดการโหลดข้อมูลเฉพาะอนิเมะ
+                    return; // หยุดการโหลดข้อมูลเฉพาะซีรีส์
                 }
 
-                // 1. ดึงข้อมูลอนิเมะ
+                // 1. ดึงข้อมูลซีรีส์
                 const showRef = doc(getCollectionRef("shows"), showId);
                 const showSnap = await getDoc(showRef);
 
                 if (!showSnap.exists()) {
-                    playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบข้อมูลอนิเมะ</p>`;
-                    renderShowDetails({ title: "ไม่พบข้อมูลอนิเมะ", description: "อนิเมะนี้อาจถูกลบไปแล้ว" });
+                    playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบข้อมูลซีรีส์</p>`;
+                    renderShowDetails({ title: "ไม่พบข้อมูลซีรีส์", description: "ซีรีส์นี้อาจถูกลบไปแล้ว" });
                     
                     playerContentWrapper.classList.remove('hidden');
                     loadingPlayer.classList.add('hidden');
@@ -368,7 +398,7 @@
                 // (MODIFIED) ย้าย renderShowDetails ไปที่ 'finally'
                 // renderShowDetails(currentShow);
 
-                // 2. ดึงข้อมูลตอนทั้งหมดของอนิเมะนี้
+                // 2. ดึงข้อมูลตอนทั้งหมดของซีรีส์นี้
                 const episodesQuery = query(getCollectionRef("episodes"), where("showId", "==", showId));
                 const episodesSnapshot = await getDocs(episodesQuery);
                 
@@ -382,7 +412,7 @@
                 
                 console.log(`Loaded ${currentEpisodes.length} episodes for ${currentShow.title}`);
                 
-                // 4. Render UI เฉพาะอนิเมะนี้
+                // 4. Render UI เฉพาะซีรีส์นี้
                 renderEpisodeList(currentEpisodes);
                 
                 await renderRelatedList(currentShow.tags || []); 
@@ -391,7 +421,7 @@
                 if (currentEpisodes.length > 0) {
                     playEpisode(currentEpisodes[0]);
                 } else {
-                    playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับอนิเมะนี้</p>`;
+                    playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับซีรีส์นี้</p>`;
                 }
                 
                 
@@ -443,7 +473,7 @@
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
         }
 
-        // (MODIFIED) แสดงรายละเอียดอนิเมะ (v8)
+        // (MODIFIED) แสดงรายละเอียดซีรีส์ (v8)
         function renderShowDetails(show) {
             // 1. ตั้งค่า Title และ Description
             showTitleEl.textContent = show.title;
@@ -530,7 +560,7 @@
                 const maxDisplay = 15; 
 
                 if (tags && tags.length > 0) {
-                    // 1. ถ้ามี Tags ให้ค้นหาอนิเมะที่มี tag ตรงกัน (ดึงทั้งหมด)
+                    // 1. ถ้ามี Tags ให้ค้นหาซีรีส์ที่มี tag ตรงกัน (ดึงทั้งหมด)
                     relatedQuery = query(getCollectionRef("shows"), where("tags", "array-contains-any", tags));
                     const querySnapshot = await getDocs(relatedQuery);
                     
@@ -557,7 +587,7 @@
                 
                 if(relatedShows.length === 0) {
                     // (MODIFIED) ข้อความแสดงผลเมื่อไม่พบ
-                    relatedListContainer.innerHTML = `<p class="text-gray-400">ไม่พบอนิเมะที่เกี่ยวข้อง</p>`;
+                    relatedListContainer.innerHTML = `<p class="text-gray-400">ไม่พบซีรีส์ที่เกี่ยวข้อง</p>`;
                     return;
                 }
                 
@@ -577,15 +607,31 @@
         }
         
         /**
-         * (NEW) สร้าง Card สำหรับ Related Shows ในรูปแบบ Grid (คล้าย index.html)
+         * (MODIFIED) สร้าง Card สำหรับ Related Shows ในรูปแบบ Grid (คล้าย index.html)
          */
         function createRelatedCard(show) {
             const title = show.title || "N/A";
             const isDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
-            
-            // Format ชื่อเรื่อง
-            let displayTitle = title;
             const dubBadge = isDub ? `<div class="dub-badge">พากย์ไทย</div>` : '';
+            
+            // (NEW) ป้ายสถานะจบแล้ว (มุมล่างซ้าย)
+            // ใช้ฟิลด์ isCompleted ที่ถูกอัปเดตจาก admin.html
+            const isCompleted = show.isCompleted === true;
+            const completedBadge = isCompleted ? `
+                <div class="status-badge-completed-related">จบแล้ว</div>
+            ` : '';
+            
+            // (MODIFIED) ป้ายบอกตอนสูงสุด (มุมล่างขวา)
+            let episodeBadge = '';
+            // ใช้ฟิลด์ latestEpisodeNumber ที่ถูกอัปเดตจาก admin.html
+            const latestEpisode = show.latestEpisodeNumber || 0;
+            
+            if (latestEpisode > 0) {
+                episodeBadge = `
+                    <div class="status-badge-episode-related">ตอนที่ ${latestEpisode}</div>
+                `;
+            }
+
             
             // ** ใช้โครงสร้าง Card Grid แบบเดียวกับใน index.html **
             return `
@@ -593,12 +639,14 @@
                     <!-- 1. ส่วนภาพ (Image Aspect Ratio Container) -->
                     <div class="aspect-[2/3] rounded-lg overflow-hidden mb-2 relative">
                         ${dubBadge}
+                        ${episodeBadge} <!-- ป้ายตอนสูงสุด (มุมล่างขวา) -->
                         <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
                              alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                        ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) -->
                     </div>
                     <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
                     <div class="text-white min-h-10">
-                        <h4 class="font-bold related-card-title text-sm">${displayTitle}</h4> 
+                        <h4 class="font-bold related-card-title text-sm">${title}</h4> 
                     </div>
                 </a>
             `;
@@ -655,6 +703,12 @@
             // Format ชื่อเรื่อง: ตัด [พากย์ไทย] ออกจากชื่อหลัก
             let displayTitle = title;
             let dubBadge = '';
+            
+            // (NEW) ป้ายสถานะจบแล้วสำหรับ Top 10 (ถ้ามี)
+            // ใช้ฟิลด์ isCompleted ที่ถูกอัปเดตจาก admin.html
+            const isCompleted = show.isCompleted === true;
+            const completedTag = isCompleted ? ' <span class="text-sm text-green-400 font-medium">(จบแล้ว)</span>' : '';
+
             if (isDub) {
                  displayTitle = displayTitle.replace(/\s*\(พากย์ไทย\)\s*$/, '').trim(); // ลบ (พากย์ไทย) ที่ท้ายชื่อ
                  // (MODIFIED) เปลี่ยนเป็นแค่ Tag Text เล็กๆ แทน Rating
@@ -673,8 +727,8 @@
                     
                     <!-- 3. Content (Title) -->
                     <div class="top10-content flex-grow">
-                        <!-- Title (Line Clamp 2) + Dub Badge -->
-                        <h4 class="font-bold text-white line-clamp-2 text-base leading-snug">${displayTitle}${dubBadge}</h4>
+                        <!-- Title (Line Clamp 2) + Dub Badge + Completed Tag -->
+                        <h4 class="font-bold text-white line-clamp-2 text-base leading-snug">${displayTitle}${dubBadge}${completedTag}</h4>
                         
                         <!-- (REMOVED) ลบส่วน Rating ออกไป -->
                         
@@ -721,7 +775,7 @@
                 if (isExpanded) {
                     // Collapse it
                     showDescEl.classList.add('line-clamp-2');
-                    expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
+                    expandDescBtn.innerHTML = 'ย่อ <i class="ri-arrow-up-s-line align-middle"></i>';
                     expandDescBtn.dataset.expanded = 'false';
                 } else {
                     // Expand it
@@ -841,4 +895,3 @@
     
 </body>
 </html>
-
