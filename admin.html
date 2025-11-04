@@ -28,7 +28,8 @@
         import { 
             getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, 
             onSnapshot, collection, query, serverTimestamp,
-            setLogLevel
+            setLogLevel, 
+            where, getDocs 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         
@@ -49,7 +50,7 @@
 
 
         let db, auth, userId;
-        let shows = []; // เก็บข้อมูลอนิเมะทั้งหมด
+        let shows = []; // เก็บข้อมูลซีรีส์ทั้งหมด
         let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
 
         // UI Elements
@@ -91,6 +92,7 @@
         const showDescInput = document.getElementById('show-description');
         const showThumbnailInput = document.getElementById('show-thumbnail');
         const showViewCountInput = document.getElementById('show-view-count'); 
+        const showCompletedCheckbox = document.getElementById('show-completed-checkbox'); // (NEW)
         const closeShowModalBtn = document.getElementById('close-show-modal');
         const addShowBtn = document.getElementById('add-show-btn');
         const deleteShowBtn = document.getElementById('delete-show-btn');
@@ -180,13 +182,51 @@
             return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
         }
 
+        // (NEW FUNCTION: ดึงตอนสูงสุดเพื่ออัปเดต Show)
+        async function updateMaxEpisodeAndStatus(showId) {
+            try {
+                const episodesQuery = query(getCollectionRef("episodes"), where("showId", "==", showId));
+                const snapshot = await getDocs(episodesQuery);
+                
+                let maxEpisode = 0;
+                
+                snapshot.forEach(doc => {
+                    const epNum = doc.data().episodeNumber || 0;
+                    if (epNum > maxEpisode) {
+                        maxEpisode = epNum;
+                    }
+                });
+
+                // ดึงสถานะที่ผู้ดูแลระบบกำหนดไว้
+                const showRef = doc(getCollectionRef("shows"), showId);
+                const showSnap = await getDoc(showRef);
+                const showData = showSnap.data();
+                
+                // (MODIFIED) isCompleted จะเป็น true ถ้า isCompleted ที่บันทึกไว้ใน Firestore เป็น true
+                const isCompleted = showData.isCompleted === true;
+                
+                // อัปเดต Show document ด้วย Max Episode ล่าสุด (ใช้ฟิลด์: latestEpisodeNumber)
+                await updateDoc(showRef, {
+                    latestEpisodeNumber: maxEpisode, // อัปเดตตอนสูงสุดเสมอ
+                    isCompleted: isCompleted, // ใช้สถานะจบที่ผู้ดูแลระบบกำหนด
+                    updatedAt: serverTimestamp() // อัปเดตวันที่ด้วย
+                });
+
+                console.log(`Show ${showId} updated: Max Episode ${maxEpisode}, Completed: ${isCompleted}`);
+
+            } catch (error) {
+                console.error("Error updating max episode:", error);
+            }
+        }
+        // (END NEW FUNCTION)
+
         async function setupListeners() {
-            // 1. Listen to Shows (อนิเมะ)
+            // 1. Listen to Shows (ซีรีส์)
             const showQuery = query(getCollectionRef("shows"));
             onSnapshot(showQuery, (snapshot) => {
                 shows = [];
                 showTableBody.innerHTML = '';
-                const showSelectHtml = '<option value="">-- เลือกอนิเมะ --</option>';
+                const showSelectHtml = '<option value="">-- เลือกซีรีส์ --</option>';
                 
                 let episodeOptions = showSelectHtml;
                 let bannerOptions = showSelectHtml; 
@@ -218,10 +258,26 @@
                 console.log("Shows loaded:", shows.length);
             }, (error) => console.error("Error listening to shows:", error));
 
-            // 2. Listen to Episodes (ตอน)
+            // 2. Listen to Episodes (ตอน) - **Trigger update Max Episode เมื่อมีการเปลี่ยนแปลง**
             const episodeQuery = query(getCollectionRef("episodes"));
             onSnapshot(episodeQuery, (snapshot) => {
                 episodeTableBody.innerHTML = '';
+                
+                // (NEW) ตรวจสอบว่ามีการเปลี่ยนแปลงเกิดขึ้นกับ Show ID ใดบ้าง
+                const changedShowIds = new Set();
+                snapshot.docChanges().forEach((change) => {
+                    if (change.doc.data().showId) {
+                        changedShowIds.add(change.doc.data().showId);
+                    }
+                });
+
+                // (NEW) Trigger การอัปเดต Max Episode สำหรับ Show ID ที่เกี่ยวข้อง
+                if (changedShowIds.size > 0) {
+                    console.log("Episode changes detected. Triggering max episode update for:", changedShowIds);
+                    changedShowIds.forEach(id => updateMaxEpisodeAndStatus(id));
+                }
+
+                // Render ตาราง Episodes
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     const show = shows.find(s => s.id === data.showId); // หาชื่อเรื่องจาก ID
@@ -290,13 +346,15 @@
         showBannerListBtn.addEventListener('click', () => switchView('banner')); 
 
 
-        // --- Show (อนิเมะ) Modal Logic ---
+        // --- Show (ซีรีส์) Modal Logic ---
         function openShowModal(mode, showData = {}, showId = null) {
             currentEditingId = showId;
+            
             if (mode === 'add') {
                 showModalTitle.textContent = "เพิ่มเรื่องใหม่";
                 showForm.reset();
                 showViewCountInput.value = 0; 
+                showCompletedCheckbox.checked = false; // (NEW) Default unchecked
                 document.querySelectorAll('.show-tag-option').forEach(checkbox => {
                     checkbox.checked = false;
                 });
@@ -307,6 +365,7 @@
                 showDescInput.value = showData.description || '';
                 showThumbnailInput.value = showData.thumbnailUrl || '';
                 showViewCountInput.value = showData.viewCount || 0; 
+                showCompletedCheckbox.checked = showData.isCompleted === true; // (NEW) Load state
                 
                 const tags = showData.tags || [];
                 document.querySelectorAll('.show-tag-option').forEach(checkbox => {
@@ -330,12 +389,16 @@
             if (tagsArray.length === 0) {
                 tagsArray.push('อนิเมะ');
             }
-
+            
+            // (NEW/MODIFIED) ใช้ค่าจาก Checkbox เพื่อกำหนดสถานะจบ
+            const isCompletedByAdmin = showCompletedCheckbox.checked; 
+            
             const showData = {
                 title: showTitleInput.value,
                 description: showDescInput.value,
                 thumbnailUrl: showThumbnailInput.value,
                 viewCount: parseInt(showViewCountInput.value, 10) || 0, 
+                isCompleted: isCompletedByAdmin, // (MODIFIED) ใช้เป็นสถานะจบที่กำหนดโดยผู้ดูแลระบบ
                 tags: tagsArray,
                 updatedAt: serverTimestamp()
             };
@@ -344,10 +407,15 @@
                 if (currentEditingId) {
                     const docRef = doc(getCollectionRef("shows"), currentEditingId);
                     await updateDoc(docRef, showData);
+                    // (NEW) เรียกอัปเดตสถานะทันทีหากมีการเปลี่ยนแปลงข้อมูล Show
+                    await updateMaxEpisodeAndStatus(currentEditingId); 
                 } else {
                     showData.createdAt = serverTimestamp();
                     showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
-                    await addDoc(getCollectionRef("shows"), showData);
+                    showData.latestEpisodeNumber = 0; // (NEW) Initialize for new show
+                    
+                    const newDocRef = await addDoc(getCollectionRef("shows"), showData);
+                    // ไม่ต้องเรียก updateMaxEpisodeAndStatus เพราะตอนใหม่ยังไม่มี
                 }
                 showForm.reset();
                 showModal.classList.remove('flex');
@@ -492,6 +560,9 @@
                     await addDoc(getCollectionRef("episodes"), episodeData);
                 }
                 
+                // (NEW) เรียกอัปเดต Max Episode สำหรับซีรีส์ที่เกี่ยวข้องเสมอ
+                await updateMaxEpisodeAndStatus(episodeData.showId); 
+                
                 episodeModal.classList.remove('flex');
                 
                 // (Optional: อัปเดตช่องกรอกด้วยโค้ดที่ถูกแปลง เพื่อให้ผู้ใช้เห็นว่ามีการแปลงเกิดขึ้น)
@@ -506,7 +577,16 @@
             if (!currentEditingId) return;
             console.log("Deleting episode... (In real app, use a custom confirm modal)");
             try {
+                const docSnap = await getDoc(doc(getCollectionRef("episodes"), currentEditingId));
+                const showId = docSnap.data().showId;
+                
                 await deleteDoc(doc(getCollectionRef("episodes"), currentEditingId));
+                
+                // (NEW) เรียกอัปเดต Max Episode สำหรับซีรีส์ที่เกี่ยวข้องหลังลบ
+                if (showId) {
+                    await updateMaxEpisodeAndStatus(showId);
+                }
+
                 episodeModal.classList.remove('flex');
             } catch (error) {
                 console.error("Error deleting episode: ", error);
@@ -814,7 +894,7 @@
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <form id="show-form">
                 <div class="flex justify-between items-center p-5 border-b border-gray-700">
-                    <h3 id="show-modal-title" class="text-2xl font-bold text-white">เพิ่มอนิเมะใหม่</h3>
+                    <h3 id="show-modal-title" class="text-2xl font-bold text-white">เพิ่มซีรีส์ใหม่</h3>
                     <button type="button" id="close-show-modal" class="text-gray-400 hover:text-white">
                         <i class="ri-close-line text-2xl"></i>
                     </button>
@@ -837,6 +917,16 @@
                     <div>
                         <label for="show-view-count" class="block text-sm font-medium text-gray-300 mb-1">ยอดเข้าชม (View Count)</label>
                         <input type="number" id="show-view-count" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="0">
+                    </div>
+                    
+                    <!-- (MODIFIED/NEW) Checkbox สำหรับสถานะจบ -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">สถานะ</label>
+                        <div class="flex items-center space-x-2">
+                             <!-- Checkbox ตรงตามภาพที่แนบมา -->
+                            <input type="checkbox" id="show-completed-checkbox" class="h-5 w-5 bg-gray-700 border-gray-600 rounded text-green-500 focus:ring-green-500">
+                            <label for="show-completed-checkbox" class="text-gray-200">จบแล้ว (Completed)</label>
+                        </div>
                     </div>
 
                     <div>
