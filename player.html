@@ -205,6 +205,8 @@
         const top10ListContainer = document.getElementById('top10-list-container'); 
         const loadingPlayer = document.getElementById('loading-player');
         const playerContentWrapper = document.getElementById('player-content-wrapper');
+        // (NEW) UI Elements for Description
+        const expandDescBtn = document.getElementById('expand-desc-btn');
 
         // (MODIFIED) Function to handle the Iframe embed 
         function embedVideo(embedCode) {
@@ -329,7 +331,8 @@
                     
                     // Clear show-specific UI
                     showTitleEl.textContent = "ไม่พบซีรีส์";
-                    showDescEl.textContent = "โปรดกลับไปที่หน้าแรกเพื่อเลือกซีรีส์ที่ถูกต้อง";
+                    // (MODIFIED) เรียก renderShowDetails เพื่อจัดการสถานะ Error
+                    renderShowDetails({ title: "ไม่พบซีรีส์", description: "โปรดกลับไปที่หน้าแรกเพื่อเลือกซีรีส์ที่ถูกต้อง" });
                     episodeListContainer.innerHTML = `<p class="text-gray-400 p-4">ไม่สามารถโหลดรายการตอนได้</p>`;
                     
                     // หากไม่มี showId เราจะไม่สามารถหา Related List ได้
@@ -344,6 +347,7 @@
 
                 if (!showSnap.exists()) {
                     playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบข้อมูลซีรีส์</p>`;
+                    renderShowDetails({ title: "ไม่พบข้อมูลซีรีส์", description: "ซีรีส์นี้อาจถูกลบไปแล้ว" });
                     
                     playerContentWrapper.classList.remove('hidden');
                     loadingPlayer.classList.add('hidden');
@@ -370,10 +374,6 @@
                 currentEpisodes = [];
                 episodesSnapshot.forEach((doc) => {
                     currentEpisodes.push({ id: doc.id, ...doc.data() });
-                    
-                    // ** เพิ่มการตรวจสอบ Embed Code ที่นี่ **
-                    // Log เพื่อดูว่า Embed Code มีปัญหาอะไรที่อาจทำให้เกิดการเลื่อนหรือไม่
-                    // console.log(`Episode ${doc.data().episodeNumber} Embed Code:`, doc.data().embedCode);
                 });
                 
                 // 3. เรียงลำดับตอน
@@ -434,11 +434,39 @@
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
         }
 
-        // แสดงรายละเอียดซีรีส์
+        // (MODIFIED) แสดงรายละเอียดซีรีส์ และตรวจสอบปุ่ม "เพิ่มเติม"
         function renderShowDetails(show) {
+            // 1. ตั้งค่า Title และ Description
             showTitleEl.textContent = show.title;
-            showDescEl.textContent = show.description || "ไม่มีคำอธิบาย";
+            const descriptionText = show.description || "ไม่มีคำอธิบาย";
+            showDescEl.textContent = descriptionText;
+
+            // 2. (NEW) รีเซ็ตสถานะปุ่มย่อ/ขยาย
+            expandDescBtn.classList.add('hidden'); // ซ่อนปุ่มไว้ก่อน
+            showDescEl.classList.add('line-clamp-2'); // บังคับให้ย่อ 2 บรรทัด
+            expandDescBtn.dataset.expanded = 'false';
+            expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
+
+            // 3. (NEW) ตรวจสอบว่าข้อความล้นหรือไม่
+            // ใช้ setTimeout เพื่อรอให้ Browser คำนวณความสูงหลัง Render
+            setTimeout(() => {
+                // scrollHeight คือ ความสูงจริงทั้งหมดของข้อความ
+                // clientHeight คือ ความสูงที่แสดงผลจริง (ที่ถูกจำกัดโดย line-clamp-2)
+                
+                // (FIX) เพิ่มการตรวจสอบเผื่อค่า clientHeight เป็น 0 หรือใกล้เคียง
+                const visibleHeight = showDescEl.clientHeight;
+                const totalHeight = showDescEl.scrollHeight;
+
+                if (totalHeight > visibleHeight && visibleHeight > 0) {
+                    // ถ้าความสูงจริง > ความสูงที่แสดง (แปลว่าข้อความล้น)
+                    expandDescBtn.classList.remove('hidden'); // แสดงปุ่ม "เพิ่มเติม"
+                } else {
+                    // ถ้าข้อความไม่ล้น (สั้นพอดี)
+                    showDescEl.classList.remove('line-clamp-2'); // เอา line-clamp ออก
+                }
+            }, 100); // รอ 100ms
         }
+
 
         // แสดงปุ่มรายการตอน
         function renderEpisodeList(episodes) {
@@ -646,8 +674,11 @@
             // ใช้ฟังก์ชัน embedVideo ที่สร้างไว้
             embedVideo(episode.embedCode);
             
-            // อัปเดตชื่อเรื่องหลัก
-            showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
+            // อัปเดตชื่อเรื่องหลัก (เฉพาะตอนที่คลิกเล่น ไม่ใช่ตอนโหลดรายละเอียด)
+            // (MODIFIED) ตรวจสอบว่า currentShow มีค่าก่อน
+            if (currentShow) {
+                showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
+            }
             
             // อัปเดตปุ่มที่ active
             document.querySelectorAll('.ep-button').forEach(btn => {
@@ -663,6 +694,23 @@
             initializeFirebase(); 
             // (NEW) Attach resize listener
             window.addEventListener('resize', syncEpisodeListHeight);
+
+            // (NEW) Event Listener for Expand/Collapse Button
+            expandDescBtn.addEventListener('click', () => {
+                const isExpanded = expandDescBtn.dataset.expanded === 'true';
+                
+                if (isExpanded) {
+                    // Collapse it
+                    showDescEl.classList.add('line-clamp-2');
+                    expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
+                    expandDescBtn.dataset.expanded = 'false';
+                } else {
+                    // Expand it
+                    showDescEl.classList.remove('line-clamp-2');
+                    expandDescBtn.innerHTML = 'ย่อ <i class="ri-arrow-up-s-line align-middle"></i>';
+                    expandDescBtn.dataset.expanded = 'true';
+                }
+            });
         });
 
     </script>
@@ -720,14 +768,17 @@
                 <!-- Show Info -->
                 <div class="text-white mb-6">
                     <h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
-                    <!-- START DELETION: ลบ div แสดงคะแนน ยอดวิว และปี -->
-                    <!-- <div class="flex items-center space-x-4 text-gray-400 text-sm mb-4">
-                        <span><i class="ri-thumb-up-line text-green-500"></i> 9.5</span>
-                        <span>1.2 พันล้านวิว</span>
-                        <span>2024</span>
-                    </div> -->
-                    <!-- END DELETION -->
-                    <p id="show-description" class="text-gray-300 line-clamp-2">...</p>
+                    
+                    <!-- (MODIFIED) Description Container -->
+                    <div id="description-container">
+                        <!-- (MODIFIED) ลบ line-clamp-2 เริ่มต้น (JS จะเพิ่มให้) และเพิ่ม transition -->
+                        <p id="show-description" class="text-gray-300 transition-all duration-200">...</p>
+                        
+                        <!-- (NEW) Expand/Collapse Button -->
+                        <button id="expand-desc-btn" class="text-green-400 hover:text-green-300 font-medium text-sm mt-1 hidden items-center">
+                            เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -771,5 +822,4 @@
     
 </body>
 </html>
-
 
