@@ -375,6 +375,13 @@
             
             if (!dropdownEl) return;
             
+            // (FIX) Check if allShows is empty/not loaded yet
+            if (allShows.length === 0) {
+                 dropdownEl.innerHTML = '<a class="block p-3 text-sm text-gray-400">กำลังโหลดข้อมูลซีรีส์...</a>';
+                 dropdownEl.classList.remove('hidden');
+                 return;
+            }
+            
             if (lowerQuery.length < 2) {
                 dropdownEl.classList.add('hidden');
                 dropdownEl.innerHTML = '';
@@ -388,7 +395,9 @@
             dropdownEl.innerHTML = '';
             
             if (results.length === 0) {
-                dropdownEl.classList.add('hidden');
+                // (MODIFIED) Display "No results" message
+                dropdownEl.innerHTML = '<a class="block p-3 text-sm text-gray-400">ไม่พบผลลัพธ์</a>';
+                dropdownEl.classList.remove('hidden'); // Show the "No result" message
                 return;
             }
             
