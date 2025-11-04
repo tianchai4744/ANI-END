@@ -434,58 +434,51 @@
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
         }
 
-        // (MODIFIED) แสดงรายละเอียดซีรีส์ และตรวจสอบปุ่ม "เพิ่มเติม"
+        // (MODIFIED) แสดงรายละเอียดซีรีส์ และตรวจสอบปุ่ม "เพิ่มเติม" (REVISED LOGIC)
         function renderShowDetails(show) {
             // 1. ตั้งค่า Title และ Description
             showTitleEl.textContent = show.title;
             const descriptionText = show.description || "ไม่มีคำอธิบาย";
             showDescEl.textContent = descriptionText;
 
-            // 2. (NEW) รีเซ็ตสถานะปุ่มย่อ/ขยาย
-            expandDescBtn.classList.add('hidden'); // ซ่อนปุ่มไว้ก่อน
-            showDescEl.classList.add('line-clamp-2'); // บังคับให้ย่อ 2 บรรทัด (เพื่อให้ได้ line-height ที่ถูกต้อง)
+            // 2. (REVISED) รีเซ็ตสถานะ
+            // - ลบ line-clamp ออกก่อน เพื่อให้เราวัดความสูงที่แท้จริงได้
+            showDescEl.classList.remove('line-clamp-2'); 
+            // - ซ่อนปุ่มไว้ก่อน
+            expandDescBtn.classList.add('hidden'); 
             expandDescBtn.dataset.expanded = 'false';
             expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
 
-            // 3. (MODIFIED) ตรวจสอบว่าข้อความล้นหรือไม่ (ใช้วิธีคำนวณบรรทัด)
+            // 3. (REVISED) ตรวจสอบว่าข้อความล้นหรือไม่
             setTimeout(() => {
                 try {
                     const computedStyle = window.getComputedStyle(showDescEl);
                     const lineHeightString = computedStyle.lineHeight;
                     let lineHeight = parseFloat(lineHeightString);
 
-                    // Fallback: If 'line-height' is 'normal', estimate it.
                     if (isNaN(lineHeight) || lineHeightString === 'normal') {
                         const fontSize = parseFloat(computedStyle.fontSize);
-                        lineHeight = Math.floor(fontSize * 1.4); // 1.4 is a common 'normal' multiplier
+                        lineHeight = Math.floor(fontSize * 1.4); 
                     }
                     
-                    const totalHeight = showDescEl.scrollHeight;
-                    
-                    // (FIX) ปัดเศษขึ้น (ceil) เพื่อความแม่นยำ
+                    // scrollHeight ตอนนี้คือความสูงจริง (เพราะไม่มี line-clamp)
+                    const totalHeight = showDescEl.scrollHeight; 
                     const numberOfLines = Math.ceil(totalHeight / lineHeight);
 
-                    console.log(`Line Height: ${lineHeight}px, Total Height: ${totalHeight}px, Calculated Lines: ${numberOfLines}`);
+                    console.log(`(Unclamped Check) Line Height: ${lineHeight}px, Total Height: ${totalHeight}px, Calculated Lines: ${numberOfLines}`);
 
                     if (numberOfLines > 2) {
                         // ถ้ามีมากกว่า 2 บรรทัด (แปลว่าข้อความล้น)
+                        showDescEl.classList.add('line-clamp-2'); // **ค่อยบีบข้อความตอนนี้**
                         expandDescBtn.classList.remove('hidden'); // แสดงปุ่ม "เพิ่มเติม"
                     } else {
                         // ถ้าข้อความไม่ล้น (สั้นพอดี 1-2 บรรทัด)
-                        showDescEl.classList.remove('line-clamp-2'); // เอา line-clamp ออก
+                        // ไม่ต้องทำอะไร (line-clamp ไม่ถูกเพิ่ม, ปุ่มยังคง hidden)
                     }
                 } catch (error) {
                     console.error("Error calculating description lines:", error);
-                    // Fallback to old logic just in case
-                    const visibleHeight = showDescEl.clientHeight;
-                    const totalHeight = showDescEl.scrollHeight;
-                    if (totalHeight > visibleHeight && visibleHeight > 0) {
-                        expandDescBtn.classList.remove('hidden');
-                    } else {
-                        showDescEl.classList.remove('line-clamp-2');
-                    }
                 }
-            }, 300); // (MODIFIED) เพิ่ม delay เป็น 300ms เพื่อรอ layout
+            }, 300); // เพิ่ม delay เพื่อรอ layout
         }
 
 
@@ -792,7 +785,7 @@
                     
                     <!-- (MODIFIED) Description Container -->
                     <div id="description-container">
-                        <!-- (MODIFIED) ลบ line-clamp-2 เริ่มต้น (JS จะเพิ่มให้) และเพิ่ม transition -->
+                        <!-- (REVISED) ลบ line-clamp-2 เริ่มต้นออก (JS จะจัดการเอง) -->
                         <p id="show-description" class="text-gray-300 transition-all duration-200">...</p>
                         
                         <!-- (NEW) Expand/Collapse Button -->
