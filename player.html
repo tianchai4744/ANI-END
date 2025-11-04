@@ -764,6 +764,29 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            
+            // (NEW) Mobile Menu Event Listeners Setup
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const mobileMenu = document.getElementById('mobile-menu');
+            
+            if (mobileMenuBtn && mobileMenu) {
+                mobileMenuBtn.addEventListener('click', () => {
+                    mobileMenu.classList.toggle('hidden');
+                });
+            }
+            
+            // (NEW) Logic to close menu when clicking on a navigation link inside the menu
+            document.body.addEventListener('click', (e) => {
+                const navLink = e.target.closest('.nav-link');
+                if (navLink) {
+                    // Check if the clicked link is inside the mobile menu
+                    if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                        mobileMenu.classList.add('hidden');
+                    }
+                }
+            });
+            
+            
             initializeFirebase(); 
             // (NEW) Attach resize listener
             window.addEventListener('resize', syncEpisodeListHeight);
@@ -798,19 +821,48 @@
                     <a href="index.html" class="flex-shrink-0 flex items-center text-white">
                         <span class="font-bold text-2xl">ANI-END</span>
                     </a>
+                    <!-- Desktop Nav Links (Secondary Navigation) -->
                     <div class="hidden md:block">
                         <div class="ml-10 flex items-baseline space-x-4">
-                            <a href="index.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                            <a href="index.html" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
                             
                             <!-- (แก้ไข) เพิ่ม URL parameter '?page=' เพื่อระบุหน้าที่จะไป -->
-                            <a href="index.html?page=อนิเมะ" class="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                            <a href="index.html?page=อนิเมะจีน" class="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                            <a href="index.html?page=อนิเมะพากย์ไทย" class="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
+                            <a href="index.html?page=อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                            <a href="index.html?page=อนิเมะจีน" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
+                            <a href="index.html?page=อนิเมะพากย์ไทย" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
                         </div>
                     </div>
                 </div>
+                
+                <!-- Mobile Menu Button & Admin Link (on mobile screens) -->
+                <!-- (NEW) เพิ่มปุ่ม Mobile Menu (Secondary Navigation toggle) -->
+                <div class="flex md:hidden items-center space-x-2">
+                     <a href="admin.html" class="text-gray-300 hover:text-white p-2 text-xl">
+                        <i class="ri-settings-4-line"></i>
+                    </a>
+                    <button id="mobile-menu-btn" class="text-gray-300 hover:text-white p-2">
+                        <i class="ri-menu-line text-2xl"></i>
+                    </button>
+                </div>
+                
             </div>
         </nav>
+        
+        <!-- (NEW) Mobile Menu (Secondary Navigation) -->
+        <div id="mobile-menu" class="md:hidden hidden bg-gray-900 shadow-lg">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <!-- Links (คัดลอกจาก Desktop Nav) -->
+                <a href="index.html" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                <a href="index.html?page=อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                <a href="index.html?page=อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
+                <a href="index.html?page=อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
+                <!-- Admin Link -->
+                <a href="admin.html" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                    <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
+                </a>
+            </div>
+        </div>
+        
     </header>
 
     <!-- Main Player Content -->
