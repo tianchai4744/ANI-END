@@ -408,9 +408,8 @@
                     renderShowDetails(currentShow);
                 }
                 
-                // (MODIFIED) ย้าย checkDescriptionOverflow มาที่นี่
-                // (REVISED) ใช้ setTimeout เพื่อรอให้ layout paint เสร็จ
-                setTimeout(checkDescriptionOverflow, 100);
+                // (REVISED) ใช้ setTimeout ที่นานขึ้น (300ms) เพื่อรอให้ layout paint เสร็จ
+                setTimeout(checkDescriptionOverflow, 300);
                 
                 syncEpisodeListHeight(); 
             }
@@ -444,51 +443,43 @@
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
         }
 
-        // (MODIFIED) แสดงรายละเอียดซีรีส์ (v7 - Measure-then-Clamp)
+        // (MODIFIED) แสดงรายละเอียดซีรีส์ (v8)
         function renderShowDetails(show) {
             // 1. ตั้งค่า Title และ Description
             showTitleEl.textContent = show.title;
             const descriptionText = show.description || "ไม่มีคำอธิบาย";
             showDescEl.textContent = descriptionText;
 
-            // 2. รีเซ็ตสถานะ
-            // (REVISED) ลบ line-clamp-2 ออกก่อน เพื่อให้วัดความสูงจริงได้
-            showDescEl.classList.remove('line-clamp-2'); 
+            // 2. รีเซ็ตสถานะ (บังคับบีบไว้ก่อน)
+            // (REVISED) บังคับให้มี line-clamp-2 เสมอเมื่อเริ่ม
+            showDescEl.classList.add('line-clamp-2'); 
             expandDescBtn.classList.add('hidden'); 
             expandDescBtn.dataset.expanded = 'false';
             expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
-
-            // 3. (REMOVED) ลบตรรกะการวัดออกจากที่นี่
         }
 
-        // (NEW) ตรวจสอบปุ่ม "เพิ่มเติม" (v7 - Measure-then-Clamp)
+        // (NEW) ตรวจสอบปุ่ม "เพิ่มเติม" (v8 - Back to Basics, Correct Timing)
         function checkDescriptionOverflow() {
             try {
-                // (REVISED) ตรรกะ "วัดก่อน แล้วค่อยบีบ"
-                
-                // 1. วัดค่า
-                const computedStyle = window.getComputedStyle(showDescEl);
-                let lineHeight = parseFloat(computedStyle.lineHeight);
-                if (isNaN(lineHeight) || computedStyle.lineHeight === 'normal') {
-                    const fontSize = parseFloat(computedStyle.fontSize);
-                    lineHeight = Math.floor(fontSize * 1.4); 
-                }
-                
-                const totalHeight = showDescEl.scrollHeight;
-                // (FIX) ปัดเศษขึ้น (ceil) เพื่อความแม่นยำ
-                const numberOfLines = Math.ceil(totalHeight / lineHeight);
+                // ตรรกะนี้จะทำงานหลังจาก setTimeout(300)
+                // ณ จุดนี้, showDescEl *ต้องมี* 'line-clamp-2'
+                const el = showDescEl;
 
-                console.log(`(Measure-then-Clamp Check) Total Height: ${totalHeight}px, Line Height: ${lineHeight}px, Lines: ${numberOfLines}`);
+                // (REVISED) ตรวจสอบว่า el.scrollHeight (ความสูงจริง)
+                // มากกว่า el.clientHeight (ความสูงที่ถูกบีบ)
+                
+                // (FIX) เพิ่ม 1px tolerance สำหรับความคลาดเคลื่อนของเบราว์เซอร์
+                const isOverflowing = el.scrollHeight > (el.clientHeight + 1);
 
-                // 2. ใช้ตรรกะ
-                if (numberOfLines > 2) {
-                    // ถ้ามีมากกว่า 2 บรรทัด (แปลว่าข้อความล้น)
-                    // เพิ่ม line-clamp-2 กลับเข้าไป
-                    showDescEl.classList.add('line-clamp-2'); 
-                    expandDescBtn.classList.remove('hidden'); // แสดงปุ่ม "เพิ่มเติม"
+                console.log(`(Final Check @ 300ms) ClientHeight: ${el.clientHeight}px, ScrollHeight: ${el.scrollHeight}px, IsOverflowing: ${isOverflowing}`);
+
+                if (isOverflowing) {
+                    // ถ้าข้อความล้นจริง -> แสดงปุ่ม
+                    expandDescBtn.classList.remove('hidden');
                 } else {
-                    // ถ้าข้อความไม่ล้น (สั้นพอดี 1-2 บรรทัด)
-                    // ไม่ต้องทำอะไร (มันแสดงผลเต็มที่อยู่แล้ว และปุ่มก็ซ่อนอยู่)
+                    // ถ้าข้อความไม่ล้น (สั้น 1-2 บรรทัด)
+                    // เอา line-clamp-2 ออก
+                    el.classList.remove('line-clamp-2');
                 }
             } catch (error) {
                 console.error("Error calculating description lines:", error);
