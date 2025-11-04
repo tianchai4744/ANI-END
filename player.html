@@ -434,7 +434,7 @@
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
         }
 
-        // (MODIFIED) แสดงรายละเอียดซีรีส์ และตรวจสอบปุ่ม "เพิ่มเติม" (REVISED LOGIC)
+        // (MODIFIED) แสดงรายละเอียดซีรีส์ และตรวจสอบปุ่ม "เพิ่มเติม" (REVISED LOGIC 4.0)
         function renderShowDetails(show) {
             // 1. ตั้งค่า Title และ Description
             showTitleEl.textContent = show.title;
@@ -442,8 +442,8 @@
             showDescEl.textContent = descriptionText;
 
             // 2. (REVISED) รีเซ็ตสถานะ
-            // - ลบ line-clamp ออกก่อน เพื่อให้เราวัดความสูงที่แท้จริงได้
-            showDescEl.classList.remove('line-clamp-2'); 
+            // - **บังคับใช้ line-clamp-2** เพื่อที่เราจะวัดความสูงเทียบกัน
+            showDescEl.classList.add('line-clamp-2'); 
             // - ซ่อนปุ่มไว้ก่อน
             expandDescBtn.classList.add('hidden'); 
             expandDescBtn.dataset.expanded = 'false';
@@ -452,28 +452,21 @@
             // 3. (REVISED) ตรวจสอบว่าข้อความล้นหรือไม่
             setTimeout(() => {
                 try {
-                    const computedStyle = window.getComputedStyle(showDescEl);
-                    const lineHeightString = computedStyle.lineHeight;
-                    let lineHeight = parseFloat(lineHeightString);
+                    // clientHeight = ความสูงที่แสดงผล (ถูกจำกัดโดย line-clamp-2)
+                    const clampedHeight = showDescEl.clientHeight;
+                    // scrollHeight = ความสูงที่แท้จริงของเนื้อหาทั้งหมด
+                    const totalHeight = showDescEl.scrollHeight;
 
-                    if (isNaN(lineHeight) || lineHeightString === 'normal') {
-                        const fontSize = parseFloat(computedStyle.fontSize);
-                        lineHeight = Math.floor(fontSize * 1.4); 
-                    }
-                    
-                    // scrollHeight ตอนนี้คือความสูงจริง (เพราะไม่มี line-clamp)
-                    const totalHeight = showDescEl.scrollHeight; 
-                    const numberOfLines = Math.ceil(totalHeight / lineHeight);
+                    console.log(`(Clamped Check) Clamped Height: ${clampedHeight}px, Total Height: ${totalHeight}px`);
 
-                    console.log(`(Unclamped Check) Line Height: ${lineHeight}px, Total Height: ${totalHeight}px, Calculated Lines: ${numberOfLines}`);
-
-                    if (numberOfLines > 2) {
-                        // ถ้ามีมากกว่า 2 บรรทัด (แปลว่าข้อความล้น)
-                        showDescEl.classList.add('line-clamp-2'); // **ค่อยบีบข้อความตอนนี้**
+                    // (FIX) เพิ่มการตรวจสอบเผื่อ totalHeight = 0 หรือค่าคลาดเคลื่อนเล็กน้อย (2px)
+                    if (totalHeight > 0 && totalHeight > (clampedHeight + 2)) {
+                        // ถ้าความสูงจริง > ความสูงที่ถูกบีบ (แปลว่าข้อความล้น)
                         expandDescBtn.classList.remove('hidden'); // แสดงปุ่ม "เพิ่มเติม"
                     } else {
                         // ถ้าข้อความไม่ล้น (สั้นพอดี 1-2 บรรทัด)
-                        // ไม่ต้องทำอะไร (line-clamp ไม่ถูกเพิ่ม, ปุ่มยังคง hidden)
+                        // ให้เอา line-clamp-2 ออก (เพื่อให้แสดงผลได้เต็ม 1 หรือ 2 บรรทัดพอดี)
+                        showDescEl.classList.remove('line-clamp-2');
                     }
                 } catch (error) {
                     console.error("Error calculating description lines:", error);
