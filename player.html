@@ -261,6 +261,7 @@
         // (NEW) Search UI Elements
         let searchInput;
         let mobileSearchInput;
+        let searchDropdown; // (NEW) Desktop Dropdown
         let mobileSearchDropdown;
 
 
@@ -367,6 +368,62 @@
                  }
              }
         }
+        
+        // (NEW) Live Search Dropdown Logic (Copied from index.html)
+        function updateSearchDropdown(query, dropdownEl, isMobile) {
+            const lowerQuery = query.toLowerCase().trim();
+            
+            if (!dropdownEl) return;
+            
+            if (lowerQuery.length < 2) {
+                dropdownEl.classList.add('hidden');
+                dropdownEl.innerHTML = '';
+                return;
+            }
+            
+            const results = allShows
+                .filter(s => s.title.toLowerCase().includes(lowerQuery))
+                .slice(0, 10); 
+                
+            dropdownEl.innerHTML = '';
+            
+            if (results.length === 0) {
+                dropdownEl.classList.add('hidden');
+                return;
+            }
+            
+            results.forEach(show => {
+                const item = document.createElement('a');
+                item.href = `player.html?id=${show.id}`;
+                // ใช้คลาส search-dropdown-item ใน CSS ที่กำหนดไว้
+                item.className = 'search-dropdown-item block p-3 text-sm font-medium text-gray-200';
+                
+                // Highlight คำที่ค้นหา
+                const highlightedTitle = show.title.replace(new RegExp(`(${query})`, 'gi'), '<span class="text-green-500 font-bold">$1</span>');
+                item.innerHTML = highlightedTitle;
+                dropdownEl.appendChild(item);
+            });
+            
+            dropdownEl.classList.remove('hidden');
+        }
+        
+        // (NEW) Handle Input event for Live Search
+        function handleSearchInput(event) {
+            const query = event.target.value;
+            const isDesktop = event.target.id === 'search-input-desktop';
+            
+            let dropdownEl = null;
+            if (isDesktop && searchDropdown) {
+                dropdownEl = searchDropdown;
+            } else if (!isDesktop && mobileSearchDropdown) {
+                 dropdownEl = mobileSearchDropdown;
+            }
+            
+            if (dropdownEl) {
+                 updateSearchDropdown(query, dropdownEl, !isDesktop);
+            }
+        }
+
 
         // (FIXED: MOVED UP) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player
         function syncEpisodeListHeight() {
@@ -837,6 +894,7 @@
             
             searchInput = document.getElementById('search-input-desktop');
             mobileSearchInput = document.getElementById('mobile-search-input');
+            searchDropdown = document.getElementById('search-dropdown'); // (NEW)
             mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
 
 
@@ -845,6 +903,7 @@
                     mobileMenu.classList.toggle('hidden');
                     // (NEW) ซ่อนแถบค้นหา Mobile เมื่อเปิด Menu
                     if (mobileSearchBar) mobileSearchBar.style.display = 'none';
+                    if (searchDropdown) searchDropdown.classList.add('hidden'); // (NEW) ซ่อน Desktop Dropdown
                 });
             }
             
@@ -853,6 +912,7 @@
                  mobileSearchBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     toggleMobileSearch(true); // เปิดแถบค้นหา
+                    if (searchDropdown) searchDropdown.classList.add('hidden'); // (NEW) ซ่อน Desktop Dropdown
                  });
             }
             
@@ -860,6 +920,7 @@
             if (mobileCloseSearchBtn && mobileSearchBar) {
                  mobileCloseSearchBtn.addEventListener('click', () => {
                     toggleMobileSearch(false); // ปิดแถบค้นหา
+                    if (mobileSearchDropdown) mobileSearchDropdown.classList.add('hidden'); // (NEW) ซ่อน Mobile Dropdown
                  });
             }
             
@@ -870,9 +931,13 @@
                 searchButtonDesktop.addEventListener('click', () => handleSearchSubmit(searchInput.value));
             }
             if (searchInput) {
+                // (MODIFIED) Add Live Search Listener
+                searchInput.addEventListener('input', handleSearchInput);
                 searchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(searchInput.value));
             }
             if (mobileSearchInput) {
+                // (MODIFIED) Add Live Search Listener
+                mobileSearchInput.addEventListener('input', handleSearchInput);
                 mobileSearchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(mobileSearchInput.value));
             }
             
@@ -885,6 +950,14 @@
                     if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
                         mobileMenu.classList.add('hidden');
                     }
+                }
+                
+                // (NEW) Close dropdowns if clicking outside
+                if (searchDropdown && !e.target.closest('.search-container')) {
+                     searchDropdown.classList.add('hidden');
+                }
+                if (mobileSearchDropdown && !e.target.closest('.search-container')) {
+                     mobileSearchDropdown.classList.add('hidden');
                 }
             });
             
@@ -943,6 +1016,10 @@
                         <button id="search-button-desktop" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
                             <i class="ri-search-line"></i>
                         </button>
+                        <!-- (NEW) Desktop Search Dropdown -->
+                        <div id="search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
+                            <!-- Search results injected here -->
+                        </div>
                     </div>
                     <!-- (REMOVED) Admin Link removed -->
                 </div>
@@ -968,6 +1045,10 @@
                 <button id="mobile-close-search" class="bg-gray-700 text-gray-400 rounded-r-full px-3">
                     <i class="ri-close-line"></i>
                 </button>
+                <!-- (NEW) Mobile Search Dropdown -->
+                <div id="mobile-search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
+                    <!-- Search results injected here -->
+                </div>
             </div>
         </div>
         
