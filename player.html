@@ -1038,14 +1038,16 @@
             </div>
         </nav>
         
-        <!-- (NEW) Mobile Search Bar -->
+        <!-- (MODIFIED) Mobile Search Bar -->
         <div id="mobile-search-bar" class="md:hidden hidden p-2 absolute top-16 left-0 right-0 bg-gray-800 shadow-lg z-40">
-            <div class="flex relative search-container">
-                <input id="mobile-search-input" type="text" placeholder="ค้นหา..." class="flex-1 bg-gray-700 text-white rounded-l-full py-2 px-4 focus:outline-none">
-                <button id="mobile-close-search" class="bg-gray-700 text-gray-400 rounded-r-full px-3">
-                    <i class="ri-close-line"></i>
-                </button>
-                <!-- (NEW) Mobile Search Dropdown -->
+            <div class="relative"> <!-- (NEW) Wrap content in relative div to fix dropdown positioning -->
+                <div class="flex search-container">
+                    <input id="mobile-search-input" type="text" placeholder="ค้นหา..." class="flex-1 bg-gray-700 text-white rounded-l-full py-2 px-4 focus:outline-none">
+                    <button id="mobile-close-search" class="bg-gray-700 text-gray-400 rounded-r-full px-3">
+                        <i class="ri-close-line"></i>
+                    </button>
+                </div>
+                <!-- (NEW) Mobile Search Dropdown (Moved outside flex container) -->
                 <div id="mobile-search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
                     <!-- Search results injected here -->
                 </div>
