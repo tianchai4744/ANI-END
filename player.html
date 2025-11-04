@@ -409,7 +409,8 @@
                 }
                 
                 // (MODIFIED) ย้าย checkDescriptionOverflow มาที่นี่
-                requestAnimationFrame(checkDescriptionOverflow);
+                // (REVISED) ใช้ setTimeout เพื่อรอให้ layout paint เสร็จ
+                setTimeout(checkDescriptionOverflow, 100);
                 
                 syncEpisodeListHeight(); 
             }
@@ -443,7 +444,7 @@
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
         }
 
-        // (MODIFIED) แสดงรายละเอียดซีรีส์ (v6 - แค่ตั้งค่า)
+        // (MODIFIED) แสดงรายละเอียดซีรีส์ (v7 - Measure-then-Clamp)
         function renderShowDetails(show) {
             // 1. ตั้งค่า Title และ Description
             showTitleEl.textContent = show.title;
@@ -451,82 +452,46 @@
             showDescEl.textContent = descriptionText;
 
             // 2. รีเซ็ตสถานะ
-            showDescEl.classList.add('line-clamp-2'); // บังคับบีบไว้ก่อน
+            // (REVISED) ลบ line-clamp-2 ออกก่อน เพื่อให้วัดความสูงจริงได้
+            showDescEl.classList.remove('line-clamp-2'); 
             expandDescBtn.classList.add('hidden'); 
             expandDescBtn.dataset.expanded = 'false';
             expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
 
-            // 3. (REMOVED) ลบตรรกะการวัดทั้งหมดออกจากที่นี่
+            // 3. (REMOVED) ลบตรรกะการวัดออกจากที่นี่
         }
 
-        // (NEW) ตรวจสอบปุ่ม "เพิ่มเติม" (v6 - ตรรกะการวัด)
+        // (NEW) ตรวจสอบปุ่ม "เพิ่มเติม" (v7 - Measure-then-Clamp)
         function checkDescriptionOverflow() {
             try {
-                const descContainer = document.getElementById('description-container');
-                if (!descContainer) return; // Exit if container not found
-
-                // 3.1 สร้าง element จำลอง
-                const tempDesc = document.createElement('p');
+                // (REVISED) ตรรกะ "วัดก่อน แล้วค่อยบีบ"
                 
-                // 3.2 คัดลอก text และ class ที่มีผลต่อขนาด
-                tempDesc.textContent = showDescEl.textContent;
-                tempDesc.className = showDescEl.className; // คัดลอก class ทั้งหมด
-                tempDesc.classList.remove('line-clamp-2', 'transition-all', 'duration-200'); // เอา class ที่ไม่จำเป็น/รบกวนการวัดค่า ออก
-                
-                // 3.3 ตั้งค่าสไตล์ให้มันอยู่นอกจอ และบังคับความกว้างให้เท่าตัวจริง
-                const containerWidth = descContainer.clientWidth;
-                if (containerWidth === 0) {
-                        // ถ้า container กว้าง 0 (เช่น มันถูกซ่อน) ให้ยกเลิก
-                        console.warn("Description container has 0 width. Skipping line check.");
-                        return;
-                }
-                
-                tempDesc.style.position = 'absolute';
-                tempDesc.style.left = '-9999px';
-                tempDesc.style.top = '0';
-                tempDesc.style.width = `${containerWidth}px`; // **สำคัญมาก**
-                tempDesc.style.visibility = 'hidden';
-                
-                // 3.4 เพิ่มเข้า DOM เพื่อวัด
-                document.body.appendChild(tempDesc);
-                
-                // 3.5 วัดค่า
-                const computedStyle = window.getComputedStyle(tempDesc);
+                // 1. วัดค่า
+                const computedStyle = window.getComputedStyle(showDescEl);
                 let lineHeight = parseFloat(computedStyle.lineHeight);
                 if (isNaN(lineHeight) || computedStyle.lineHeight === 'normal') {
                     const fontSize = parseFloat(computedStyle.fontSize);
                     lineHeight = Math.floor(fontSize * 1.4); 
                 }
                 
-                const totalHeight = tempDesc.scrollHeight;
+                const totalHeight = showDescEl.scrollHeight;
                 // (FIX) ปัดเศษขึ้น (ceil) เพื่อความแม่นยำ
                 const numberOfLines = Math.ceil(totalHeight / lineHeight);
 
-                // 3.6 ลบ element จำลองทิ้ง
-                document.body.removeChild(tempDesc);
+                console.log(`(Measure-then-Clamp Check) Total Height: ${totalHeight}px, Line Height: ${lineHeight}px, Lines: ${numberOfLines}`);
 
-                console.log(`(Clone Check) Container Width: ${containerWidth}px, Line Height: ${lineHeight}px, Total Height: ${totalHeight}px, Calculated Lines: ${numberOfLines}`);
-
-                // 3.7 ใช้ตรรกะ
+                // 2. ใช้ตรรกะ
                 if (numberOfLines > 2) {
                     // ถ้ามีมากกว่า 2 บรรทัด (แปลว่าข้อความล้น)
-                    // line-clamp-2 ถูกเพิ่มไว้แล้ว
+                    // เพิ่ม line-clamp-2 กลับเข้าไป
+                    showDescEl.classList.add('line-clamp-2'); 
                     expandDescBtn.classList.remove('hidden'); // แสดงปุ่ม "เพิ่มเติม"
                 } else {
                     // ถ้าข้อความไม่ล้น (สั้นพอดี 1-2 บรรทัด)
-                    // ให้เอา line-clamp-2 ออก (เพื่อให้แสดงผลได้เต็ม 1 หรือ 2 บรรทัดพอดี)
-                    showDescEl.classList.remove('line-clamp-2');
+                    // ไม่ต้องทำอะไร (มันแสดงผลเต็มที่อยู่แล้ว และปุ่มก็ซ่อนอยู่)
                 }
             } catch (error) {
                 console.error("Error calculating description lines:", error);
-                // Fallback (ตรรกะเก่าสุด) ในกรณีที่วิธีใหม่ error
-                const clampedHeight = showDescEl.clientHeight;
-                const totalHeight = showDescEl.scrollHeight;
-                if (totalHeight > 0 && totalHeight > (clampedHeight + 2)) {
-                    expandDescBtn.classList.remove('hidden');
-                } else {
-                    showDescEl.classList.remove('line-clamp-2');
-                }
             }
         }
 
