@@ -130,6 +130,36 @@
         gap: 4px;
      }
 
+     /* (NEW) ป้ายสถานะจบแล้ว (มุมล่างซ้าย) */
+     .status-badge-completed {
+        position: absolute;
+        bottom: 8px; 
+        left: 8px;
+        z-index: 10;
+        background-color: #059669; /* green-600 */
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+     }
+     
+     /* (FIXED: มุมล่างขวา) ป้ายบอกตอนล่าสุด */
+     .status-badge-episode {
+        position: absolute;
+        bottom: 8px; /* มุมล่างขวา */
+        right: 8px;
+        z-index: 10;
+        background-color: #4B5563; /* gray-600 */
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+     }
+     
  </style>
  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
 </head>
@@ -220,7 +250,7 @@
         }
 
         async function setupListeners() {
-            // 1. Listener for Shows (ยังคงใช้ onSnapshot เพื่ออัพเดท allShows สำหรับ Carousel/Search)
+            // 1. Listener for Shows (ใช้ onSnapshot และฟิลด์ latestEpisodeNumber ที่ถูกอัปเดตจาก Admin)
             const showsQuery = query(getCollectionRef("shows"));
             onSnapshot(showsQuery, (snapshot) => {
                 allShows = [];
@@ -373,7 +403,7 @@
             if (latestShows.length > 0) {
                  sectionsContainer.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up' }));
             } else {
-                sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
+                sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลซีรีส์ในระบบ</p>`;
             }
 
             // อัปเดต Swiper ที่มีอยู่สำหรับ Carousels
@@ -445,6 +475,25 @@
             <div class="dub-badge">
                 <i class="ri-volume-up-line"></i> พากย์ไทย
             </div>` : '';
+            
+        // 3. ป้ายสถานะจบแล้ว (มุมล่างซ้าย)
+        // ใช้ฟิลด์ isCompleted ที่ถูกอัปเดตจาก admin.html
+        const isCompleted = show.isCompleted === true;
+        const completedBadge = isCompleted ? `
+            <div class="status-badge-completed">จบแล้ว</div>
+        ` : '';
+        
+        // 4. ป้ายบอกตอนล่าสุด (มุมล่างขวา)
+        let episodeBadge = '';
+        // ใช้ฟิลด์ latestEpisodeNumber ที่ถูกอัปเดตจาก admin.html
+        const latestEpisode = show.latestEpisodeNumber || 0;
+        
+        // แสดงป้ายตอนล่าสุด ถ้า latestEpisode > 0
+        if (latestEpisode > 0) {
+            episodeBadge = `
+                <div class="status-badge-episode">ตอนที่ ${latestEpisode}</div>
+            `;
+        }
 
 
         return `
@@ -453,8 +502,10 @@
                     <div class="aspect-[2/3] rounded-lg overflow-hidden mb-2 relative">
                         ${rankBadge}
                         ${dubBadge}
+                        ${episodeBadge} <!-- ป้ายตอนล่าสุด (มุมล่างขวา) -->
                         <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
                              alt="${show.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                        ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) -->
                         <!-- (REMOVED) ลบ Gradient และ Title ที่อยู่ซ้อนทับภาพออก -->
                     </div>
                     <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
@@ -517,7 +568,7 @@
                 currentRenderedIndex = endIndex;
             } else if (currentRenderedIndex === 0) {
                  // No shows found at all
-                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
+                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบซีรีส์สำหรับ "${currentGridTag}"</p>`;
             }
 
             // Update Load More Button visibility
@@ -834,7 +885,7 @@
             
             <div id="sections-container">
                 <div class="loading-placeholder bg-gray-800 rounded-lg p-4">
-                        <p class="text-gray-400">กำลังโหลดอนิเมะ...</p>
+                        <p class="text-gray-400">กำลังโหลดซีรีส์...</p>
                 </div>
             </div>
         </div>
