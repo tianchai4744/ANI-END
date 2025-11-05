@@ -210,10 +210,10 @@
         import { 
             getFirestore, doc, getDoc, onSnapshot, collection, query, where, getDocs,
             setLogLevel,
-            updateDoc, increment, orderBy, limit 
+            updateDoc, increment, orderBy, limit, serverTimestamp // (MODIFIED) Add serverTimestamp
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // (*** จำลอง Firebase Config เนื่องจาก Canvas ไม่ได้ให้ global vars มาในโหมดนี้ ***)
+        // (*** จำลอง Firebase Config ...
         const firebaseConfig = {
             apiKey: "AIzaSyDVXZUnw5oiTLqCG00GYdtPTwzOubCSe1o",
             authDomain: "ani-end-94710.firebaseapp.com",
@@ -246,6 +246,7 @@
         // (NEW) UI Elements for Nav Buttons
         let prevEpisodeBtn;
         let nextEpisodeBtn;
+        let reportBrokenBtn; // (NEW)
         
         // (NEW) Global State for Nav
         let currentEpisodeIndex = -1;
@@ -464,6 +465,48 @@
             }
         }
 
+        // (NEW) Function to mark an episode as broken
+        async function markEpisodeAsBroken() {
+            if (currentEpisodeIndex < 0 || !currentEpisodes[currentEpisodeIndex]) {
+                console.warn("No current episode selected to report.");
+                return;
+            }
+            
+            const episode = currentEpisodes[currentEpisodeIndex];
+            if (episode.status === 'broken') {
+                console.warn("Episode already marked as broken.");
+                return;
+            }
+
+            console.log(`Reporting episode ${episode.id} (${episode.title}) as broken...`);
+            
+            try {
+                const episodeRef = doc(getCollectionRef("episodes"), episode.id);
+                // (MODIFIED) อัปเดตสถานะและเวลา
+                await updateDoc(episodeRef, {
+                    status: 'broken',
+                    updatedAt: serverTimestamp() 
+                });
+
+                // อัปเดตสถานะปุ่มทันที
+                if (reportBrokenBtn) {
+                    reportBrokenBtn.disabled = true;
+                    reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว (เสีย)';
+                    reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
+                    reportBrokenBtn.classList.remove('hover:bg-red-600');
+                }
+                
+                // อัปเดตข้อมูลในเครื่องเพื่อป้องกันการแจ้งซ้ำ
+                currentEpisodes[currentEpisodeIndex].status = 'broken';
+
+            } catch (error) {
+                console.error("Error reporting broken episode:", error);
+                if (reportBrokenBtn) {
+                    reportBrokenBtn.innerHTML = 'แจ้ง (ล้มเหลว)';
+                }
+            }
+        }
+
 
         // (FIXED: MOVED UP) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player
         function syncEpisodeListHeight() {
@@ -566,6 +609,23 @@
             currentEpisodeIndex = currentEpisodes.findIndex(ep => ep.id === episode.id);
             console.log("Current episode index:", currentEpisodeIndex);
             updateNavButtonStates();
+            
+            // (NEW) อัปเดตสถานะปุ่ม "แจ้งเสีย" ตามตอนที่เล่น
+            if (reportBrokenBtn) {
+                if (episode.status === 'broken') {
+                    // ถ้าตอนนี้ถูกแจ้งเสียไว้แล้ว
+                    reportBrokenBtn.disabled = true;
+                    reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว (เสีย)';
+                    reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
+                    reportBrokenBtn.classList.remove('hover:bg-red-600');
+                } else {
+                    // ถ้าตอนนี้ยังปกติ
+                    reportBrokenBtn.disabled = false;
+                    reportBrokenBtn.innerHTML = '<i class="ri-error-warning-line mr-1"></i> แจ้ง (เสีย)';
+                    reportBrokenBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-red-600');
+                    reportBrokenBtn.classList.add('hover:bg-red-600');
+                }
+            }
             
             // (NEW) Scroll to top on episode change (for mobile usability)
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -981,6 +1041,7 @@
             expandDescBtn = document.getElementById('expand-desc-btn');
             prevEpisodeBtn = document.getElementById('prev-episode-btn');
             nextEpisodeBtn = document.getElementById('next-episode-btn');
+            reportBrokenBtn = document.getElementById('report-broken-btn'); // (NEW)
             searchInput = document.getElementById('search-input-desktop');
             mobileSearchInput = document.getElementById('mobile-search-input');
             searchDropdown = document.getElementById('search-dropdown');
@@ -1093,6 +1154,10 @@
             if (prevEpisodeBtn && nextEpisodeBtn) {
                  prevEpisodeBtn.addEventListener('click', handlePrevEpisode);
                  nextEpisodeBtn.addEventListener('click', handleNextEpisode);
+            }
+            // (NEW) Event Listener for Report Button
+            if (reportBrokenBtn) {
+                reportBrokenBtn.addEventListener('click', markEpisodeAsBroken);
             }
 
             // (NEW) Event Listener for Expand/Collapse Button
@@ -1224,11 +1289,18 @@
                 </div>
                 
                 <!-- (NEW) Next/Previous Buttons -->
-                <div id="video-nav-buttons" class="flex justify-between mt-1"> <!-- (MODIFIED) Changed mt-2 to mt-1 -->
+                <div id="video-nav-buttons" class="flex justify-between items-center mt-1"> <!-- (MODIFIED) Changed mt-2 to mt-1 and added items-center -->
                     <button id="prev-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="ri-arrow-left-s-line mr-1"></i>
                         ตอนก่อนหน้า
                     </button>
+                    
+                    <!-- (NEW) Report Broken Video Button -->
+                    <button id="report-broken-btn" class="flex items-center bg-gray-700 hover:bg-red-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="ri-error-warning-line mr-1"></i>
+                        แจ้ง (เสีย)
+                    </button>
+                    
                     <button id="next-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                         ตอนถัดไป
                         <i class="ri-arrow-right-s-line ml-1"></i>
@@ -1255,7 +1327,7 @@
             <!-- 2. รายการตอน (Episodes List) - ลำดับ 2 บนมือถือ -->
             <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-2 lg:order-2">
                 <section class="bg-gray-800 rounded-lg p-4">
-                    <h3 class_section="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
+                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
                     <div id="episode-list-container" class="flex flex-wrap gap-2">
                         <!-- Episode buttons injected by JS -->
                         <p class="text-gray-400">กำลังโหลดตอน...</p>
