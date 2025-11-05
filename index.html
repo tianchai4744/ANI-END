@@ -42,6 +42,7 @@
         }
 
         .nav-link.active { color: #00b87c; } 
+        /* (MODIFIED) ให้ Grid View ซ่อนอยู่ และ Home View แสดงเมื่อเริ่มต้น */
         #grid-view-container { display: none; } 
         #home-view { display: block; } 
         #mobile-search-bar { display: none; }
@@ -168,7 +169,7 @@
     <!-- Firebase SDK and Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, setLogLevel,
             limit, orderBy, where, startAfter, getDocs 
@@ -193,6 +194,9 @@
         let allTags = new Set(); 
         let currentPageId = 'home'; 
         let heroSwiperInstance = null; // ตัวแปรสำหรับ Swiper
+        
+        // (NEW) สถานะสำหรับตรวจสอบว่าข้อมูลอนิเมะถูกโหลดครั้งแรกแล้วหรือยัง
+        let isDataLoaded = false; 
         
         // (MODIFIED) State for Grid View Pagination (Client-Side Paging)
         let currentGridTag = null; 
@@ -241,14 +245,7 @@
 
         async function signIn() {
             try {
-                 // NOTE: Using signInAnonymously if __initial_auth_token is not available (as per rules)
-                 // Since this environment doesn't provide it easily, we use anonymous sign-in directly.
-                const __initial_auth_token = ""; // Placeholder/mock
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token.length > 0) {
-                     await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                     await signInAnonymously(auth);
-                }
+                await signInAnonymously(auth);
             } catch (error) {
                 console.error("Sign In Error:", error);
             }
@@ -273,6 +270,14 @@
                 
                 console.log("Shows loaded:", allShows.length);
                 
+                const wasDataLoaded = isDataLoaded;
+                isDataLoaded = true; // ตั้งค่าสถานะว่าโหลดข้อมูลแล้ว
+                
+                // (NEW) ตรวจสอบการค้นหาค้างไว้ (กรณีมาจากการ Redirect)
+                if (!wasDataLoaded) {
+                    checkInitialSearch();
+                }
+                
                 // (MODIFIED) ตรวจสอบว่าควร render หน้าไหน
                 if (currentPageId === 'home') {
                     console.log("Snapshot update: rendering HOME (Sections)");
@@ -280,7 +285,9 @@
                     renderDynamicNav('home'); 
                     renderSections(); // Render home content (carousels only)
                 } else if (currentPageId === 'search-results') {
-                    console.log("Snapshot update: on SEARCH page, re-rendering nav");
+                    console.log("Snapshot update: re-running search for:", currentSearchQuery);
+                    // (FIX) ต้องเรียก performSearch ซ้ำ เพื่ออัปเดตผลลัพธ์การค้นหา
+                    performSearch(currentSearchQuery); 
                     renderDynamicNav('search-results'); 
                 } else if (currentGridTag && currentPageId !== 'home') {
                     // หากมีการอัพเดทข้อมูลในขณะที่ Grid View เปิดอยู่ ให้ re-initialize การแบ่งหน้า
@@ -291,9 +298,7 @@
                 
             }, (error) => {
                 console.error("Error listening to shows:", error);
-                if (sectionsContainer) {
-                    sectionsContainer.innerHTML = `<p class="text-center text-red-500">ไม่สามารถโหลดข้อมูลได้</p>`;
-                }
+                sectionsContainer.innerHTML = `<p class="text-center text-red-500">ไม่สามารถโหลดข้อมูลได้</p>`;
             });
 
             // 2. Listener for Banners (แยกออกมา)
@@ -313,6 +318,21 @@
                 }
             });
         }
+        
+        // (NEW) Variable to hold the query from URL
+        let initialQueryFromUrl = null;
+        let currentSearchQuery = null; // Store the current query when on search results page
+
+        // (NEW) Function to check if a search was requested via URL on initial load
+        function checkInitialSearch() {
+            if (initialQueryFromUrl) {
+                console.log("Performing initial search from URL:", initialQueryFromUrl);
+                performSearch(initialQueryFromUrl);
+                // Clear the initial query after execution
+                initialQueryFromUrl = null; 
+            }
+        }
+
 
         function renderDynamicNav(activePageId = 'home') {
             // (FIX) ตรวจสอบว่า Elements ถูกกำหนดค่าแล้วหรือไม่ (เนื่องจากอาจถูกเรียกใน setupListeners ก่อน DOMContentLoaded)
@@ -333,10 +353,6 @@
                 desktopNavLinks.innerHTML += link;
                 mobileNavLinks.innerHTML += mobileLink;
             });
-            
-             // (NEW) ลิงก์ Admin สำหรับ Mobile (เพิ่มกลับมาอีกครั้งเพื่อให้ครบ)
-            const adminLinkMobile = `<a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"><i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน</a>`;
-            mobileNavLinks.innerHTML += adminLinkMobile;
         }
 
         function renderHeroSlider(banners) {
@@ -385,7 +401,6 @@
         }
 
         function renderSections() {
-            if (!sectionsContainer) return;
             sectionsContainer.innerHTML = ''; 
             
             // 1. "10 อันดับอนิเมะยอดนิยม"
@@ -418,16 +433,16 @@
             // 5. "อนิเมะอัปเดตใหม่" (จัดเรียงตามวันที่สร้างใหม่ล่าสุด 20 เรื่อง)
             const latestShows = [...allShows]
                 .sort((a, b) => {
-                    // Firestore Timestamps need to be converted to milliseconds for comparison if they are not native objects
-                    const timeA = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : 0) : 0;
-                    const timeB = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : 0) : 0;
+                    // (MODIFIED) เปลี่ยนจาก b.updatedAt เป็น b.createdAt เพื่อเรียงตามเรื่องที่เพิ่มเข้ามาใหม่เท่านั้น
+                    const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
+                    const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
                     return timeB - timeA; // เรียงจากเวลาสร้างล่าสุด (มากที่สุด) ไปยังเวลาเก่าที่สุด (น้อยที่สุด)
                 })
                 .slice(0, 20); 
 
             if (latestShows.length > 0) {
                  sectionsContainer.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up' }));
-            } else if(allShows.length === 0) {
+            } else {
                 sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
             }
 
@@ -546,15 +561,16 @@
         function initializeGridPaging(tag) {
             currentGridTag = tag;
             gridViewTitle.textContent = tag;
+            currentSearchQuery = null; // Clear search query when viewing tags
             
             // 1. Filter and Sort all shows on the client side
             gridFilteredShows = allShows
                 .filter(s => (s.tags || []).includes(tag))
                 // (MODIFIED) เปลี่ยนตรรกะการจัดเรียง: เรียงตาม 'updatedAt' จากมากไปน้อย (ล่าสุดก่อน)
                 .sort((a, b) => {
-                    // Firestore Timestamps need to be converted to milliseconds for comparison if they are not native objects
-                    const timeA = a.updatedAt ? (a.updatedAt.toMillis ? a.updatedAt.toMillis() : 0) : 0;
-                    const timeB = b.updatedAt ? (b.updatedAt.toMillis ? b.updatedAt.toMillis() : 0) : 0;
+                    // Firestore Timestamp ถูกแปลงเป็น Object ธรรมดาเมื่อโหลด
+                    const timeA = a.updatedAt ? a.updatedAt.toMillis() : 0;
+                    const timeB = b.updatedAt ? b.updatedAt.toMillis() : 0;
                     return timeB - timeA; // เรียงจากเวลาล่าสุด (มากที่สุด) ไปยังเวลาเก่าที่สุด (น้อยที่สุด)
                 });
 
@@ -562,6 +578,7 @@
             gridViewContent.innerHTML = '';
             loadMoreButton.classList.add('hidden');
             gridViewContainer.style.display = 'block';
+            homeView.style.display = 'none';
             
             // Show loading text momentarily
             gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">กำลังจัดเรียงและโหลดรายการ...</p>`;
@@ -635,6 +652,7 @@
                 homeView.style.display = 'block';
                 gridViewContainer.style.display = 'none';
                 loadMoreButton.classList.add('hidden'); // ซ่อนปุ่มดูเพิ่มเติม
+                currentSearchQuery = null;
                 
                 // (MODIFIED) เพิ่ม isSecureEnvironment() check
                 if (window.history.replaceState && isSecureEnvironment()) {
@@ -652,6 +670,9 @@
                 homeView.style.display = 'none';
                 gridViewContainer.style.display = 'block';
                 loadMoreButton.classList.add('hidden'); // ซ่อนปุ่มดูเพิ่มเติมสำหรับหน้าค้นหา
+                
+                // Note: performSearch will be called separately/later
+                
             } else {
                 // This handles 'อนิเมะ', 'อนิเมะจีน', 'อนิเมะพากย์ไทย'
                 homeView.style.display = 'none';
@@ -674,9 +695,8 @@
                 .filter(s => s.title.toLowerCase().includes(lowerQuery))
                 .slice(0, 10); 
             if (results.length === 0) {
-                 // (MODIFIED) Display "No results" message
                 dropdownEl.innerHTML = '<a class="block p-3 text-sm text-gray-400">ไม่พบผลลัพธ์</a>';
-                dropdownEl.classList.remove('hidden'); // Show the "No result" message
+                dropdownEl.classList.remove('hidden');
                 return;
             }
             results.forEach(show => {
@@ -696,38 +716,56 @@
             updateSearchDropdown(query, dropdownEl);
         }
         function handleSearchSubmit(query) {
-             // (FIX) ต้องเช็คว่า dropdown elements ถูก load แล้วหรือไม่
-             if(searchDropdown) searchDropdown.classList.add('hidden');
-             if(mobileSearchDropdown) mobileSearchDropdown.classList.add('hidden');
-             
-             if (query && mobileSearchInput && mobileSearchInput.value) {
+             searchDropdown.classList.add('hidden');
+             mobileSearchDropdown.classList.add('hidden');
+             if (query && mobileSearchInput.value) {
                  mobileSearchInput.value = '';
                  // (FIX) เข้าถึง Element โดยตรงเนื่องจากอาจยังไม่ได้กำหนดค่าในตัวแปร
-                 const mobileSearchBarEl = document.getElementById('mobile-search-bar');
-                 if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
+                 document.getElementById('mobile-search-bar').style.display = 'none'; 
              }
-             performSearch(query);
+             // (MODIFIED) หากข้อมูลโหลดแล้ว ให้ทำการค้นหาเลย
+             if (isDataLoaded) {
+                 performSearch(query);
+             } else {
+                 // (FIX) ถ้าข้อมูลยังไม่โหลด ให้ตั้งค่า query และรอ Snapshot ครั้งแรก
+                 initialQueryFromUrl = query;
+                 showPage('search-results'); 
+                 gridViewTitle.textContent = `กำลังค้นหาสำหรับ "${query}"...`;
+                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">กำลังโหลดข้อมูลและค้นหา...</p>`;
+             }
         }
         // --- End Live Search ---
 
         function performSearch(query) {
             if (!query) return;
+            
+            // 1. ตั้งค่าสถานะหน้าและ query
             showPage('search-results'); 
+            currentSearchQuery = query; // เก็บ query ปัจจุบัน
             
             gridViewTitle.textContent = `ผลการค้นหาสำหรับ "${query}"`;
             gridViewContent.innerHTML = '';
             const lowerQuery = query.toLowerCase();
             
-            // Search still uses allShows array since it's only 1 query
+            // 2. กรองผลลัพธ์ (ต้องแน่ใจว่า allShows ถูกโหลดแล้ว)
+            if (allShows.length === 0) {
+                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">ข้อมูลอนิเมะยังไม่ถูกโหลด. โปรดรอสักครู่...</p>`;
+                 return;
+            }
+            
+            // Search uses allShows array
             const results = allShows.filter(s => 
                 s.title.toLowerCase().includes(lowerQuery) || 
                 (s.description || '').toLowerCase().includes(lowerQuery)
             );
             
+            // 3. แสดงผล
             if (results.length === 0) {
+                // (FIX) แสดงข้อความไม่พบผลลัพธ์
                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบผลลัพธ์สำหรับ "${query}"</p>`;
                 return;
             }
+            
             // (MODIFIED) Ensure grid view class is set correctly
             gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
             results.forEach(show => {
@@ -769,8 +807,9 @@
                 mobileMenuBtn.addEventListener('click', () => {
                     mobileMenu.classList.toggle('hidden');
                     // (FIX) เข้าถึง Element โดยตรงเนื่องจาก mobileSearchBar ไม่ใช่ตัวแปร global
-                    if (mobileSearchBar) mobileSearchBar.style.display = 'none'; 
-                    if (searchDropdown) searchDropdown.classList.add('hidden');
+                    const mobileSearchBarEl = document.getElementById('mobile-search-bar');
+                    if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
+                    searchDropdown.classList.add('hidden');
                 });
             }
             
@@ -779,14 +818,14 @@
                     e.preventDefault();
                     mobileSearchBar.style.display = 'flex';
                     mobileMenu.classList.add('hidden'); 
-                    if (searchDropdown) searchDropdown.classList.add('hidden');
+                    searchDropdown.classList.add('hidden');
                 });
             }
 
             if (mobileCloseSearchBtn && mobileSearchBar) {
                 mobileCloseSearchBtn.addEventListener('click', () => {
                     mobileSearchBar.style.display = 'none';
-                    if (mobileSearchDropdown) mobileSearchDropdown.classList.add('hidden');
+                    mobileSearchDropdown.classList.add('hidden');
                 });
             }
             
@@ -827,14 +866,14 @@
             // (FIX) ตรรกะตรวจสอบ URL ตอนเริ่มโหลด (ย้ายมาไว้ด้านล่าง)
             const urlParams = new URLSearchParams(window.location.search);
             const pageFromUrl = urlParams.get('page');
-            const searchFromUrl = urlParams.get('search'); // (NEW) Handle search query from player.html
-            
+            const searchFromUrl = urlParams.get('search'); // ดึงคำค้นหาจาก URL
+
             if (searchFromUrl) {
-                // If there's a search query, perform search immediately
-                performSearch(searchFromUrl);
-                // Clear the search input if visible
-                if (searchInput) searchInput.value = searchFromUrl;
-                if (mobileSearchInput) mobileSearchInput.value = searchFromUrl;
+                // (MODIFIED) หากมีคำค้นหา ให้ตั้งค่า initialQueryFromUrl และแสดงหน้า Search Results
+                initialQueryFromUrl = decodeURIComponent(searchFromUrl);
+                currentPageId = 'search-results'; 
+                showPage(currentPageId);
+                // checkInitialSearch() จะถูกเรียกหลังจากข้อมูลโหลดใน setupListeners
                 
             } else if (pageFromUrl) {
                 currentPageId = pageFromUrl; // ตั้งค่า global state
@@ -856,10 +895,9 @@
                          console.warn("Could not use history.replaceState on load:", e.message);
                     }
                 }
-            } else {
-                // Ensure home view is shown on clean load
-                showPage('home');
-            }
+            } 
+            
+            // ถ้าไม่มีทั้ง page และ search ก็จะใช้ค่า default 'home' และรอ setupListeners
         });
     </script>
     
@@ -869,7 +907,7 @@
             <div class="flex items-center justify-between h-16">
                 <!-- Logo & Desktop Nav -->
                 <div class="flex items-center">
-                    <!-- (MODIFIED) เปลี่ยนเป็นลิงก์ตรง & ลบ nav-link, data-page -->
+                    <!-- (MODIFIED) แก้ไขแท็ก </a> ที่ผิดรูปแบบ -->
                     <a href="index.html" class="flex-shrink-0 flex items-center text-white">
                         <span class="font-bold text-2xl">ANI-END</span> 
                     </a>
@@ -927,7 +965,9 @@
             <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                 <!-- Links generated by JS -->
                 <!-- (NEW) ลิงก์ Admin สำหรับ Mobile -->
-                <!-- ถูกย้ายไปสร้างใน renderDynamicNav() เพื่อให้แน่ใจว่าถูกสร้างเพียงครั้งเดียว -->
+                <a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                    <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
+                </a>
             </div>
             <!-- (REMOVED) Mobile menu buttons (History, User, VIP) removed -->
         </div>
