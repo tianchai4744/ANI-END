@@ -52,6 +52,7 @@
         .ep-button.active { 
             background-color: #00b87c !important; /* (FIX) Added !important */
             color: #fff !important; /* (FIX) Added !important */
+            box-shadow: 0 0 10px rgba(0, 184, 124, 0.5); /* เพิ่มเงาเรืองแสง */
         }
         
         /* Style สำหรับ Thumbnail ในส่วน Related/Grid View */
@@ -197,6 +198,16 @@
         .search-dropdown-item:hover {
          background-color: #374151;
      }
+     
+     /* (NEW) Style for Next/Prev buttons on mobile */
+     .nav-episode-btn {
+        background-color: #374151; /* gray-700 */
+        color: white;
+        transition: background-color 0.15s;
+     }
+     .nav-episode-btn:hover:not(:disabled) {
+        background-color: #4b5563; /* gray-600 */
+     }
 
 
     </style>
@@ -228,6 +239,7 @@
         let db, auth, userId;
         let currentShow = null;
         let currentEpisodes = [];
+        let currentEpisodeId = null; // (NEW) ID ของตอนที่กำลังเล่นอยู่
         
         // (NEW) Global State for search function
         let allShows = []; // Required for Search Functionality
@@ -243,6 +255,9 @@
         const playerContentWrapper = document.getElementById('player-content-wrapper');
         // (NEW) UI Elements for Description
         const expandDescBtn = document.getElementById('expand-desc-btn');
+        // (NEW) UI Elements for Episode Navigation
+        const prevEpisodeBtn = document.getElementById('prev-episode-btn');
+        const nextEpisodeBtn = document.getElementById('next-episode-btn');
         
         // (NEW) Search UI Elements
         let searchInput;
@@ -513,32 +528,74 @@
             }
         }
         
-        // (FIXED: MOVED UP) ฟังก์ชันเล่นวิดีโอ
+        // (MODIFIED) ฟังก์ชันเล่นวิดีโอ - อัปเดตสถานะปุ่มนำทาง
         function playEpisode(episode) {
             console.log(`Playing: ${episode.title}`, episode.embedCode);
             
             playerEmbedDiv.innerHTML = ''; 
+            currentEpisodeId = episode.id; // อัปเดต ID ตอนปัจจุบัน
             
             // ใช้ฟังก์ชัน embedVideo ที่สร้างไว้
             embedVideo(episode.embedCode);
             
             // อัปเดตชื่อเรื่องหลัก (เฉพาะตอนที่คลิกเล่น ไม่ใช่ตอนโหลดรายละเอียด)
-            // (MODIFIED) ตรวจสอบว่า currentShow มีค่าก่อน
             if (currentShow) {
                 showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
             }
             
-            // อัปเดตปุ่มที่ active
+            // อัปเดตปุ่มที่ active (ฟีเจอร์ที่ 2)
             document.querySelectorAll('.ep-button').forEach(btn => {
                 if (btn.dataset.episodeId === episode.id) {
                     btn.classList.add('active');
+                    // (NEW) เลื่อนรายการตอนให้ปุ่มที่กำลัง active อยู่ตรงกลาง
+                    btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
                 } else {
                     btn.classList.remove('active');
                 }
             });
             
+            // (NEW) อัปเดตสถานะปุ่มตอนถัดไป/ก่อนหน้า (ฟีเจอร์ที่ 1)
+            updateEpisodeNavButtons();
+            
             // (NEW) Scroll to top on episode change (for mobile usability)
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        // (NEW) ฟังก์ชันอัปเดตสถานะปุ่มนำทางตอน
+        function updateEpisodeNavButtons() {
+            const currentIndex = currentEpisodes.findIndex(ep => ep.id === currentEpisodeId);
+            
+            if (prevEpisodeBtn) {
+                 prevEpisodeBtn.disabled = currentIndex <= 0;
+                 if (prevEpisodeBtn.disabled) {
+                     prevEpisodeBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                     prevEpisodeBtn.classList.remove('hover:bg-gray-600');
+                 } else {
+                     prevEpisodeBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                     prevEpisodeBtn.classList.add('hover:bg-gray-600');
+                 }
+            }
+            
+            if (nextEpisodeBtn) {
+                 nextEpisodeBtn.disabled = currentIndex >= currentEpisodes.length - 1;
+                 if (nextEpisodeBtn.disabled) {
+                     nextEpisodeBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                     nextEpisodeBtn.classList.remove('hover:bg-gray-600');
+                 } else {
+                     nextEpisodeBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                     nextEpisodeBtn.classList.add('hover:bg-gray-600');
+                 }
+            }
+        }
+        
+        // (NEW) ฟังก์ชันนำทางตอน
+        function navigateEpisode(direction) {
+             const currentIndex = currentEpisodes.findIndex(ep => ep.id === currentEpisodeId);
+             let newIndex = currentIndex + direction;
+             
+             if (newIndex >= 0 && newIndex < currentEpisodes.length) {
+                 playEpisode(currentEpisodes[newIndex]);
+             }
         }
 
         // (FIXED: MOVED UP) แสดงปุ่มรายการตอน
@@ -556,6 +613,7 @@
             
             episodes.forEach((ep, index) => {
                 const button = document.createElement('button');
+                // (MODIFIED) ใช้คลาส ep-button เพื่อใช้ active style ที่ปรับปรุงแล้ว
                 button.className = "ep-button w-12 h-12 flex-shrink-0 bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200";
                 button.textContent = ep.episodeNumber || (index + 1);
                 button.dataset.episodeId = ep.id;
@@ -1009,6 +1067,13 @@
                 }
             });
             
+            // (NEW) Add Event Listeners for Next/Previous Buttons
+            if (prevEpisodeBtn) {
+                 prevEpisodeBtn.addEventListener('click', () => navigateEpisode(-1));
+            }
+            if (nextEpisodeBtn) {
+                 nextEpisodeBtn.addEventListener('click', () => navigateEpisode(1));
+            }
             
             initializeFirebase(); 
             // (NEW) Attach resize listener
@@ -1138,6 +1203,20 @@
                             <p class="text-gray-400">กำลังโหลดวิดีโอ...</p>
                         </div>
                     </div>
+                </div>
+                
+                <!-- (NEW) ปุ่มนำทางตอน (Next/Prev) - ด้านล่าง Player -->
+                <div class="flex justify-between items-center mb-6">
+                    <!-- ปุ่มก่อนหน้า -->
+                    <button id="prev-episode-btn" disabled class="nav-episode-btn flex items-center space-x-2 py-2 px-4 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="ri-arrow-left-s-line text-xl"></i>
+                        <span class="hidden sm:inline">ตอนก่อนหน้า</span>
+                    </button>
+                    <!-- ปุ่มถัดไป -->
+                    <button id="next-episode-btn" disabled class="nav-episode-btn flex items-center space-x-2 py-2 px-4 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span class="hidden sm:inline">ตอนถัดไป</span>
+                        <i class="ri-arrow-right-s-line text-xl"></i>
+                    </button>
                 </div>
                 
                 <!-- Show Info -->
