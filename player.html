@@ -332,23 +332,25 @@
              }
         }
         
-        // (NEW) Search Logic (Simplified version for player.html)
+        // (MODIFIED) Search Logic: Check for 'No results' before redirecting
         function handleSearchSubmit(query, isDesktop) {
              const lowerQuery = query.toLowerCase().trim();
              if (!lowerQuery) return;
              
-             // (MODIFIED) Check if the dropdown contains the 'No results' message
+             // 1. Determine which dropdown is active
              const dropdownEl = isDesktop ? searchDropdown : mobileSearchDropdown;
-             const hasNoResultsMessage = dropdownEl && dropdownEl.children.length === 1 && dropdownEl.children[0].textContent.includes('ไม่พบผลลัพธ์');
+             
+             // 2. Check if the dropdown exists, is visible, and contains the 'No results' message
+             const isDropdownVisible = dropdownEl && !dropdownEl.classList.contains('hidden');
+             const hasNoResultsMessage = isDropdownVisible && dropdownEl.children.length === 1 && dropdownEl.children[0].textContent.includes('ไม่พบผลลัพธ์');
 
              if (hasNoResultsMessage) {
-                 // (NEW) If the user explicitly submits when there are no results,
-                 // we prevent redirection and let the "No results" message stay.
+                 // If the dropdown shows 'No results', prevent redirection.
                  console.log("Search submit prevented: No results found in live search.");
                  return; 
              }
              
-             // Default behavior: redirect to index.html to perform full search
+             // 3. Default behavior: redirect to index.html to perform full search
              window.location.href = `index.html?search=${encodeURIComponent(query)}`;
         }
         
@@ -953,6 +955,7 @@
             if (searchButtonDesktop && searchInput) {
                 searchButtonDesktop.addEventListener('click', (e) => {
                     e.preventDefault();
+                    // Pass true for isDesktop
                     handleSearchSubmit(searchInput.value, true);
                 });
             }
@@ -962,6 +965,7 @@
                 searchInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault(); // Prevent default form submit (which might reload the page)
+                        // Pass true for isDesktop
                         handleSearchSubmit(searchInput.value, true);
                     }
                 });
@@ -972,6 +976,7 @@
                 mobileSearchInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault(); // Prevent default form submit (which might reload the page)
+                        // Pass false for isDesktop
                         handleSearchSubmit(mobileSearchInput.value, false);
                     }
                 });
