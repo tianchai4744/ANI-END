@@ -249,6 +249,20 @@
         let mobileSearchInput;
         let searchDropdown; // (NEW) Desktop Dropdown
         let mobileSearchDropdown;
+        
+        // (NEW FUNCTION) Thai Normalization
+        function normalizeThai(text) {
+            if (typeof text !== 'string') return text;
+            // 1. ใช้ String.prototype.normalize('NFC') เพื่อให้มั่นใจว่าอักขระที่รวมกันถูกรวมให้เป็นรูปแบบเดียว
+            // NFC = Normalization Form C (Canonical Composition)
+            let normalized = text.normalize('NFC'); 
+            
+            // 2. เนื่องจาก NFC อาจไม่ครอบคลุมการพิมพ์ผิดบางอย่าง, ให้ตรวจสอบการแทนที่แบบง่ายสำหรับ 'ำ'
+            normalized = normalized.replace(/\u0E4D\u0E32/g, '\u0E33');
+            
+            return normalized; 
+        }
+        // (END NEW FUNCTION)
 
 
         // ฟังก์ชันช่วยสำหรับอ้างอิง Collection
@@ -358,9 +372,10 @@
              }
         }
         
-        // (NEW) Live Search Dropdown Logic (Copied from index.html)
+        // (MODIFIED) Live Search Dropdown Logic
         function updateSearchDropdown(query, dropdownEl, isMobile) {
-            const lowerQuery = query.toLowerCase().trim();
+            // (MODIFIED) Normalize query and convert to lowercase
+            const normalizedQuery = normalizeThai(query).toLowerCase().trim();
             
             if (!dropdownEl) return;
             
@@ -371,14 +386,16 @@
                  return;
             }
             
-            if (lowerQuery.length < 2) {
+            // (MODIFIED) Check normalized query length
+            if (normalizedQuery.length < 2) {
                 dropdownEl.classList.add('hidden');
                 dropdownEl.innerHTML = '';
                 return;
             }
             
             const results = allShows
-                .filter(s => s.title.toLowerCase().includes(lowerQuery))
+                // (MODIFIED) Normalize show title before comparison
+                .filter(s => normalizeThai(s.title).toLowerCase().includes(normalizedQuery))
                 .slice(0, 10); 
                 
             dropdownEl.innerHTML = '';
@@ -396,7 +413,7 @@
                 // ใช้คลาส search-dropdown-item ใน CSS ที่กำหนดไว้
                 item.className = 'search-dropdown-item block p-3 text-sm font-medium text-gray-200';
                 
-                // Highlight คำที่ค้นหา
+                // Highlight คำที่ค้นหา (ใช้ query เดิมสำหรับการเน้น)
                 const highlightedTitle = show.title.replace(new RegExp(`(${query})`, 'gi'), '<span class="text-green-500 font-bold">$1</span>');
                 item.innerHTML = highlightedTitle;
                 dropdownEl.appendChild(item);
