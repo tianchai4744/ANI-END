@@ -172,20 +172,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.4);
         }
         
-        /* (MODIFIED) ลบ media query เก่าที่แก้ไขปัญหา iframe ล้นจอออก */
-        @media (max-width: 1023px) {
-             .video-aspect-wrapper {
-                padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
-                overflow-x: hidden; 
-                height: 0; 
-             }
-             #video-player-embed {
-                 position: absolute;
-                 width: 100%;
-                 height: 100%;
-             }
-        }
-
         /* (NEW) Hide scrollbar for horizontal episode list */
         #episode-list-container::-webkit-scrollbar {
             display: none; /* Hide scrollbar for WebKit */
@@ -220,7 +206,7 @@
     <!-- Firebase SDK and Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, doc, getDoc, onSnapshot, collection, query, where, getDocs,
             setLogLevel,
@@ -347,12 +333,23 @@
         }
         
         // (NEW) Search Logic (Simplified version for player.html)
-        function handleSearchSubmit(query) {
+        function handleSearchSubmit(query, isDesktop) {
              const lowerQuery = query.toLowerCase().trim();
-             if (lowerQuery) {
-                 // Redirect to index.html with search query
-                 window.location.href = `index.html?search=${encodeURIComponent(query)}`;
+             if (!lowerQuery) return;
+             
+             // (MODIFIED) Check if the dropdown contains the 'No results' message
+             const dropdownEl = isDesktop ? searchDropdown : mobileSearchDropdown;
+             const hasNoResultsMessage = dropdownEl && dropdownEl.children.length === 1 && dropdownEl.children[0].textContent.includes('ไม่พบผลลัพธ์');
+
+             if (hasNoResultsMessage) {
+                 // (NEW) If the user explicitly submits when there are no results,
+                 // we prevent redirection and let the "No results" message stay.
+                 console.log("Search submit prevented: No results found in live search.");
+                 return; 
              }
+             
+             // Default behavior: redirect to index.html to perform full search
+             window.location.href = `index.html?search=${encodeURIComponent(query)}`;
         }
         
         // (NEW) Search UI Toggles
@@ -474,30 +471,33 @@
             expandDescBtn.classList.add('hidden'); 
             expandDescBtn.dataset.expanded = 'false';
             expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
+            
+             // (REVISED) Check overflow after a slight delay to ensure rendering is complete
+            setTimeout(checkDescriptionOverflow, 150); 
         }
 
         // (FIXED: MOVED UP) ตรวจสอบปุ่ม "เพิ่มเติม" (v8 - Back to Basics, Correct Timing)
         function checkDescriptionOverflow() {
             try {
-                // ตรรกะนี้จะทำงานหลังจาก setTimeout(300)
-                // ณ จุดนี้, showDescEl *ต้องมี* 'line-clamp-2'
                 const el = showDescEl;
+                // (FIX) ต้องแน่ใจว่า Line Clamp ยังอยู่
+                el.classList.add('line-clamp-2'); 
 
-                // (REVISED) ตรวจสอบว่า el.scrollHeight (ความสูงจริง)
-                // มากกว่า el.clientHeight (ความสูงที่ถูกบีบ)
-                
-                // (FIX) เพิ่ม 1px tolerance สำหรับความคลาดเคลื่อนของเบราว์เซอร์
+                // ตรวจสอบว่า el.scrollHeight (ความสูงจริง) มากกว่า el.clientHeight (ความสูงที่ถูกบีบ)
+                // เพิ่ม 1px tolerance สำหรับความคลาดเคลื่อนของเบราว์เซอร์
                 const isOverflowing = el.scrollHeight > (el.clientHeight + 1);
 
-                console.log(`(Final Check @ 300ms) ClientHeight: ${el.clientHeight}px, ScrollHeight: ${el.scrollHeight}px, IsOverflowing: ${isOverflowing}`);
+                console.log(`(Final Check) ClientHeight: ${el.clientHeight}px, ScrollHeight: ${el.scrollHeight}px, IsOverflowing: ${isOverflowing}`);
 
                 if (isOverflowing) {
                     // ถ้าข้อความล้นจริง -> แสดงปุ่ม
                     expandDescBtn.classList.remove('hidden');
+                    expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>'; // Ensure it shows "เพิ่มเติม"
                 } else {
                     // ถ้าข้อความไม่ล้น (สั้น 1-2 บรรทัด)
                     // เอา line-clamp-2 ออก
                     el.classList.remove('line-clamp-2');
+                    expandDescBtn.classList.add('hidden'); 
                 }
             } catch (error) {
                 console.error("Error calculating description lines:", error);
@@ -527,6 +527,9 @@
                     btn.classList.remove('active');
                 }
             });
+            
+            // (NEW) Scroll to top on episode change (for mobile usability)
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         // (FIXED: MOVED UP) แสดงปุ่มรายการตอน
@@ -610,26 +613,28 @@
             relatedListContainer.innerHTML = `<p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>`;
             
             try {
-                let relatedQuery;
                 let relatedShows = [];
                 // (MODIFIED) 15 items (3 rows * 5 columns)
                 const maxDisplay = 15; 
 
                 if (tags && tags.length > 0) {
                     // 1. ถ้ามี Tags ให้ค้นหาอนิเมะที่มี tag ตรงกัน (ดึงทั้งหมด)
-                    relatedQuery = query(getCollectionRef("shows"), where("tags", "array-contains-any", tags));
-                    const querySnapshot = await getDocs(relatedQuery);
+                    // Note: array-contains-any requires an index in real Firestore, but for a simple demo and small dataset, fetching all might be acceptable.
+                    // For performance, we limit to 30 and shuffle/slice.
+                    const allShowsSnapshot = await getDocs(query(getCollectionRef("shows"), limit(30)));
                     
-                    querySnapshot.forEach((doc) => {
-                        // กรองเรื่องปัจจุบันออก
-                        if (currentShow && doc.id !== currentShow.id) { 
-                            relatedShows.push({ id: doc.id, ...doc.data() });
+                    allShowsSnapshot.forEach((doc) => {
+                        const show = { id: doc.id, ...doc.data() };
+                        // Check if show has any matching tag AND is not the current show
+                        const hasMatchingTag = tags.some(tag => (show.tags || []).includes(tag));
+                        if (currentShow && doc.id !== currentShow.id && hasMatchingTag) { 
+                            relatedShows.push(show);
                         }
                     });
                 } else {
                     // 2. ถ้าไม่มี Tags (หน้า Error) ให้ดึงเรื่องแนะนำทั่วไป (เรียงตาม ViewCount)
                     // (MODIFIED) จำกัดเป็น maxDisplay (15)
-                    relatedQuery = query(getCollectionRef("shows"), orderBy("viewCount", "desc"), limit(maxDisplay));
+                    const relatedQuery = query(getCollectionRef("shows"), orderBy("viewCount", "desc"), limit(maxDisplay));
                     const querySnapshot = await getDocs(relatedQuery);
                     
                     querySnapshot.forEach((doc) => {
@@ -649,7 +654,7 @@
                 
                 // (MODIFIED) ตั้งค่า Container ให้เป็น Grid 2-5 คอลัมน์ (Responsive)
                 // grid-cols-2 (mobile), md:grid-cols-3 (tablet), lg:grid-cols-5 (desktop)
-                relatedListContainer.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4';
+                relatedListContainer.className = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-4';
                 relatedListContainer.innerHTML = ''; // Clear loading text
 
                 relatedShows.forEach(show => {
@@ -664,6 +669,7 @@
         
         // (FIXED: MOVED UP) แสดงรายการ 10 อันดับยอดนิยม
         async function renderTop10List() {
+            if (!top10ListContainer) return;
             top10ListContainer.innerHTML = '';
             
             try {
@@ -720,7 +726,8 @@
             const completedTag = isCompleted ? ' <span class="text-sm text-green-400 font-medium">(จบแล้ว)</span>' : '';
 
             if (isDub) {
-                 displayTitle = displayTitle.replace(/\s*\(พากย์ไทย\)\s*$/, '').trim(); // ลบ (พากย์ไทย) ที่ท้ายชื่อ
+                 // ใช้ RegEx เพื่อลบ "(พากย์ไทย)" ที่อาจมีวงเล็บ หรือไม่มีวงเล็บก็ได้
+                 displayTitle = displayTitle.replace(/\s*\(?พากย์ไทย\)?\s*$/, '').trim(); 
                  // (MODIFIED) เปลี่ยนเป็นแค่ Tag Text เล็กๆ แทน Rating
                  dubBadge = ' <span class="text-sm text-red-400 font-medium">(พากย์ไทย)</span>';
             }
@@ -847,8 +854,7 @@
                     renderShowDetails(currentShow);
                 }
                 
-                // (REVISED) ใช้ setTimeout ที่นานขึ้น (300ms) เพื่อรอให้ layout paint เสร็จ
-                checkDescriptionOverflow(); 
+                // checkDescriptionOverflow is now called inside renderShowDetails after a delay.
                 
                 syncEpisodeListHeight(); 
             }
@@ -884,7 +890,14 @@
 
         async function signIn() {
             try {
-                await signInAnonymously(auth);
+                 // NOTE: Using signInAnonymously if __initial_auth_token is not available (as per rules)
+                 // Since this environment doesn't provide it easily, we use anonymous sign-in directly.
+                const __initial_auth_token = ""; // Placeholder/mock
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token.length > 0) {
+                     await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                     await signInAnonymously(auth);
+                }
             } catch (error) {
                 console.error("Sign In Error:", error);
             }
@@ -921,6 +934,7 @@
                  mobileSearchBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     toggleMobileSearch(true); // เปิดแถบค้นหา
+                    if (mobileMenu) mobileMenu.classList.add('hidden'); // ซ่อน Mobile Menu
                     if (searchDropdown) searchDropdown.classList.add('hidden'); // (NEW) ซ่อน Desktop Dropdown
                  });
             }
@@ -937,17 +951,30 @@
             const searchButtonDesktop = document.getElementById('search-button-desktop');
             
             if (searchButtonDesktop && searchInput) {
-                searchButtonDesktop.addEventListener('click', () => handleSearchSubmit(searchInput.value));
+                searchButtonDesktop.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    handleSearchSubmit(searchInput.value, true);
+                });
             }
             if (searchInput) {
                 // (MODIFIED) Add Live Search Listener
                 searchInput.addEventListener('input', handleSearchInput);
-                searchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(searchInput.value));
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // Prevent default form submit (which might reload the page)
+                        handleSearchSubmit(searchInput.value, true);
+                    }
+                });
             }
             if (mobileSearchInput) {
                 // (MODIFIED) Add Live Search Listener
                 mobileSearchInput.addEventListener('input', handleSearchInput);
-                mobileSearchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(mobileSearchInput.value));
+                mobileSearchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // Prevent default form submit (which might reload the page)
+                        handleSearchSubmit(mobileSearchInput.value, false);
+                    }
+                });
             }
             
             
@@ -982,7 +1009,7 @@
                 if (isExpanded) {
                     // Collapse it
                     showDescEl.classList.add('line-clamp-2');
-                    expandDescBtn.innerHTML = 'ย่อ <i class="ri-arrow-up-s-line align-middle"></i>';
+                    expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
                     expandDescBtn.dataset.expanded = 'false';
                 } else {
                     // Expand it
@@ -1071,7 +1098,6 @@
                 <a href="index.html?page=อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
                 <a href="index.html?page=อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
                 <a href="index.html?page=อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
-                <!-- (REMOVED) Admin Link removed -->
             </div>
         </div>
         
@@ -1112,7 +1138,7 @@
                         <p id="show-description" class="text-gray-300 transition-all duration-200 line-clamp-2">...</p>
                         
                         <!-- (NEW) Expand/Collapse Button -->
-                        <button id="expand-desc-btn" class="text-green-400 hover:text-green-300 font-medium text-sm mt-1 hidden items-center">
+                        <button id="expand-desc-btn" class="text-green-400 hover:text-green-300 font-medium text-sm mt-1 hidden flex items-center">
                             เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>
                         </button>
                     </div>
