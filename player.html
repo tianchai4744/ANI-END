@@ -337,10 +337,8 @@
              const lowerQuery = query.toLowerCase().trim();
              if (!lowerQuery) return;
              
-             // 1. Determine which dropdown is active (Not needed for the new logic, but kept for context)
-             // const dropdownEl = isDesktop ? searchDropdown : mobileSearchDropdown;
-             
-             // 2. We remove the check for 'No results' to ensure redirection happens
+             // *** REMOVED CHECK FOR 'NO RESULTS' TO ALWAYS REDIRECT ***
+             // This ensures that even if live search finds no result, the full search is performed on index.html.
              
              // 3. Always redirect to index.html to perform full search and display "No results" there if necessary.
              window.location.href = `index.html?search=${encodeURIComponent(query)}`;
