@@ -232,17 +232,23 @@
         // (NEW) Global State for search function
         let allShows = []; // Required for Search Functionality
 
-        // UI Elements
-        const playerEmbedDiv = document.getElementById('video-player-embed');
-        const showTitleEl = document.getElementById('show-title');
-        const showDescEl = document.getElementById('show-description');
-        const episodeListContainer = document.getElementById('episode-list-container');
-        const relatedListContainer = document.getElementById('related-list-container'); 
-        const top10ListContainer = document.getElementById('top10-list-container'); 
-        const loadingPlayer = document.getElementById('loading-player');
-        const playerContentWrapper = document.getElementById('player-content-wrapper');
-        // (NEW) UI Elements for Description
-        const expandDescBtn = document.getElementById('expand-desc-btn');
+        // (FIX) UI Elements - Declare with 'let'
+        let playerEmbedDiv;
+        let showTitleEl;
+        let showDescEl;
+        let episodeListContainer;
+        let relatedListContainer; 
+        let top10ListContainer; 
+        let loadingPlayer;
+        let playerContentWrapper;
+        let expandDescBtn;
+        
+        // (NEW) UI Elements for Nav Buttons
+        let prevEpisodeBtn;
+        let nextEpisodeBtn;
+        
+        // (NEW) Global State for Nav
+        let currentEpisodeIndex = -1;
         
         // (NEW) Search UI Elements
         let searchInput;
@@ -439,6 +445,25 @@
             }
         }
 
+        // (NEW FUNCTION) Update Next/Prev Button States
+        function updateNavButtonStates() {
+            if (!prevEpisodeBtn || !nextEpisodeBtn) return;
+
+            // Disable PREV if it's the first episode or index is invalid
+            if (currentEpisodeIndex <= 0) {
+                prevEpisodeBtn.disabled = true;
+            } else {
+                prevEpisodeBtn.disabled = false;
+            }
+
+            // Disable NEXT if it's the last episode or index is invalid
+            if (currentEpisodeIndex < 0 || currentEpisodeIndex >= currentEpisodes.length - 1) {
+                nextEpisodeBtn.disabled = true;
+            } else {
+                nextEpisodeBtn.disabled = false;
+            }
+        }
+
 
         // (FIXED: MOVED UP) ฟังก์ชันสำหรับคำนวณความสูงของ Episode List ให้เท่ากับ Video Player
         function syncEpisodeListHeight() {
@@ -513,7 +538,7 @@
             }
         }
         
-        // (FIXED: MOVED UP) ฟังก์ชันเล่นวิดีโอ
+        // (MODIFIED) ฟังก์ชันเล่นวิดีโอ
         function playEpisode(episode) {
             console.log(`Playing: ${episode.title}`, episode.embedCode);
             
@@ -536,6 +561,11 @@
                     btn.classList.remove('active');
                 }
             });
+            
+            // (NEW) Update current index and nav button states
+            currentEpisodeIndex = currentEpisodes.findIndex(ep => ep.id === episode.id);
+            console.log("Current episode index:", currentEpisodeIndex);
+            updateNavButtonStates();
             
             // (NEW) Scroll to top on episode change (for mobile usability)
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -793,6 +823,9 @@
                     // หากไม่มี showId เราจะไม่สามารถหา Related List ได้
                     await renderRelatedList([]);
 
+                    // (NEW) Disable nav buttons on error
+                    currentEpisodeIndex = -1;
+                    updateNavButtonStates();
                     return; // หยุดการโหลดข้อมูลเฉพาะอนิเมะ
                 }
 
@@ -806,6 +839,10 @@
                     
                     playerContentWrapper.classList.remove('hidden');
                     loadingPlayer.classList.add('hidden');
+                    
+                    // (NEW) Disable nav buttons on error
+                    currentEpisodeIndex = -1;
+                    updateNavButtonStates();
                     return;
                 }
                 
@@ -847,6 +884,9 @@
                     playEpisode(currentEpisodes[0]);
                 } else {
                     playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับอนิเมะนี้</p>`;
+                    // (NEW) Ensure buttons are disabled if no episodes
+                    currentEpisodeIndex = -1; // Reset index
+                    updateNavButtonStates(); 
                 }
                 
                 
@@ -912,7 +952,39 @@
             }
         }
         
+        // (NEW) Helper function for Nav Buttons
+        function handlePrevEpisode() {
+            if (currentEpisodeIndex > 0) {
+                const prevEpisode = currentEpisodes[currentEpisodeIndex - 1];
+                playEpisode(prevEpisode);
+            }
+        }
+
+        function handleNextEpisode() {
+            if (currentEpisodeIndex < currentEpisodes.length - 1) {
+                const nextEpisode = currentEpisodes[currentEpisodeIndex + 1];
+                playEpisode(nextEpisode);
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
+
+            // (FIX) Assign UI Elements now that DOM is loaded
+            playerEmbedDiv = document.getElementById('video-player-embed');
+            showTitleEl = document.getElementById('show-title');
+            showDescEl = document.getElementById('show-description');
+            episodeListContainer = document.getElementById('episode-list-container');
+            relatedListContainer = document.getElementById('related-list-container');
+            top10ListContainer = document.getElementById('top10-list-container');
+            loadingPlayer = document.getElementById('loading-player');
+            playerContentWrapper = document.getElementById('player-content-wrapper');
+            expandDescBtn = document.getElementById('expand-desc-btn');
+            prevEpisodeBtn = document.getElementById('prev-episode-btn');
+            nextEpisodeBtn = document.getElementById('next-episode-btn');
+            searchInput = document.getElementById('search-input-desktop');
+            mobileSearchInput = document.getElementById('mobile-search-input');
+            searchDropdown = document.getElementById('search-dropdown');
+            mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
             
             // (NEW) Mobile Menu Event Listeners Setup
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
@@ -923,10 +995,13 @@
             const mobileSearchBar = document.getElementById('mobile-search-bar');
             const mobileCloseSearchBtn = document.getElementById('mobile-close-search');
             
-            searchInput = document.getElementById('search-input-desktop');
-            mobileSearchInput = document.getElementById('mobile-search-input');
-            searchDropdown = document.getElementById('search-dropdown'); // (NEW)
-            mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
+            // (REMOVED) Assignments moved up
+            // searchInput = document.getElementById('search-input-desktop');
+            // mobileSearchInput = document.getElementById('mobile-search-input');
+            // searchDropdown = document.getElementById('search-dropdown'); // (NEW)
+            // mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
+            // prevEpisodeBtn = document.getElementById('prev-episode-btn');
+            // nextEpisodeBtn = document.getElementById('next-episode-btn');
 
 
             if (mobileMenuBtn && mobileMenu) {
@@ -1014,22 +1089,30 @@
             // (NEW) Attach resize listener
             window.addEventListener('resize', syncEpisodeListHeight);
 
+            // (NEW) Event Listeners for Nav Buttons
+            if (prevEpisodeBtn && nextEpisodeBtn) {
+                 prevEpisodeBtn.addEventListener('click', handlePrevEpisode);
+                 nextEpisodeBtn.addEventListener('click', handleNextEpisode);
+            }
+
             // (NEW) Event Listener for Expand/Collapse Button
-            expandDescBtn.addEventListener('click', () => {
-                const isExpanded = expandDescBtn.dataset.expanded === 'true';
-                
-                if (isExpanded) {
-                    // Collapse it
-                    showDescEl.classList.add('line-clamp-2');
-                    expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
-                    expandDescBtn.dataset.expanded = 'false';
-                } else {
-                    // Expand it
-                    showDescEl.classList.remove('line-clamp-2');
-                    expandDescBtn.innerHTML = 'ย่อ <i class="ri-arrow-up-s-line align-middle"></i>';
-                    expandDescBtn.dataset.expanded = 'true';
-                }
-            });
+            if(expandDescBtn) { // (FIX) Add null check
+                expandDescBtn.addEventListener('click', () => {
+                    const isExpanded = expandDescBtn.dataset.expanded === 'true';
+                    
+                    if (isExpanded) {
+                        // Collapse it
+                        showDescEl.classList.add('line-clamp-2');
+                        expandDescBtn.innerHTML = 'เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>';
+                        expandDescBtn.dataset.expanded = 'false';
+                    } else {
+                        // Expand it
+                        showDescEl.classList.remove('line-clamp-2');
+                        expandDescBtn.innerHTML = 'ย่อ <i class="ri-arrow-up-s-line align-middle"></i>';
+                        expandDescBtn.dataset.expanded = 'true';
+                    }
+                });
+            }
         });
 
     </script>
@@ -1131,7 +1214,7 @@
             <!-- 1. Player & Info (วิดีโอและรายละเอียด) -->
             <div class="w-full lg:w-[calc(66.666%-12px)] order-1 lg:order-1">
                 <!-- Responsive Video Player Wrapper -->
-                <div class="video-aspect-wrapper rounded-lg overflow-hidden mb-4">
+                <div class="video-aspect-wrapper rounded-lg overflow-hidden"> <!-- (MODIFIED) Removed mb-4 -->
                     <div id="video-player-embed">
                         <!-- Initial Loading state for player -->
                         <div class="w-full h-full flex items-center justify-center bg-black">
@@ -1140,8 +1223,20 @@
                     </div>
                 </div>
                 
+                <!-- (NEW) Next/Previous Buttons -->
+                <div id="video-nav-buttons" class="flex justify-between mt-1"> <!-- (MODIFIED) Changed mt-2 to mt-1 -->
+                    <button id="prev-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="ri-arrow-left-s-line mr-1"></i>
+                        ตอนก่อนหน้า
+                    </button>
+                    <button id="next-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        ตอนถัดไป
+                        <i class="ri-arrow-right-s-line ml-1"></i>
+                    </button>
+                </div>
+                
                 <!-- Show Info -->
-                <div class="text-white mb-6">
+                <div class="text-white mb-6 mt-4"> <!-- (MODIFIED) Added mt-4 for spacing -->
                     <h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
                     
                     <!-- (MODIFIED) Description Container -->
@@ -1160,7 +1255,7 @@
             <!-- 2. รายการตอน (Episodes List) - ลำดับ 2 บนมือถือ -->
             <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-2 lg:order-2">
                 <section class="bg-gray-800 rounded-lg p-4">
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
+                    <h3 class_section="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
                     <div id="episode-list-container" class="flex flex-wrap gap-2">
                         <!-- Episode buttons injected by JS -->
                         <p class="text-gray-400">กำลังโหลดตอน...</p>
