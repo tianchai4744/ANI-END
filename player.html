@@ -332,25 +332,17 @@
              }
         }
         
-        // (MODIFIED) Search Logic: Check for 'No results' before redirecting
+        // (MODIFIED) Search Logic: Always redirect to index.html with the query
         function handleSearchSubmit(query, isDesktop) {
              const lowerQuery = query.toLowerCase().trim();
              if (!lowerQuery) return;
              
-             // 1. Determine which dropdown is active
-             const dropdownEl = isDesktop ? searchDropdown : mobileSearchDropdown;
+             // 1. Determine which dropdown is active (Not needed for the new logic, but kept for context)
+             // const dropdownEl = isDesktop ? searchDropdown : mobileSearchDropdown;
              
-             // 2. Check if the dropdown exists, is visible, and contains the 'No results' message
-             const isDropdownVisible = dropdownEl && !dropdownEl.classList.contains('hidden');
-             const hasNoResultsMessage = isDropdownVisible && dropdownEl.children.length === 1 && dropdownEl.children[0].textContent.includes('ไม่พบผลลัพธ์');
-
-             if (hasNoResultsMessage) {
-                 // If the dropdown shows 'No results', prevent redirection.
-                 console.log("Search submit prevented: No results found in live search.");
-                 return; 
-             }
+             // 2. We remove the check for 'No results' to ensure redirection happens
              
-             // 3. Default behavior: redirect to index.html to perform full search
+             // 3. Always redirect to index.html to perform full search and display "No results" there if necessary.
              window.location.href = `index.html?search=${encodeURIComponent(query)}`;
         }
         
@@ -394,7 +386,7 @@
             dropdownEl.innerHTML = '';
             
             if (results.length === 0) {
-                // (MODIFIED) Display "No results" message
+                // (MODIFIED) Display "No results" message (This remains for the live feedback)
                 dropdownEl.innerHTML = '<a class="block p-3 text-sm text-gray-400">ไม่พบผลลัพธ์</a>';
                 dropdownEl.classList.remove('hidden'); // Show the "No result" message
                 return;
