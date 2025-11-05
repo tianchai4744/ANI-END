@@ -414,7 +414,7 @@
             if (latestShows.length > 0) {
                  sectionsContainer.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up' }));
             } else {
-                sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลซีรีส์ในระบบ</p>`;
+                sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
             }
 
             // อัปเดต Swiper ที่มีอยู่สำหรับ Carousels
@@ -585,7 +585,7 @@
                 currentRenderedIndex = endIndex;
             } else if (currentRenderedIndex === 0) {
                  // No shows found at all
-                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบซีรีส์สำหรับ "${currentGridTag}"</p>`;
+                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
             }
 
             // Update Load More Button visibility
@@ -935,7 +935,7 @@
             
             <div id="sections-container">
                 <div class="loading-placeholder bg-gray-800 rounded-lg p-4">
-                        <p class="text-gray-400">กำลังโหลดซีรีส์...</p>
+                        <p class="text-gray-400">กำลังโหลดอนิเมะ...</p>
                 </div>
             </div>
         </div>
