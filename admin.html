@@ -14,6 +14,22 @@
         }
         .modal { display: none; }
         .modal.flex { display: flex; }
+
+        /* (NEW) Switch toggle styles */
+        .switch-bg {
+            background-color: #4b5563; /* gray-600 */
+            transition: background-color 0.2s ease-in-out;
+        }
+        .switch-bg.toggled {
+            background-color: #dc2626; /* red-600 */
+        }
+        .switch-dot {
+            transform: translateX(0.25rem); /* 4px */
+            transition: transform 0.2s ease-in-out;
+        }
+        .switch-dot.toggled {
+            transform: translateX(1.5rem); /* 24px */
+        }
     </style>
 </head>
 <body class="text-gray-100">
@@ -80,6 +96,11 @@
         const episodeNumberInput = document.getElementById('episode-number');
         const episodeEmbedInput = document.getElementById('episode-embed-code');
         const episodeShowSelect = document.getElementById('episode-show-select');
+        // const episodeStatusSelect = document.getElementById('episode-status-select'); // (REMOVED)
+        const episodeStatusToggle = document.getElementById('episode-status-toggle'); // (NEW)
+        const episodeStatusDot = document.getElementById('episode-status-dot'); // (NEW)
+        const episodeStatusLabel = document.getElementById('episode-status-label'); // (NEW)
+        const episodeStatusValue = document.getElementById('episode-status-value'); // (NEW)
         const closeEpisodeModalBtn = document.getElementById('close-episode-modal');
         const addEpisodeBtn = document.getElementById('add-episode-btn');
         const deleteEpisodeBtn = document.getElementById('delete-episode-btn');
@@ -276,7 +297,10 @@
                 snapshot.docChanges().forEach((change) => {
                     if (change.doc.data().showId) {
                         // NOTE: Only trigger update on added, modified, or removed documents
-                        if (change.type !== 'modified' || change.doc.data().episodeNumber !== change.oldDoc.data().episodeNumber) {
+                        // (MODIFIED) เพิ่มการตรวจสอบ status change ด้วย
+                        if (change.type !== 'modified' || 
+                            change.doc.data().episodeNumber !== change.oldDoc.data().episodeNumber ||
+                            change.doc.data().status !== change.oldDoc.data().status) {
                              changedShowIds.add(change.doc.data().showId);
                         }
                     }
@@ -540,6 +564,29 @@
         // --- END MODIFIED FUNCTION ---
 
 
+        // (NEW) Helper function to control the switch toggle
+        function updateSwitchToggle(status) {
+            if (!episodeStatusToggle || !episodeStatusDot || !episodeStatusLabel || !episodeStatusValue) return;
+
+            if (status === 'broken') {
+                episodeStatusToggle.classList.add('toggled');
+                episodeStatusToggle.setAttribute('aria-checked', 'true');
+                episodeStatusDot.classList.add('toggled');
+                episodeStatusLabel.textContent = 'เสีย (Broken)';
+                episodeStatusLabel.classList.remove('text-green-500');
+                episodeStatusLabel.classList.add('text-red-500');
+                episodeStatusValue.value = 'broken';
+            } else { // Default to 'active'
+                episodeStatusToggle.classList.remove('toggled');
+                episodeStatusToggle.setAttribute('aria-checked', 'false');
+                episodeStatusDot.classList.remove('toggled');
+                episodeStatusLabel.textContent = 'ปกติ (Active)';
+                episodeStatusLabel.classList.remove('text-red-500');
+                episodeStatusLabel.classList.add('text-green-500');
+                episodeStatusValue.value = 'active';
+            }
+        }
+
         // --- Episode (ตอน) Modal Logic ---
         function openEpisodeModal(mode, episodeData = {}, episodeId = null) {
             currentEditingId = episodeId;
@@ -550,12 +597,16 @@
                 // (NEW) ตั้งค่าเริ่มต้น
                 if (episodeShowSelect) episodeShowSelect.value = '';
                 if (episodeEmbedInput) episodeEmbedInput.value = '';
+                // if (episodeStatusSelect) episodeStatusSelect.value = 'active'; // (REMOVED)
+                updateSwitchToggle('active'); // (MODIFIED) Set default status
             } else {
                 if (episodeModalTitle) episodeModalTitle.textContent = "แก้ไขตอน";
                 if (episodeTitleInput) episodeTitleInput.value = episodeData.title || '';
                 if (episodeNumberInput) episodeNumberInput.value = episodeData.episodeNumber || '';
                 if (episodeEmbedInput) episodeEmbedInput.value = episodeData.embedCode || '';
                 if (episodeShowSelect) episodeShowSelect.value = episodeData.showId || '';
+                // if (episodeStatusSelect) episodeStatusSelect.value = episodeData.status || 'active'; // (REMOVED)
+                updateSwitchToggle(episodeData.status || 'active'); // (MODIFIED) Load saved status
                 if (deleteEpisodeBtn) deleteEpisodeBtn.classList.remove('hidden');
             }
             if (episodeModal) episodeModal.classList.add('flex');
@@ -576,7 +627,8 @@
                     episodeNumber: parseInt(episodeNumberInput.value, 10) || 0,
                     embedCode: embedCodeToSave, // ใช้โค้ดที่แปลงแล้ว
                     showId: episodeShowSelect.value,
-                    status: 'active', // (NEW) ตั้งสถานะเริ่มต้นเป็น 'active'
+                    // status: episodeStatusSelect.value, // (REMOVED)
+                    status: episodeStatusValue.value, // (MODIFIED) Get status from hidden input
                     updatedAt: serverTimestamp()
                 };
 
@@ -738,6 +790,14 @@
                     } else {
                         episodeTitleInput.value = '';
                     }
+                });
+            }
+            
+            // (NEW) Event listener for status switch toggle
+            if (episodeStatusToggle) {
+                episodeStatusToggle.addEventListener('click', () => {
+                    const newValue = episodeStatusValue.value === 'active' ? 'broken' : 'active';
+                    updateSwitchToggle(newValue);
                 });
             }
             
@@ -920,79 +980,18 @@
                         <input type="text" id="episode-title" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="เช่น ตอนที่ 1: การเริ่มต้น" required>
                     </div>
                     
+                    <!-- (MODIFIED) Status Switch Toggle -->
                     <div>
-                        <label for="episode-embed-code" class="block text-sm font-medium text-gray-300 mb-1">ลิงก์วิดีโอ (URL) หรือ Embed Code *</label>
-                        <textarea id="episode-embed-code" rows="4" placeholder="เช่น https://ok.ru/video/7229912320757 หรือ https://youtu.be/..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
-                    </div>
-
-                </div>
-                <div class="flex items-center justify-between p-5 border-t border-gray-700">
-                    <button type="button" id="delete-episode-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg hidden">
-                        ลบตอน
-                    </button>
-                    <button type="submit" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg">
-                        บันทึก
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal for Adding/Editing Show -->
-    <div id="show-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
-        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <form id="show-form">
-                <div class="flex justify-between items-center p-5 border-b border-gray-700">
-                    <h3 id="show-modal-title" class="text-2xl font-bold text-white">เพิ่มอนิเมะใหม่</h3>
-                    <button type="button" id="close-show-modal" class="text-gray-400 hover:text-white">
-                        <i class="ri-close-line text-2xl"></i>
-                    </button>
-                </div>
-                <div class="p-6 space-y-4">
-                    <div>
-                        <label for="show-title" class="block text-sm font-medium text-gray-300 mb-1">ชื่อเรื่อง (Title) *</label>
-                        <input type="text" id="show-title" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                    </div>
-                    <div>
-                        <label for="show-description" class="block text-sm font-medium text-gray-300 mb-1">คำอธิบาย (Description)</label>
-                        <textarea id="show-description" rows="3" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                    </div>
-                    <div>
-                        <label for="show-thumbnail" class="block text-sm font-medium text-gray-300 mb-1">URL รูปปก (Thumbnail) *</label>
-                        <input type="url" id="show-thumbnail" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                    </div>
-                    
-                    <!-- (NEW) View Count Input -->
-                    <div>
-                        <label for="show-view-count" class="block text-sm font-medium text-gray-300 mb-1">ยอดเข้าชม (View Count)</label>
-                        <input type="number" id="show-view-count" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="0">
-                    </div>
-                    
-                    <!-- (MODIFIED/NEW) Checkbox สำหรับสถานะจบ -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-1">สถานะ</label>
-                        <div class="flex items-center space-x-2">
-                             <!-- Checkbox ตรงตามภาพที่แนบมา -->
-                            <input type="checkbox" id="show-completed-checkbox" class="h-5 w-5 bg-gray-700 border-gray-600 rounded text-green-500 focus:ring-green-500">
-                            <label for="show-completed-checkbox" class="text-gray-200">จบแล้ว (Completed)</label>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-1">Tags</label>
-                        <div class="flex flex-wrap gap-x-6 gap-y-2 mt-2">
-                            <label class="flex items-center space-x-2 text-gray-200">
-                                <input type="checkbox" value="อนิเมะ" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
-                                <span>อนิเมะ</span>
-                            </label>
-                            <label class="flex items-center space-x-2 text-gray-200">
-                                <input type="checkbox" value="อนิเมะจีน" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
-                                <span>อนิเมะจีน</span>
-                            </label>
-                            <label class="flex items-center space-x-2 text-gray-200">
-                                <input type="checkbox" value="อนิเมะพากย์ไทย" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
-                                <span>อนิเมะพากย์ไทย</span>
-                            </label>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">สถานะ (Status)</label>
+                        <div class="flex items-center space-x-3">
+                            <!-- Hidden input to store value -->
+                            <input type="hidden" id="episode-status-value" value="active">
+                            
+                            <button type="button" id="episode-status-toggle" role="switch" aria-checked="false" class="switch-bg relative inline-flex items-center h-6 w-11 flex-shrink-0 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500">
+                                <span id="episode-status-dot" class="switch-dot inline-block h-4 w-4 transform bg-white rounded-full shadow-lg transition-transform duration-200 ease-in-out"></span>
+                            </button>
+                            
+                            <span id="episode-status-label" class="font-medium text-green-500">ปกติ (Active)</span>
                         </div>
                     </div>
 
