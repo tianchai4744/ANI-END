@@ -168,7 +168,7 @@
     <!-- Firebase SDK and Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, setLogLevel,
             limit, orderBy, where, startAfter, getDocs 
@@ -241,7 +241,14 @@
 
         async function signIn() {
             try {
-                await signInAnonymously(auth);
+                 // NOTE: Using signInAnonymously if __initial_auth_token is not available (as per rules)
+                 // Since this environment doesn't provide it easily, we use anonymous sign-in directly.
+                const __initial_auth_token = ""; // Placeholder/mock
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token.length > 0) {
+                     await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                     await signInAnonymously(auth);
+                }
             } catch (error) {
                 console.error("Sign In Error:", error);
             }
@@ -284,7 +291,9 @@
                 
             }, (error) => {
                 console.error("Error listening to shows:", error);
-                sectionsContainer.innerHTML = `<p class="text-center text-red-500">ไม่สามารถโหลดข้อมูลได้</p>`;
+                if (sectionsContainer) {
+                    sectionsContainer.innerHTML = `<p class="text-center text-red-500">ไม่สามารถโหลดข้อมูลได้</p>`;
+                }
             });
 
             // 2. Listener for Banners (แยกออกมา)
@@ -324,6 +333,10 @@
                 desktopNavLinks.innerHTML += link;
                 mobileNavLinks.innerHTML += mobileLink;
             });
+            
+             // (NEW) ลิงก์ Admin สำหรับ Mobile (เพิ่มกลับมาอีกครั้งเพื่อให้ครบ)
+            const adminLinkMobile = `<a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"><i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน</a>`;
+            mobileNavLinks.innerHTML += adminLinkMobile;
         }
 
         function renderHeroSlider(banners) {
@@ -372,6 +385,7 @@
         }
 
         function renderSections() {
+            if (!sectionsContainer) return;
             sectionsContainer.innerHTML = ''; 
             
             // 1. "10 อันดับอนิเมะยอดนิยม"
@@ -404,16 +418,16 @@
             // 5. "อนิเมะอัปเดตใหม่" (จัดเรียงตามวันที่สร้างใหม่ล่าสุด 20 เรื่อง)
             const latestShows = [...allShows]
                 .sort((a, b) => {
-                    // (MODIFIED) เปลี่ยนจาก b.updatedAt เป็น b.createdAt เพื่อเรียงตามเรื่องที่เพิ่มเข้ามาใหม่เท่านั้น
-                    const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
-                    const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
+                    // Firestore Timestamps need to be converted to milliseconds for comparison if they are not native objects
+                    const timeA = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : 0) : 0;
+                    const timeB = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : 0) : 0;
                     return timeB - timeA; // เรียงจากเวลาสร้างล่าสุด (มากที่สุด) ไปยังเวลาเก่าที่สุด (น้อยที่สุด)
                 })
                 .slice(0, 20); 
 
             if (latestShows.length > 0) {
                  sectionsContainer.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up' }));
-            } else {
+            } else if(allShows.length === 0) {
                 sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
             }
 
@@ -538,9 +552,9 @@
                 .filter(s => (s.tags || []).includes(tag))
                 // (MODIFIED) เปลี่ยนตรรกะการจัดเรียง: เรียงตาม 'updatedAt' จากมากไปน้อย (ล่าสุดก่อน)
                 .sort((a, b) => {
-                    // Firestore Timestamp ถูกแปลงเป็น Object ธรรมดาเมื่อโหลด
-                    const timeA = a.updatedAt ? a.updatedAt.toMillis() : 0;
-                    const timeB = b.updatedAt ? b.updatedAt.toMillis() : 0;
+                    // Firestore Timestamps need to be converted to milliseconds for comparison if they are not native objects
+                    const timeA = a.updatedAt ? (a.updatedAt.toMillis ? a.updatedAt.toMillis() : 0) : 0;
+                    const timeB = b.updatedAt ? (b.updatedAt.toMillis ? b.updatedAt.toMillis() : 0) : 0;
                     return timeB - timeA; // เรียงจากเวลาล่าสุด (มากที่สุด) ไปยังเวลาเก่าที่สุด (น้อยที่สุด)
                 });
 
@@ -606,9 +620,6 @@
             initializeGridPaging(tag);
         }
         
-        // (MOVED & FIXED) Load More handler - ย้ายเข้า DOMContentLoaded แล้ว
-        // ลบ Event Listener ที่อยู่นอก DOMContentLoaded ออก
-        
         // (FIX) เพิ่มการตรวจสอบ URL เพื่อหลีกเลี่ยง SecurityError เมื่อใช้ replaceState
         function isSecureEnvironment() {
             // ตรวจสอบว่า URL ไม่ได้ขึ้นต้นด้วย 'blob:' หรือ 'file:'
@@ -663,7 +674,9 @@
                 .filter(s => s.title.toLowerCase().includes(lowerQuery))
                 .slice(0, 10); 
             if (results.length === 0) {
-                dropdownEl.classList.add('hidden');
+                 // (MODIFIED) Display "No results" message
+                dropdownEl.innerHTML = '<a class="block p-3 text-sm text-gray-400">ไม่พบผลลัพธ์</a>';
+                dropdownEl.classList.remove('hidden'); // Show the "No result" message
                 return;
             }
             results.forEach(show => {
@@ -683,12 +696,15 @@
             updateSearchDropdown(query, dropdownEl);
         }
         function handleSearchSubmit(query) {
-             searchDropdown.classList.add('hidden');
-             mobileSearchDropdown.classList.add('hidden');
-             if (query && mobileSearchInput.value) {
+             // (FIX) ต้องเช็คว่า dropdown elements ถูก load แล้วหรือไม่
+             if(searchDropdown) searchDropdown.classList.add('hidden');
+             if(mobileSearchDropdown) mobileSearchDropdown.classList.add('hidden');
+             
+             if (query && mobileSearchInput && mobileSearchInput.value) {
                  mobileSearchInput.value = '';
                  // (FIX) เข้าถึง Element โดยตรงเนื่องจากอาจยังไม่ได้กำหนดค่าในตัวแปร
-                 document.getElementById('mobile-search-bar').style.display = 'none'; 
+                 const mobileSearchBarEl = document.getElementById('mobile-search-bar');
+                 if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
              }
              performSearch(query);
         }
@@ -753,9 +769,8 @@
                 mobileMenuBtn.addEventListener('click', () => {
                     mobileMenu.classList.toggle('hidden');
                     // (FIX) เข้าถึง Element โดยตรงเนื่องจาก mobileSearchBar ไม่ใช่ตัวแปร global
-                    const mobileSearchBarEl = document.getElementById('mobile-search-bar');
-                    if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
-                    searchDropdown.classList.add('hidden');
+                    if (mobileSearchBar) mobileSearchBar.style.display = 'none'; 
+                    if (searchDropdown) searchDropdown.classList.add('hidden');
                 });
             }
             
@@ -764,14 +779,14 @@
                     e.preventDefault();
                     mobileSearchBar.style.display = 'flex';
                     mobileMenu.classList.add('hidden'); 
-                    searchDropdown.classList.add('hidden');
+                    if (searchDropdown) searchDropdown.classList.add('hidden');
                 });
             }
 
             if (mobileCloseSearchBtn && mobileSearchBar) {
                 mobileCloseSearchBtn.addEventListener('click', () => {
                     mobileSearchBar.style.display = 'none';
-                    mobileSearchDropdown.classList.add('hidden');
+                    if (mobileSearchDropdown) mobileSearchDropdown.classList.add('hidden');
                 });
             }
             
@@ -812,7 +827,16 @@
             // (FIX) ตรรกะตรวจสอบ URL ตอนเริ่มโหลด (ย้ายมาไว้ด้านล่าง)
             const urlParams = new URLSearchParams(window.location.search);
             const pageFromUrl = urlParams.get('page');
-            if (pageFromUrl) {
+            const searchFromUrl = urlParams.get('search'); // (NEW) Handle search query from player.html
+            
+            if (searchFromUrl) {
+                // If there's a search query, perform search immediately
+                performSearch(searchFromUrl);
+                // Clear the search input if visible
+                if (searchInput) searchInput.value = searchFromUrl;
+                if (mobileSearchInput) mobileSearchInput.value = searchFromUrl;
+                
+            } else if (pageFromUrl) {
                 currentPageId = pageFromUrl; // ตั้งค่า global state
                 console.log("Page requested from URL on load:", pageFromUrl);
                 
@@ -832,7 +856,10 @@
                          console.warn("Could not use history.replaceState on load:", e.message);
                     }
                 }
-            } 
+            } else {
+                // Ensure home view is shown on clean load
+                showPage('home');
+            }
         });
     </script>
     
@@ -845,7 +872,7 @@
                     <!-- (MODIFIED) เปลี่ยนเป็นลิงก์ตรง & ลบ nav-link, data-page -->
                     <a href="index.html" class="flex-shrink-0 flex items-center text-white">
                         <span class="font-bold text-2xl">ANI-END</span> 
-                    </a href="index.html" class="flex-shrink-0 flex items-center text-white">
+                    </a>
                     <div class="hidden md:block">
                         <div id="desktop-nav-links" class="ml-10 flex items-baseline space-x-4">
                             <!-- Links generated by JS -->
@@ -900,9 +927,7 @@
             <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                 <!-- Links generated by JS -->
                 <!-- (NEW) ลิงก์ Admin สำหรับ Mobile -->
-                <a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
-                    <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
-                </a>
+                <!-- ถูกย้ายไปสร้างใน renderDynamicNav() เพื่อให้แน่ใจว่าถูกสร้างเพียงครั้งเดียว -->
             </div>
             <!-- (REMOVED) Mobile menu buttons (History, User, VIP) removed -->
         </div>
