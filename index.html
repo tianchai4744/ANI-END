@@ -306,7 +306,7 @@
                     performSearch(currentSearchQuery); 
                     renderDynamicNav('search-results'); 
                 } else if (currentGridTag && currentPageId !== 'home') {
-                    // หากมีการอัพเดทข้อมูลในขณะที่ Grid View เปิดอยู่ ให้ re-initialize การแบ่งหน้า
+                    // หากมีการอัพทเดทข้อมูลในขณะที่ Grid View เปิดอยู่ ให้ re-initialize การแบ่งหน้า
                     console.log("Snapshot update: re-initializing Grid View for", currentGridTag);
                     renderDynamicNav(currentGridTag);
                     renderGridView(currentGridTag); 
