@@ -218,7 +218,23 @@
         
         let desktopNavLinks;
         let mobileNavLinks;
-
+        
+        // (NEW FUNCTION) Thai Normalization
+        function normalizeThai(text) {
+            if (typeof text !== 'string') return text;
+            // 1. ใช้ String.prototype.normalize('NFC') เพื่อให้มั่นใจว่าอักขระที่รวมกันถูกรวมให้เป็นรูปแบบเดียว
+            // NFC = Normalization Form C (Canonical Composition)
+            // ตัวอย่าง: U+0E4D (ไม้ไตคู้/ไม้หันอากาศ) + U+0E32 (สระอา) => U+0E33 (สระอำ)
+            let normalized = text.normalize('NFC'); 
+            
+            // 2. เนื่องจาก NFC อาจไม่ครอบคลุมการพิมพ์ผิดบางอย่าง, ให้ตรวจสอบการแทนที่แบบง่ายสำหรับ 'ำ'
+            // U+0E4D (ไม้หันอากาศ/ไม้ไต่คู้) ตามด้วย U+0E32 (สระอา) เป็น U+0E33 (สระอำ)
+            // (Note: Since NFC already handles the standard canonical composition, this is a fallback/extra check)
+            normalized = normalized.replace(/\u0E4D\u0E32/g, '\u0E33');
+            
+            return normalized; 
+        }
+        // (END NEW FUNCTION)
 
         async function initializeFirebase() {
             try {
@@ -684,15 +700,17 @@
 
         // --- Live Search (No pagination needed for small dropdown) ---
         function updateSearchDropdown(query, dropdownEl) {
-            const lowerQuery = query.toLowerCase().trim();
+            // (MODIFIED) Normalize query
+            const normalizedQuery = normalizeThai(query).toLowerCase().trim();
             dropdownEl.innerHTML = '';
             
-            if (lowerQuery.length < 2) {
+            if (normalizedQuery.length < 2) {
                 dropdownEl.classList.add('hidden');
                 return;
             }
             const results = allShows
-                .filter(s => s.title.toLowerCase().includes(lowerQuery))
+                // (MODIFIED) Normalize show title before comparison
+                .filter(s => normalizeThai(s.title).toLowerCase().includes(normalizedQuery))
                 .slice(0, 10); 
             if (results.length === 0) {
                 dropdownEl.innerHTML = '<a class="block p-3 text-sm text-gray-400">ไม่พบผลลัพธ์</a>';
@@ -703,6 +721,9 @@
                 const item = document.createElement('a');
                 item.href = `player.html?id=${show.id}`;
                 item.className = 'search-dropdown-item block p-3 text-sm font-medium text-gray-200';
+                
+                // (FIXED) ใช้ query เดิมในการ highlight แต่ควรระวังเรื่อง normalization
+                // Note: For simplicity, we use the raw query for highlighting, but the filter uses normalized text.
                 const highlightedTitle = show.title.replace(new RegExp(`(${query})`, 'gi'), '<span class="text-green-500 font-bold">$1</span>');
                 item.innerHTML = highlightedTitle;
                 dropdownEl.appendChild(item);
@@ -745,7 +766,9 @@
             
             gridViewTitle.textContent = `ผลการค้นหาสำหรับ "${query}"`;
             gridViewContent.innerHTML = '';
-            const lowerQuery = query.toLowerCase();
+            
+            // (MODIFIED) Normalize query
+            const normalizedQuery = normalizeThai(query).toLowerCase();
             
             // 2. กรองผลลัพธ์ (ต้องแน่ใจว่า allShows ถูกโหลดแล้ว)
             if (allShows.length === 0) {
@@ -754,10 +777,13 @@
             }
             
             // Search uses allShows array
-            const results = allShows.filter(s => 
-                s.title.toLowerCase().includes(lowerQuery) || 
-                (s.description || '').toLowerCase().includes(lowerQuery)
-            );
+            const results = allShows.filter(s => {
+                // (MODIFIED) Normalize Show Title and Description
+                const normalizedTitle = normalizeThai(s.title).toLowerCase();
+                const normalizedDesc = normalizeThai(s.description || '').toLowerCase();
+                
+                return normalizedTitle.includes(normalizedQuery) || normalizedDesc.includes(normalizedQuery);
+            });
             
             // 3. แสดงผล
             if (results.length === 0) {
