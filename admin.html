@@ -293,11 +293,16 @@
                     const data = doc.data();
                     const show = shows.find(s => s.id === data.showId); // หาชื่อเรื่องจาก ID
                     
+                    // (NEW) เพิ่มตัวบ่งชี้สถานะวิดีโอ
+                    const statusIndicator = data.status === 'broken' 
+                        ? '<span class="text-red-500 font-bold ml-2">(เสีย)</span>' 
+                        : '';
+                    
                     if (episodeTableBody) {
                          episodeTableBody.innerHTML += `
                             <tr class="border-b border-gray-700 hover:bg-gray-700">
                                 <td class="py-3 px-4 text-sm">${data.episodeNumber || '-'}</td>
-                                <td class="py-3 px-4">${data.title}</td>
+                                <td class="py-3 px-4">${data.title}${statusIndicator}</td>
                                 <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
                                 <td class="py-3 px-4">
                                     <button class="text-green-400 hover:text-green-300 edit-episode-btn" data-id="${doc.id}">แก้ไข</button>
@@ -571,6 +576,7 @@
                     episodeNumber: parseInt(episodeNumberInput.value, 10) || 0,
                     embedCode: embedCodeToSave, // ใช้โค้ดที่แปลงแล้ว
                     showId: episodeShowSelect.value,
+                    status: 'active', // (NEW) ตั้งสถานะเริ่มต้นเป็น 'active'
                     updatedAt: serverTimestamp()
                 };
 
