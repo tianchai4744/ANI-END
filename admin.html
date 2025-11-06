@@ -565,16 +565,16 @@
                 console.log("Reports loaded:", allReports.length);
                 renderReportTable(); // (NEW) เรียกใช้ฟังก์ชัน render
                 
-                // (Optional) อัปเดต Badge
-                // const reportBadge = document.getElementById('report-count-badge');
-                // if (reportBadge) {
-                //     if (allReports.length > 0) {
-                //         reportBadge.textContent = allReports.length;
-                //         reportBadge.classList.remove('hidden');
-                //     } else {
-                //         reportBadge.classList.add('hidden');
-                //     }
-                // }
+                // (MODIFIED) อัปเดต Badge
+                const reportBadge = document.getElementById('report-count-badge');
+                if (reportBadge) {
+                    if (allReports.length > 0) {
+                        reportBadge.textContent = allReports.length;
+                        reportBadge.classList.remove('hidden');
+                    } else {
+                        reportBadge.classList.add('hidden');
+                    }
+                }
 
             }, (error) => console.error("Error listening to reports:", error));
         }
@@ -1418,11 +1418,14 @@
                         <i class="ri-movie-2-line"></i>
                         <span>ตอน (Episodes)</span>
                     </button>
-                    <!-- (NEW) 4. Report Button -->
-                    <button id="show-report-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
+                    <!-- (MODIFIED) 4. Report Button (เพิ่ม relative และป้าย Badge) -->
+                    <button id="show-report-list-btn" class="relative flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
                         <i class="ri-flag-line"></i>
                         <span>รายงาน (Reports)</span>
-                        <!-- <span id="report-count-badge" class="hidden ml-1 bg-red-600 text-white text-xs font-bold px-2 rounded-full">0</span> -->
+                        <!-- (NEW) Notification Badge (เหมือนในรูปภาพ) -->
+                        <span id="report-count-badge" class="hidden absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-gray-800">
+                            0
+                        </span>
                     </button>
                 </nav>
             </div>
