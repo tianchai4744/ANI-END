@@ -67,6 +67,7 @@
         let db, auth, userId;
         let shows = []; // เก็บข้อมูลอนิเมะทั้งหมด
         let allEpisodes = []; // (NEW) เก็บข้อมูลตอนทั้งหมด
+        let allReports = []; // (NEW) เก็บข้อมูลรายงานทั้งหมด
         let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
 
         // (NEW) State for Bulk Selection
@@ -86,13 +87,17 @@
         const episodeListView = document.getElementById('episode-list-view');
         const showListView = document.getElementById('show-list-view');
         const bannerListView = document.getElementById('banner-list-view'); 
+        const reportListView = document.getElementById('report-list-view'); // (NEW)
+        
         const episodeTableBody = document.getElementById('episode-table-body');
         const showTableBody = document.getElementById('show-table-body');
         const bannerTableBody = document.getElementById('banner-table-body'); 
+        const reportTableBody = document.getElementById('report-table-body'); // (NEW)
         
         const showEpisodeListBtn = document.getElementById('show-episode-list-btn');
         const showShowListBtn = document.getElementById('show-show-list-btn');
         const showBannerListBtn = document.getElementById('show-banner-list-btn');
+        const showReportListBtn = document.getElementById('show-report-list-btn'); // (NEW)
         
         // (NEW) Search Inputs
         let showSearchInput;
@@ -381,6 +386,65 @@
             }
         }
 
+        // (NEW) Function to Render Report Table
+        function renderReportTable() {
+            if (!reportTableBody) return;
+
+            let tableHtml = '';
+            
+            if (allReports.length === 0) {
+                tableHtml = `
+                    <tr>
+                        <td colspan="3" class="py-6 px-4 text-center text-gray-400">
+                            <i class="ri-check-double-line text-4xl mb-2"></i>
+                            <p>เยี่ยม! ไม่มีรายงานปัญหาในขณะนี้</p>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                allReports.forEach((report) => {
+                    // หาข้อมูล Episode และ Show ที่เกี่ยวข้อง
+                    const episode = allEpisodes.find(ep => ep.id === report.episodeId);
+                    const show = episode ? shows.find(s => s.id === episode.showId) : null;
+                    
+                    const episodeTitle = episode ? episode.title : 'N/A (อาจถูกลบไปแล้ว)';
+                    const showTitle = show ? show.title : 'N/A';
+                    
+                    // (NEW) ตรวจสอบว่าตอนนี้ถูก Mark as broken หรือยัง
+                    const isBroken = episode && episode.status === 'broken';
+
+                    tableHtml += `
+                        <tr class="border-b border-gray-700 hover:bg-gray-700">
+                            <td class="py-3 px-4">
+                                ${episodeTitle}
+                                ${isBroken ? '<span class="ml-2 text-xs font-medium text-white bg-red-600 px-2 py-0.5 rounded-full">เสีย</span>' : ''}
+                            </td>
+                            <td class="py-3 px-4">${showTitle}</td>
+                            <td class="py-3 px-4 space-x-2 whitespace-nowrap">
+                                <!-- Action 1: Mark as Broken (ถ้ายังไม่ถูก Mark) -->
+                                ${!isBroken ? `
+                                <button class="text-xs text-red-400 hover:text-red-300 bg-gray-900 px-2 py-1 rounded mark-broken-btn" data-episode-id="${report.episodeId}">
+                                    <i class="ri-flag-line"></i> Mark Broken
+                                </button>
+                                ` : ''}
+                                
+                                <!-- Action 2: Go to Edit -->
+                                <button class="text-xs text-green-400 hover:text-green-300 bg-gray-900 px-2 py-1 rounded goto-episode-btn" data-episode-id="${report.episodeId}">
+                                    <i class="ri-pencil-line"></i> Edit
+                                </button>
+                                
+                                <!-- Action 3: Resolve (Delete Report) -->
+                                <button class="text-xs text-blue-400 hover:text-blue-300 bg-gray-900 px-2 py-1 rounded resolve-report-btn" data-report-id="${report.id}">
+                                    <i class="ri-check-line"></i> Resolve
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            reportTableBody.innerHTML = tableHtml;
+        }
 
         async function setupListeners() {
             // 1. Listen to Shows (อนิเมะ)
@@ -409,6 +473,7 @@
                 
                 // (NEW) Call render function
                 renderShowTable();
+                renderReportTable(); // (NEW) Re-render reports in case show names changed
                 
             }, (error) => console.error("Error listening to shows:", error));
 
@@ -439,6 +504,7 @@
                 
                 // (NEW) Call render function
                 renderEpisodeTable();
+                renderReportTable(); // (NEW) Re-render reports in case episode names/status changed
                 
             }, (error) => console.error("Error listening to episodes:", error));
 
@@ -467,6 +533,30 @@
                 });
                 console.log("Banners loaded:", snapshot.size);
             }, (error) => console.error("Error listening to banners:", error));
+
+            // (NEW) 4. Listen to Reports
+            const reportQuery = query(getCollectionRef("reports"));
+            onSnapshot(reportQuery, (snapshot) => {
+                allReports = [];
+                snapshot.forEach((doc) => {
+                    allReports.push({ id: doc.id, ...doc.data() });
+                });
+                
+                console.log("Reports loaded:", allReports.length);
+                renderReportTable(); // (NEW) เรียกใช้ฟังก์ชัน render
+                
+                // (Optional) อัปเดต Badge
+                // const reportBadge = document.getElementById('report-count-badge');
+                // if (reportBadge) {
+                //     if (allReports.length > 0) {
+                //         reportBadge.textContent = allReports.length;
+                //         reportBadge.classList.remove('hidden');
+                //     } else {
+                //         reportBadge.classList.add('hidden');
+                //     }
+                // }
+
+            }, (error) => console.error("Error listening to reports:", error));
         }
 
         // --- Navigation (สลับหน้า) ---
@@ -474,10 +564,12 @@
             if (episodeListView) episodeListView.classList.add('hidden');
             if (showListView) showListView.classList.add('hidden');
             if (bannerListView) bannerListView.classList.add('hidden'); 
+            if (reportListView) reportListView.classList.add('hidden'); // (NEW)
 
             if (showEpisodeListBtn) showEpisodeListBtn.classList.remove('bg-gray-900', 'text-white');
             if (showShowListBtn) showShowListBtn.classList.remove('bg-gray-900', 'text-white');
             if (showBannerListBtn) showBannerListBtn.classList.remove('bg-gray-900', 'text-white'); 
+            if (showReportListBtn) showReportListBtn.classList.remove('bg-gray-900', 'text-white'); // (NEW)
 
             if (viewId === 'episode') {
                 if (episodeListView) episodeListView.classList.remove('hidden');
@@ -488,12 +580,76 @@
             } else if (viewId === 'banner') {
                 if (bannerListView) bannerListView.classList.remove('hidden');
                 if (showBannerListBtn) showBannerListBtn.classList.add('bg-gray-900', 'text-white');
+            } else if (viewId === 'report') { // (NEW)
+                if (reportListView) reportListView.classList.remove('hidden');
+                if (showReportListBtn) showReportListBtn.classList.add('bg-gray-900', 'text-white');
             }
         }
         if (showEpisodeListBtn) showEpisodeListBtn.addEventListener('click', () => switchView('episode'));
         if (showShowListBtn) showShowListBtn.addEventListener('click', () => switchView('show'));
         if (showBannerListBtn) showBannerListBtn.addEventListener('click', () => switchView('banner')); 
+        if (showReportListBtn) showReportListBtn.addEventListener('click', () => switchView('report')); // (NEW)
 
+        
+        // (NEW) Event Listeners for Report Actions
+        if (reportTableBody) {
+            reportTableBody.addEventListener('click', async (e) => {
+                const target = e.target.closest('button');
+                if (!target) return;
+
+                try {
+                    // Action 1: Mark as Broken
+                    if (target.classList.contains('mark-broken-btn')) {
+                        const episodeId = target.dataset.episodeId;
+                        if (!episodeId) return;
+                        
+                        const docRef = doc(getCollectionRef("episodes"), episodeId);
+                        await updateDoc(docRef, { status: 'broken' });
+                        // onSnapshot จะ re-render ให้อัตโนมัติ (เพราะ allEpisodes จะเปลี่ยน)
+                        console.log(`Episode ${episodeId} marked as broken.`);
+                    }
+                    
+                    // Action 2: Go to Edit Episode
+                    else if (target.classList.contains('goto-episode-btn')) {
+                        const episodeId = target.dataset.episodeId;
+                        if (!episodeId) return;
+                        
+                        // ใช้ Logic เดิมจากตาราง Episode (ดึงข้อมูลและเปิด Modal)
+                        const docRef = doc(getCollectionRef("episodes"), episodeId);
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                            openEpisodeModal('edit', docSnap.data(), episodeId);
+                        } else {
+                            console.error("Episode not found, cannot edit.");
+                        }
+                    }
+                    
+                    // Action 3: Resolve Report
+                    else if (target.classList.contains('resolve-report-btn')) {
+                        const reportId = target.dataset.reportId;
+                        if (!reportId) return;
+
+                        // ยืนยันก่อนลบ (ใช้ Modal เดิม)
+                        openConfirmModal(`คุณแน่ใจหรือไม่ว่าจัดการปัญหานี้ และต้องการลบรายงานนี้?`, 
+                            async () => {
+                                try {
+                                    await deleteDoc(doc(getCollectionRef("reports"), reportId));
+                                    // onSnapshot ของ reports จะ re-render ให้อัตโนมัติ
+                                    console.log(`Report ${reportId} resolved and deleted.`);
+                                } catch (error) {
+                                    console.error("Error resolving report: ", error);
+                                } finally {
+                                    closeConfirmModal();
+                                }
+                            }
+                        );
+                    }
+
+                } catch (error) {
+                    console.error("Error handling report action: ", error);
+                }
+            });
+        }
         
         // --- (NEW) Bulk Action Logic ---
         
@@ -966,7 +1122,17 @@
                     embedCode: embedCodeToSave, 
                     showId: episodeShowSelect.value,
                     updatedAt: serverTimestamp()
+                    // (NEW) If episode is being edited (and status was broken), clear status
                 };
+                
+                if (currentEditingId) {
+                    const oldData = allEpisodes.find(ep => ep.id === currentEditingId);
+                    if (oldData && oldData.status === 'broken') {
+                        episodeData.status = null; // หรือ deleteField() แต่ null ก็ใช้ได้
+                        console.log("Cleared 'broken' status after edit.");
+                    }
+                }
+
 
                 if (!episodeData.showId) {
                     console.error("Please select a show.");
@@ -1199,21 +1365,27 @@
             <div class="container mx-auto px-4 sm:px-6 lg:px-8">
                 <!-- (MOVED) Horizontal Navigation -->
                 <!-- (NEW) Added border-t border-gray-700/50 for separation -->
-                <nav class="flex flex-row space-x-2 pt-2 pb-3 border-t border-gray-700/50">
+                <nav class="flex flex-row space-x-2 pt-2 pb-3 border-t border-gray-700/50 overflow-x-auto">
                     <!-- (MODIFIED) 1. Banner Button (Now inactive) -->
-                    <button id="show-banner-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium">
+                    <button id="show-banner-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
                         <i class="ri-image-line"></i>
                         <span>แบนเนอร์ (Banner)</span>
                     </button>
                     <!-- (MODIFIED) 2. Show Button (Renamed, Now default active) -->
-                    <button id="show-show-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg bg-gray-900 text-white font-medium">
+                    <button id="show-show-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg bg-gray-900 text-white font-medium flex-shrink-0">
                         <i class="ri-play-list-line"></i>
                         <span>อนิเมะ (Anime)</span>
                     </button>
                     <!-- (MODIFIED) 3. Episode Button (Now inactive) -->
-                    <button id="show-episode-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium">
+                    <button id="show-episode-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
                         <i class="ri-movie-2-line"></i>
                         <span>ตอน (Episodes)</span>
+                    </button>
+                    <!-- (NEW) 4. Report Button -->
+                    <button id="show-report-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
+                        <i class="ri-flag-line"></i>
+                        <span>รายงาน (Reports)</span>
+                        <!-- <span id="report-count-badge" class="hidden ml-1 bg-red-600 text-white text-xs font-bold px-2 rounded-full">0</span> -->
                     </button>
                 </nav>
             </div>
@@ -1221,15 +1393,14 @@
 
         <!-- (MODIFIED) Main Content Area (Sidebar Removed) -->
         <!-- (NEW) Added 'relative' for sticky bar positioning -->
+        <!-- (MODIFIED) Increased sticky top to 125px to account for new menu bar height -->
         <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 relative">
             
             <!-- (NEW) Bulk Action Bar (Episodes) -->
             <!-- This bar is sticky and will appear *under* the header when items are selected -->
-            <div id="bulk-action-bar-episodes" class="hidden sticky top-[117px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
+            <div id="bulk-action-bar-episodes" class="hidden sticky top-[125px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     <span id="selected-episodes-count" class="font-bold text-white">เลือก 0 รายการ</span>
-                    <!-- (Future) Add "Edit" button here -->
-                    <!-- <button id="bulk-edit-episodes-btn" class="text-sm text-blue-400 hover:text-blue-300">แก้ไข</button> -->
                 </div>
                 <button id="bulk-delete-episodes-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center space-x-2">
                     <i class="ri-delete-bin-line"></i>
@@ -1238,7 +1409,7 @@
             </div>
             
             <!-- (NEW) Bulk Action Bar (Shows) -->
-            <div id="bulk-action-bar-shows" class="hidden sticky top-[117px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
+            <div id="bulk-action-bar-shows" class="hidden sticky top-[125px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     <span id="selected-shows-count" class="font-bold text-white">เลือก 0 รายการ</span>
                 </div>
@@ -1262,12 +1433,7 @@
                             <span>เพิ่มแบนเนอร์</span>
                         </button>
                     </div>
-                    <!-- (NEW) Search Bar for Banners (Not implemented, but placeholder) -->
-                    <!-- 
-                    <div class="mb-4">
-                        <input type="text" placeholder="ค้นหาแบนเนอร์..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    </div>
-                    -->
+                    
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
                         <table class="w-full">
                             <thead class="bg-gray-900">
@@ -1298,9 +1464,9 @@
                             </button>
                         </div>
                     </div>
-                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
                         <!-- (MODIFIED) Added table-fixed and th widths -->
-                        <table class="w-full table-fixed">
+                        <table class="w-full table-fixed min-w-[768px]">
                             <thead class="bg-gray-900">
                                 <tr>
                                     <th class="w-16 py-3 px-4 text-center">
@@ -1333,9 +1499,9 @@
                             </button>
                         </div>
                     </div>
-                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
                         <!-- (MODIFIED) Added table-fixed and th widths -->
-                        <table class="w-full table-fixed">
+                        <table class="w-full table-fixed min-w-[768px]">
                             <thead class="bg-gray-900">
                                 <tr>
                                     <th class="w-16 py-3 px-4 text-center">
@@ -1348,6 +1514,28 @@
                                 </tr>
                             </thead>
                             <tbody id="episode-table-body" class="divide-y divide-gray-700">
+                                <!-- Data injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- (NEW) 4. Report List View -->
+                <div id="report-list-view" class="hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-white">รายการแจ้งปัญหา (Reports)</h2>
+                    </div>
+                    
+                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
+                        <table class="w-full table-fixed min-w-[768px]">
+                            <thead class="bg-gray-900">
+                                <tr>
+                                    <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อตอน (ที่ถูกรายงาน)</th>
+                                    <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th>
+                                    <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-table-body" class="divide-y divide-gray-700">
                                 <!-- Data injected by JS -->
                             </tbody>
                         </table>
@@ -1521,7 +1709,7 @@
                         ยกเลิก
                     </button>
                     <button type="button" id="confirm-modal-confirm-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
-                        ยืนยัน (ลบ)
+                        ยืนยัน
                     </button>
                 </div>
             </div>
