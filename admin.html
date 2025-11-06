@@ -14,21 +14,19 @@
         }
         .modal { display: none; }
         .modal.flex { display: flex; }
-
-        /* (NEW) Switch toggle styles */
-        .switch-bg {
-            background-color: #4b5563; /* gray-600 */
-            transition: background-color 0.2s ease-in-out;
+        
+        /* (NEW) Style for Checkboxes in table */
+        .admin-checkbox {
+            width: 1.25rem; /* w-5 */
+            height: 1.25rem; /* h-5 */
+            background-color: #374151; /* bg-gray-700 */
+            border-color: #4b5563; /* border-gray-600 */
+            border-radius: 0.25rem; /* rounded */
+            cursor: pointer;
         }
-        .switch-bg.toggled {
-            background-color: #dc2626; /* red-600 */
-        }
-        .switch-dot {
-            transform: translateX(0.25rem); /* 4px */
-            transition: transform 0.2s ease-in-out;
-        }
-        .switch-dot.toggled {
-            transform: translateX(1.5rem); /* 24px */
+        .admin-checkbox:checked {
+            background-color: #2563eb; /* bg-blue-600 */
+            border-color: #2563eb; /* border-blue-600 */
         }
     </style>
 </head>
@@ -45,7 +43,8 @@
             getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, 
             onSnapshot, collection, query, serverTimestamp,
             setLogLevel, 
-            where, getDocs 
+            where, getDocs, 
+            writeBatch // (NEW) Import writeBatch for bulk delete
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         
@@ -67,7 +66,14 @@
 
         let db, auth, userId;
         let shows = []; // เก็บข้อมูลอนิเมะทั้งหมด
+        let allEpisodes = []; // (NEW) เก็บข้อมูลตอนทั้งหมด
         let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
+
+        // (NEW) State for Bulk Selection
+        let selectedEpisodes = new Set();
+        let selectedShows = new Set(); // (NEW) For Shows
+        
+        let currentConfirmCallback = null;
 
         // UI Elements
         const loadingIndicator = document.getElementById('loading-indicator');
@@ -86,7 +92,11 @@
         
         const showEpisodeListBtn = document.getElementById('show-episode-list-btn');
         const showShowListBtn = document.getElementById('show-show-list-btn');
-        const showBannerListBtn = document.getElementById('show-banner-list-btn'); 
+        const showBannerListBtn = document.getElementById('show-banner-list-btn');
+        
+        // (NEW) Search Inputs
+        let showSearchInput;
+        let episodeSearchInput;
 
         // Modal: Episode
         const episodeModal = document.getElementById('episode-modal');
@@ -96,11 +106,6 @@
         const episodeNumberInput = document.getElementById('episode-number');
         const episodeEmbedInput = document.getElementById('episode-embed-code');
         const episodeShowSelect = document.getElementById('episode-show-select');
-        // const episodeStatusSelect = document.getElementById('episode-status-select'); // (REMOVED)
-        const episodeStatusToggle = document.getElementById('episode-status-toggle'); // (NEW)
-        const episodeStatusDot = document.getElementById('episode-status-dot'); // (NEW)
-        const episodeStatusLabel = document.getElementById('episode-status-label'); // (NEW)
-        const episodeStatusValue = document.getElementById('episode-status-value'); // (NEW)
         const closeEpisodeModalBtn = document.getElementById('close-episode-modal');
         const addEpisodeBtn = document.getElementById('add-episode-btn');
         const deleteEpisodeBtn = document.getElementById('delete-episode-btn');
@@ -127,6 +132,25 @@
         const closeBannerModalBtn = document.getElementById('close-banner-modal');
         const addBannerBtn = document.getElementById('add-banner-btn');
         const deleteBannerBtn = document.getElementById('delete-banner-btn');
+        
+        // (NEW) Bulk Action UI Elements (Episodes)
+        const bulkActionBarEpisodes = document.getElementById('bulk-action-bar-episodes');
+        const selectedEpisodesCount = document.getElementById('selected-episodes-count');
+        const bulkDeleteEpisodesBtn = document.getElementById('bulk-delete-episodes-btn');
+        const episodeSelectAll = document.getElementById('episode-select-all');
+
+        // (NEW) Bulk Action UI Elements (Shows)
+        const bulkActionBarShows = document.getElementById('bulk-action-bar-shows');
+        const selectedShowsCount = document.getElementById('selected-shows-count');
+        const bulkDeleteShowsBtn = document.getElementById('bulk-delete-shows-btn');
+        const showSelectAll = document.getElementById('show-select-all');
+
+
+        // (NEW) Confirm Modal UI Elements
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmModalText = document.getElementById('confirm-modal-text');
+        const confirmModalConfirmBtn = document.getElementById('confirm-modal-confirm-btn');
+        const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
 
 
         async function initializeFirebase() {
@@ -227,6 +251,13 @@
                 // ดึงสถานะที่ผู้ดูแลระบบกำหนดไว้
                 const showRef = doc(getCollectionRef("shows"), showId);
                 const showSnap = await getDoc(showRef);
+                
+                // (FIX) Check if show exists before reading data
+                if (!showSnap.exists()) {
+                    console.warn(`Show ${showId} not found, skipping status update.`);
+                    return;
+                }
+                
                 const showData = showSnap.data();
                 
                 // (MODIFIED) isCompleted จะเป็น true ถ้า isCompleted ที่บันทึกไว้ใน Firestore เป็น true
@@ -241,20 +272,111 @@
 
                 console.log(`Show ${showId} updated: Max Episode ${maxEpisode}, Completed: ${isCompleted}`);
 
-            } catch (error) {
+            } catch (error) { // (FIXED) Added curly braces
                 console.error("Error updating max episode:", error);
             }
         }
         // (END NEW FUNCTION)
+        
+        // (NEW) Render Function for Shows Table
+        function renderShowTable() {
+            if (!showTableBody) return;
+            
+            const searchQuery = showSearchInput ? showSearchInput.value.toLowerCase() : '';
+            
+            const filteredShows = shows.filter(show => 
+                show.title.toLowerCase().includes(searchQuery)
+            );
+
+            // (MODIFIED) Build HTML string first, then set innerHTML once
+            let tableHtml = '';
+            selectedShows.clear();
+            updateBulkActionUIShows(filteredShows.length);
+
+            let hasShows = false;
+            filteredShows.forEach((show) => {
+                hasShows = true;
+                tableHtml += `
+                    <tr class="border-b border-gray-700 hover:bg-gray-700">
+                        <td class="py-3 px-4 text-center">
+                            <input type="checkbox" class="admin-checkbox show-row-checkbox" data-id="${show.id}">
+                        </td>
+                        <td class="py-3 px-4">
+                            <img src="${show.thumbnailUrl || 'https://placehold.co/100x60/333/fff?text=No+Img'}" alt="thumb" class="w-24 h-14 object-cover rounded">
+                        </td>
+                        <td class="py-3 px-4">${show.title}</td>
+                        <td class="py-3 px-4 text-sm">${(show.tags || []).join(', ')}</td>
+                        <td class="py-3 px-4">
+                            <button class="text-green-400 hover:text-green-300 edit-show-btn" data-id="${show.id}">แก้ไข</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            showTableBody.innerHTML = tableHtml; // Set HTML once
+
+            if (showSelectAll) {
+                showSelectAll.checked = false;
+                showSelectAll.indeterminate = false;
+                showSelectAll.disabled = !hasShows;
+            }
+        }
+        
+        // (NEW) Render Function for Episodes Table
+        function renderEpisodeTable() {
+            if (!episodeTableBody) return;
+            
+            const searchQuery = episodeSearchInput ? episodeSearchInput.value.toLowerCase() : '';
+
+            const filteredEpisodes = allEpisodes.filter(ep => {
+                const show = shows.find(s => s.id === ep.showId);
+                const showTitle = show ? show.title.toLowerCase() : '';
+                const epTitle = ep.title.toLowerCase();
+                return epTitle.includes(searchQuery) || showTitle.includes(searchQuery);
+            });
+
+            // (MODIFIED) Build HTML string first, then set innerHTML once
+            let tableHtml = '';
+            selectedEpisodes.clear();
+            updateBulkActionUIEpisodes(filteredEpisodes.length);
+
+            let hasEpisodes = false;
+            filteredEpisodes.forEach((data) => {
+                hasEpisodes = true;
+                const show = shows.find(s => s.id === data.showId); // หาชื่อเรื่องจาก ID
+                
+                tableHtml += `
+                    <tr class="border-b border-gray-700 hover:bg-gray-700">
+                        <td class="py-3 px-4 text-center">
+                            <input type="checkbox" class="admin-checkbox episode-row-checkbox" data-id="${data.id}">
+                        </td>
+                        <td class="py-3 px-4 text-sm">${data.episodeNumber || '-'}</td>
+                        <td class="py-3 px-4">${data.title}</td>
+                        <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
+                        <td class="py-3 px-4">
+                            <button class="text-green-400 hover:text-green-300 edit-episode-btn" data-id="${data.id}">แก้ไข</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            episodeTableBody.innerHTML = tableHtml; // Set HTML once
+
+            if (episodeSelectAll) {
+                episodeSelectAll.checked = false;
+                episodeSelectAll.indeterminate = false;
+                episodeSelectAll.disabled = !hasEpisodes;
+            }
+        }
+
 
         async function setupListeners() {
             // 1. Listen to Shows (อนิเมะ)
             const showQuery = query(getCollectionRef("shows"));
             onSnapshot(showQuery, (snapshot) => {
-                shows = [];
-                if (showTableBody) showTableBody.innerHTML = '';
-                const showSelectHtml = '<option value="">-- เลือกอนิเมะ --</option>';
+                shows = []; // (MODIFIED) Store in global array
                 
+                const showSelectHtml = '<option value="">-- เลือกอนิเมะ --</option>';
                 let episodeOptions = showSelectHtml;
                 let bannerOptions = showSelectHtml; 
 
@@ -262,20 +384,7 @@
                     const data = doc.data();
                     shows.push({ id: doc.id, ...data });
                     
-                    if (showTableBody) {
-                         showTableBody.innerHTML += `
-                            <tr class="border-b border-gray-700 hover:bg-gray-700">
-                                <td class="py-3 px-4">
-                                    <img src="${data.thumbnailUrl || 'https://placehold.co/100x60/333/fff?text=No+Img'}" alt="thumb" class="w-24 h-14 object-cover rounded">
-                                </td>
-                                <td class="py-3 px-4">${data.title}</td>
-                                <td class="py-3 px-4 text-sm">${(data.tags || []).join(', ')}</td>
-                                <td class="py-3 px-4">
-                                    <button class="text-green-400 hover:text-green-300 edit-show-btn" data-id="${doc.id}">แก้ไข</button>
-                                </td>
-                            </tr>
-                        `;
-                    }
+                    // (MODIFIED) Logic to build dropdowns remains here
                     const option = `<option value="${doc.id}">${data.title}</option>`;
                     episodeOptions += option;
                     bannerOptions += option; 
@@ -285,62 +394,46 @@
                 if (bannerShowSelect) bannerShowSelect.innerHTML = bannerOptions; 
 
                 console.log("Shows loaded:", shows.length);
+                
+                // (NEW) Call render function
+                renderShowTable();
+                
             }, (error) => console.error("Error listening to shows:", error));
 
-            // 2. Listen to Episodes (ตอน) - **Trigger update Max Episode เมื่อมีการเปลี่ยนแปลง**
+            // 2. Listen to Episodes (ตอน)
             const episodeQuery = query(getCollectionRef("episodes"));
             onSnapshot(episodeQuery, (snapshot) => {
-                if (episodeTableBody) episodeTableBody.innerHTML = '';
+                allEpisodes = []; // (NEW) Store in global array
                 
-                // (NEW) ตรวจสอบว่ามีการเปลี่ยนแปลงเกิดขึ้นกับ Show ID ใดบ้าง
                 const changedShowIds = new Set();
                 snapshot.docChanges().forEach((change) => {
                     if (change.doc.data().showId) {
-                        // NOTE: Only trigger update on added, modified, or removed documents
-                        // (MODIFIED) เพิ่มการตรวจสอบ status change ด้วย
-                        if (change.type !== 'modified' || 
-                            change.doc.data().episodeNumber !== change.oldDoc.data().episodeNumber ||
-                            change.doc.data().status !== change.oldDoc.data().status) {
+                        if (change.type !== 'modified' || change.doc.data().episodeNumber !== change.oldDoc.data().episodeNumber) {
                              changedShowIds.add(change.doc.data().showId);
                         }
                     }
                 });
 
-                // (NEW) Trigger การอัปเดต Max Episode สำหรับ Show ID ที่เกี่ยวข้อง
                 if (changedShowIds.size > 0) {
                     console.log("Episode changes detected. Triggering max episode update for:", changedShowIds);
                     changedShowIds.forEach(id => updateMaxEpisodeAndStatus(id));
                 }
 
-                // Render ตาราง Episodes
                 snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const show = shows.find(s => s.id === data.showId); // หาชื่อเรื่องจาก ID
-                    
-                    // (NEW) เพิ่มตัวบ่งชี้สถานะวิดีโอ
-                    const statusIndicator = data.status === 'broken' 
-                        ? '<span class="text-red-500 font-bold ml-2">(เสีย)</span>' 
-                        : '';
-                    
-                    if (episodeTableBody) {
-                         episodeTableBody.innerHTML += `
-                            <tr class="border-b border-gray-700 hover:bg-gray-700">
-                                <td class="py-3 px-4 text-sm">${data.episodeNumber || '-'}</td>
-                                <td class="py-3 px-4">${data.title}${statusIndicator}</td>
-                                <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
-                                <td class="py-3 px-4">
-                                    <button class="text-green-400 hover:text-green-300 edit-episode-btn" data-id="${doc.id}">แก้ไข</button>
-                                </td>
-                            </tr>
-                        `;
-                    }
+                    allEpisodes.push({ id: doc.id, ...doc.data() });
                 });
-                console.log("Episodes loaded:", snapshot.size);
+                
+                console.log("Episodes loaded:", allEpisodes.length);
+                
+                // (NEW) Call render function
+                renderEpisodeTable();
+                
             }, (error) => console.error("Error listening to episodes:", error));
 
             // 3. Listen to Banners
             const bannerQuery = query(getCollectionRef("banners"));
             onSnapshot(bannerQuery, (snapshot) => {
+                // (MODIFIED) This doesn't need filtering, so we render directly
                 if (bannerTableBody) bannerTableBody.innerHTML = '';
                 snapshot.forEach((doc) => {
                     const data = doc.data();
@@ -389,27 +482,286 @@
         if (showShowListBtn) showShowListBtn.addEventListener('click', () => switchView('show'));
         if (showBannerListBtn) showBannerListBtn.addEventListener('click', () => switchView('banner')); 
 
+        
+        // --- (NEW) Bulk Action Logic ---
+        
+        // (NEW) Function to open the confirmation modal
+        function openConfirmModal(message, onConfirm) {
+            confirmModalText.textContent = message;
+            currentConfirmCallback = onConfirm;
+            confirmModal.classList.add('flex');
+        }
+        
+        // (NEW) Function to close the confirmation modal
+        function closeConfirmModal() {
+            confirmModal.classList.remove('flex');
+            currentConfirmCallback = null;
+        }
+
+        // (NEW) Update UI based on selection (Episodes)
+        // (MODIFIED) Pass totalRows to avoid querying DOM
+        function updateBulkActionUIEpisodes(totalRows) {
+            if (!bulkActionBarEpisodes || !selectedEpisodesCount || !episodeSelectAll) return;
+
+            const selectedCount = selectedEpisodes.size;
+            
+            if (selectedCount > 0) {
+                bulkActionBarEpisodes.classList.remove('hidden');
+                selectedEpisodesCount.textContent = `เลือก ${selectedCount} รายการ`;
+            } else {
+                bulkActionBarEpisodes.classList.add('hidden');
+            }
+            
+            // Update "Select All" checkbox state
+            if (totalRows === 0) {
+                 episodeSelectAll.checked = false;
+                 episodeSelectAll.indeterminate = false;
+            } else if (selectedCount === 0) {
+                episodeSelectAll.checked = false;
+                episodeSelectAll.indeterminate = false;
+            } else if (selectedCount === totalRows) {
+                episodeSelectAll.checked = true;
+                episodeSelectAll.indeterminate = false;
+            } else {
+                episodeSelectAll.checked = false;
+                episodeSelectAll.indeterminate = true;
+            }
+        }
+        
+        // (NEW) Update UI based on selection (Shows)
+        // (MODIFIED) Pass totalRows to avoid querying DOM
+        function updateBulkActionUIShows(totalRows) {
+            if (!bulkActionBarShows || !selectedShowsCount || !showSelectAll) return;
+
+            const selectedCount = selectedShows.size;
+            
+            if (selectedCount > 0) {
+                bulkActionBarShows.classList.remove('hidden');
+                selectedShowsCount.textContent = `เลือก ${selectedCount} รายการ`;
+            } else {
+                bulkActionBarShows.classList.add('hidden');
+            }
+            
+            // Update "Select All" checkbox state
+            if (totalRows === 0) {
+                 showSelectAll.checked = false;
+                 showSelectAll.indeterminate = false;
+            } else if (selectedCount === 0) {
+                showSelectAll.checked = false;
+                showSelectAll.indeterminate = false;
+            } else if (selectedCount === totalRows) {
+                showSelectAll.checked = true;
+                showSelectAll.indeterminate = false;
+            } else {
+                showSelectAll.checked = false;
+                showSelectAll.indeterminate = true;
+            }
+        }
+
+
+        // (NEW) Handle "Select All" (Episodes)
+        if (episodeSelectAll) {
+            episodeSelectAll.addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                // (MODIFIED) Select only visible rows
+                const rowCheckboxes = document.querySelectorAll('.episode-row-checkbox');
+                
+                rowCheckboxes.forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                    const id = checkbox.dataset.id;
+                    if (isChecked) {
+                        selectedEpisodes.add(id);
+                    } else {
+                        selectedEpisodes.delete(id);
+                    }
+                });
+                
+                updateBulkActionUIEpisodes(rowCheckboxes.length);
+            });
+        }
+        
+        // (NEW) Handle "Select All" (Shows)
+        if (showSelectAll) {
+            showSelectAll.addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                // (MODIFIED) Select only visible rows
+                const rowCheckboxes = document.querySelectorAll('.show-row-checkbox');
+                
+                rowCheckboxes.forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                    const id = checkbox.dataset.id;
+                    if (isChecked) {
+                        selectedShows.add(id);
+                    } else {
+                        selectedShows.delete(id);
+                    }
+                });
+                
+                updateBulkActionUIShows(rowCheckboxes.length);
+            });
+        }
+        
+        // (NEW) Handle single row selection (using event delegation) (Episodes)
+        if (episodeTableBody) {
+            episodeTableBody.addEventListener('change', (e) => {
+                if (e.target.classList.contains('episode-row-checkbox')) {
+                    const id = e.target.dataset.id;
+                    if (e.target.checked) {
+                        selectedEpisodes.add(id);
+                    } else {
+                        selectedEpisodes.delete(id);
+                    }
+                    const totalRows = document.querySelectorAll('.episode-row-checkbox').length;
+                    updateBulkActionUIEpisodes(totalRows);
+                }
+            });
+        }
+        
+        // (NEW) Handle single row selection (using event delegation) (Shows)
+        if (showTableBody) {
+            showTableBody.addEventListener('change', (e) => {
+                if (e.target.classList.contains('show-row-checkbox')) {
+                    const id = e.target.dataset.id;
+                    if (e.target.checked) {
+                        selectedShows.add(id);
+                    } else {
+                        selectedShows.delete(id);
+                    }
+                    const totalRows = document.querySelectorAll('.show-row-checkbox').length;
+                    updateBulkActionUIShows(totalRows);
+                }
+            });
+        }
+        
+        // (NEW) Handle Bulk Delete Button (Episodes)
+        if (bulkDeleteEpisodesBtn) {
+            bulkDeleteEpisodesBtn.addEventListener('click', () => {
+                const count = selectedEpisodes.size;
+                if (count === 0) return;
+                
+                openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบ ${count} ตอนที่เลือก? (การดำเนินการนี้ไม่สามารถย้อนกลับได้)`, 
+                    async () => {
+                        console.log(`Starting bulk delete for ${count} episodes...`);
+                        try {
+                            // 1. Find all affected show IDs *before* deleting
+                            const affectedShowIds = new Set();
+                            const docsToGet = [];
+                            selectedEpisodes.forEach(id => {
+                                // (FIX) Find from local array instead of re-fetching
+                                const ep = allEpisodes.find(e => e.id === id);
+                                if (ep) {
+                                    affectedShowIds.add(ep.showId);
+                                }
+                            });
+                            
+                            // 2. Create a batch delete
+                            const batch = writeBatch(db);
+                            selectedEpisodes.forEach(id => {
+                                batch.delete(doc(getCollectionRef("episodes"), id));
+                            });
+                            
+                            // 3. Commit the batch
+                            await batch.commit();
+                            
+                            // 4. Update max episode status for all affected shows
+                            console.log("Bulk delete successful. Updating status for shows:", affectedShowIds);
+                            affectedShowIds.forEach(showId => {
+                                if (showId) {
+                                    updateMaxEpisodeAndStatus(showId);
+                                }
+                            });
+                            
+                            // 5. Clear selection and hide bar
+                            // (Snapshot will auto-refresh the list)
+                            selectedEpisodes.clear();
+                            updateBulkActionUIEpisodes(0);
+                            
+                        } catch (error) {
+                            console.error("Error during bulk delete:", error);
+                        } finally {
+                            closeConfirmModal();
+                        }
+                    }
+                );
+            });
+        }
+        
+        // (NEW) Handle Bulk Delete Button (Shows)
+        if (bulkDeleteShowsBtn) {
+            bulkDeleteShowsBtn.addEventListener('click', () => {
+                const count = selectedShows.size;
+                if (count === 0) return;
+                
+                openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบ ${count} อนิเมะที่เลือก? (การดำเนินการนี้จะลบตอนทั้งหมดของอนิเมะเหล่านี้ด้วย และไม่สามารถย้อนกลับได้)`, 
+                    async () => {
+                        console.log(`Starting bulk delete for ${count} shows...`);
+                        try {
+                            
+                            for (const showId of selectedShows) {
+                                const batch = writeBatch(db);
+                                batch.delete(doc(getCollectionRef("shows"), showId));
+                                
+                                const episodesQuery = query(getCollectionRef("episodes"), where("showId", "==", showId));
+                                const episodesSnapshot = await getDocs(episodesQuery);
+                                
+                                episodesSnapshot.forEach(epDoc => {
+                                    batch.delete(epDoc.ref);
+                                });
+                                
+                                await batch.commit();
+                                console.log(`Deleted show ${showId} and ${episodesSnapshot.size} episodes.`);
+                            }
+                            
+                            selectedShows.clear();
+                            updateBulkActionUIShows(0);
+                            
+                        } catch (error) {
+                            console.error("Error during bulk show delete:", error);
+                            // In a real app, show a message box error
+                        } finally {
+                            closeConfirmModal();
+                        }
+                    }
+                );
+            });
+        }
+
+        
+        // (NEW) Setup Confirm Modal Buttons
+        if (confirmModalCancelBtn) {
+            confirmModalCancelBtn.addEventListener('click', closeConfirmModal);
+        }
+        if (confirmModalConfirmBtn) {
+            confirmModalConfirmBtn.addEventListener('click', () => {
+                if (typeof currentConfirmCallback === 'function') {
+                    currentConfirmCallback();
+                }
+            });
+        }
+        
+        // --- (End of) Bulk Action Logic ---
+
 
         // --- Show (อนิเมะ) Modal Logic ---
         function openShowModal(mode, showData = {}, showId = null) {
             currentEditingId = showId;
             
             if (mode === 'add') {
-                if (showModalTitle) showModalTitle.textContent = "เพิ่มเรื่องใหม่";
+                if (showModalTitle) showModalTitle.textContent = "เพิ่มอนิเมะใหม่";
                 if (showForm) showForm.reset();
                 if (showViewCountInput) showViewCountInput.value = 0; 
-                if (showCompletedCheckbox) showCompletedCheckbox.checked = false; // (NEW) Default unchecked
+                if (showCompletedCheckbox) showCompletedCheckbox.checked = false; 
                 document.querySelectorAll('.show-tag-option').forEach(checkbox => {
                     checkbox.checked = false;
                 });
                 if (deleteShowBtn) deleteShowBtn.classList.add('hidden');
             } else {
-                if (showModalTitle) showModalTitle.textContent = "แก้ไขเรื่อง";
+                if (showModalTitle) showModalTitle.textContent = "แก้ไขอนิเมะ";
                 if (showTitleInput) showTitleInput.value = showData.title || '';
                 if (showDescInput) showDescInput.value = showData.description || '';
                 if (showThumbnailInput) showThumbnailInput.value = showData.thumbnailUrl || '';
                 if (showViewCountInput) showViewCountInput.value = showData.viewCount || 0; 
-                if (showCompletedCheckbox) showCompletedCheckbox.checked = showData.isCompleted === true; // (NEW) Load state
+                if (showCompletedCheckbox) showCompletedCheckbox.checked = showData.isCompleted === true; 
                 
                 const tags = showData.tags || [];
                 document.querySelectorAll('.show-tag-option').forEach(checkbox => {
@@ -435,7 +787,6 @@
                     tagsArray.push('อนิเมะ');
                 }
                 
-                // (NEW/MODIFIED) ใช้ค่าจาก Checkbox เพื่อกำหนดสถานะจบ
                 const isCompletedByAdmin = showCompletedCheckbox.checked; 
                 
                 const showData = {
@@ -443,7 +794,7 @@
                     description: showDescInput.value,
                     thumbnailUrl: showThumbnailInput.value,
                     viewCount: parseInt(showViewCountInput.value, 10) || 0, 
-                    isCompleted: isCompletedByAdmin, // (MODIFIED) ใช้เป็นสถานะจบที่กำหนดโดยผู้ดูแลระบบ
+                    isCompleted: isCompletedByAdmin, 
                     tags: tagsArray,
                     updatedAt: serverTimestamp()
                 };
@@ -452,15 +803,13 @@
                     if (currentEditingId) {
                         const docRef = doc(getCollectionRef("shows"), currentEditingId);
                         await updateDoc(docRef, showData);
-                        // (NEW) เรียกอัปเดตสถานะทันทีหากมีการเปลี่ยนแปลงข้อมูล Show
                         await updateMaxEpisodeAndStatus(currentEditingId); 
                     } else {
                         showData.createdAt = serverTimestamp();
                         showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
-                        showData.latestEpisodeNumber = 0; // (NEW) Initialize for new show
+                        showData.latestEpisodeNumber = 0; 
                         
-                        const newDocRef = await addDoc(getCollectionRef("shows"), showData);
-                        // ไม่ต้องเรียก updateMaxEpisodeAndStatus เพราะตอนใหม่ยังไม่มี
+                        await addDoc(getCollectionRef("shows"), showData);
                     }
                     if (showForm) showForm.reset();
                     if (showModal) showModal.classList.remove('flex');
@@ -473,13 +822,32 @@
         if (deleteShowBtn) {
             deleteShowBtn.addEventListener('click', async () => {
                 if (!currentEditingId) return;
-                console.log("Deleting show... (In real app, use a custom confirm modal)");
-                try {
-                    await deleteDoc(doc(getCollectionRef("shows"), currentEditingId));
-                    if (showModal) showModal.classList.remove('flex');
-                } catch (error) {
-                    console.error("Error deleting show: ", error);
-                }
+                
+                openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบอนิเมะเรื่องนี้? (การดำเนินการนี้จะลบตอนทั้งหมดของอนิเมะเรื่องนี้ด้วย และไม่สามารถย้อนกลับได้)`, 
+                    async () => {
+                        try {
+                            const batch = writeBatch(db);
+                            batch.delete(doc(getCollectionRef("shows"), currentEditingId));
+                            
+                            const episodesQuery = query(getCollectionRef("episodes"), where("showId", "==", currentEditingId));
+                            const episodesSnapshot = await getDocs(episodesQuery);
+                            
+                            episodesSnapshot.forEach(epDoc => {
+                                batch.delete(epDoc.ref);
+                            });
+                            
+                            await batch.commit();
+                            
+                            console.log(`Deleted show ${currentEditingId} and ${episodesSnapshot.size} episodes.`);
+                            
+                            if (showModal) showModal.classList.remove('flex');
+                        } catch (error) {
+                            console.error("Error deleting show and its episodes: ", error);
+                        } finally {
+                            closeConfirmModal();
+                        }
+                    }
+                );
             });
         }
 
@@ -503,13 +871,10 @@
         // --- MODIFIED: URL to Embed Code Converter Function ---
         function convertToEmbedCode(input) {
             if (!input || input.trim().toLowerCase().startsWith('<iframe')) {
-                // If input is empty or already an iframe, return as is
                 return input.trim();
             }
 
             try {
-                // ใช้ iframe template ที่จะมีการกำหนดขนาด 100% ใน player.html
-                // ใช้พารามิเตอร์ "allow" เพื่อเปิดใช้งานการเล่นอัตโนมัติและ fullscreen
                 const defaultIframeStart = `<iframe src="`;
                 const defaultIframeEnd = `" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
                 
@@ -517,34 +882,25 @@
                 const hostname = url.hostname.replace('www.', '');
                 let embedSrc = '';
                 
-                // --- Ok.ru (Odnoklassniki) ---
                 if (hostname.includes('ok.ru') || hostname.includes('vk.com')) {
                     const videoIdMatch = url.pathname.match(/\/video\/(\d+)/);
                     if (videoIdMatch) {
                         const videoId = videoIdMatch[1];
-                        // Ok.ru parameters: ?nochat=1 (ซ่อนแชท), disable_top_panel=1 (พยายามซ่อนส่วนหัว), autoplay=1 (เล่นอัตโนมัติ)
                         embedSrc = `//ok.ru/videoembed/${videoId}?nochat=1&autoplay=1&disable_top_panel=1`;
                     }
                 }
                 
-                // --- YouTube ---
                 else if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
                     let videoId = url.searchParams.get('v');
                     if (!videoId && hostname.includes('youtu.be')) {
-                        // Handle short links: /youtu.be/videoId
                         videoId = url.pathname.substring(1).split('/')[0];
                     }
                     if (videoId) {
-                        // Use standard YouTube embed format with autoplay.
-                        // rel=0 (ปิดวิดีโอแนะนำ) และ modestbranding=1 (ซ่อนโลโก้)
                         embedSrc = `https://www.youtube.com/embed/${videoId}?rel=0&autoplay=1&showinfo=0&modestbranding=1`;
                     }
                 }
                 
-                // --- Fallback: Direct URL ---
                 if (!embedSrc) {
-                    // หากเป็น URL ธรรมดาที่ไม่รู้จัก ให้ใช้ URL เดิมและเพิ่ม autoplay=1
-                    // NOTE: This fallback may not work for all video hostings, but it's the best guess.
                     url.searchParams.set('autoplay', '1');
                     embedSrc = url.href;
                 }
@@ -552,40 +908,16 @@
                 if (embedSrc) {
                     return defaultIframeStart + embedSrc + defaultIframeEnd;
                 } else {
-                    return input.trim(); // Fallback to original input if conversion failed
+                    return input.trim(); 
                 }
 
             } catch (e) {
                 console.error("Invalid URL format or conversion error:", e);
-                // If it's not a valid URL (e.g., malformed or just random text), return the original input
                 return input.trim();
             }
         }
         // --- END MODIFIED FUNCTION ---
 
-
-        // (NEW) Helper function to control the switch toggle
-        function updateSwitchToggle(status) {
-            if (!episodeStatusToggle || !episodeStatusDot || !episodeStatusLabel || !episodeStatusValue) return;
-
-            if (status === 'broken') {
-                episodeStatusToggle.classList.add('toggled');
-                episodeStatusToggle.setAttribute('aria-checked', 'true');
-                episodeStatusDot.classList.add('toggled');
-                episodeStatusLabel.textContent = 'เสีย (Broken)';
-                episodeStatusLabel.classList.remove('text-green-500');
-                episodeStatusLabel.classList.add('text-red-500');
-                episodeStatusValue.value = 'broken';
-            } else { // Default to 'active'
-                episodeStatusToggle.classList.remove('toggled');
-                episodeStatusToggle.setAttribute('aria-checked', 'false');
-                episodeStatusDot.classList.remove('toggled');
-                episodeStatusLabel.textContent = 'ปกติ (Active)';
-                episodeStatusLabel.classList.remove('text-red-500');
-                episodeStatusLabel.classList.add('text-green-500');
-                episodeStatusValue.value = 'active';
-            }
-        }
 
         // --- Episode (ตอน) Modal Logic ---
         function openEpisodeModal(mode, episodeData = {}, episodeId = null) {
@@ -594,19 +926,14 @@
                 if (episodeModalTitle) episodeModalTitle.textContent = "เพิ่มตอนใหม่";
                 if (episodeForm) episodeForm.reset();
                 if (deleteEpisodeBtn) deleteEpisodeBtn.classList.add('hidden');
-                // (NEW) ตั้งค่าเริ่มต้น
                 if (episodeShowSelect) episodeShowSelect.value = '';
                 if (episodeEmbedInput) episodeEmbedInput.value = '';
-                // if (episodeStatusSelect) episodeStatusSelect.value = 'active'; // (REMOVED)
-                updateSwitchToggle('active'); // (MODIFIED) Set default status
             } else {
                 if (episodeModalTitle) episodeModalTitle.textContent = "แก้ไขตอน";
                 if (episodeTitleInput) episodeTitleInput.value = episodeData.title || '';
                 if (episodeNumberInput) episodeNumberInput.value = episodeData.episodeNumber || '';
                 if (episodeEmbedInput) episodeEmbedInput.value = episodeData.embedCode || '';
                 if (episodeShowSelect) episodeShowSelect.value = episodeData.showId || '';
-                // if (episodeStatusSelect) episodeStatusSelect.value = episodeData.status || 'active'; // (REMOVED)
-                updateSwitchToggle(episodeData.status || 'active'); // (MODIFIED) Load saved status
                 if (deleteEpisodeBtn) deleteEpisodeBtn.classList.remove('hidden');
             }
             if (episodeModal) episodeModal.classList.add('flex');
@@ -618,23 +945,19 @@
             episodeForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
-                // --- MODIFIED: Convert URL to Embed Code before saving ---
                 const rawEmbedInput = episodeEmbedInput.value;
                 const embedCodeToSave = convertToEmbedCode(rawEmbedInput);
 
                 const episodeData = {
                     title: episodeTitleInput.value,
                     episodeNumber: parseInt(episodeNumberInput.value, 10) || 0,
-                    embedCode: embedCodeToSave, // ใช้โค้ดที่แปลงแล้ว
+                    embedCode: embedCodeToSave, 
                     showId: episodeShowSelect.value,
-                    // status: episodeStatusSelect.value, // (REMOVED)
-                    status: episodeStatusValue.value, // (MODIFIED) Get status from hidden input
                     updatedAt: serverTimestamp()
                 };
 
                 if (!episodeData.showId) {
                     console.error("Please select a show.");
-                    // In a real app, show a message box here instead of console.error
                     return;
                 }
 
@@ -647,12 +970,10 @@
                         await addDoc(getCollectionRef("episodes"), episodeData);
                     }
                     
-                    // (NEW) เรียกอัปเดต Max Episode สำหรับอนิเมะที่เกี่ยวข้องเสมอ
                     await updateMaxEpisodeAndStatus(episodeData.showId); 
                     
                     if (episodeModal) episodeModal.classList.remove('flex');
                     
-                    // (Optional: อัปเดตช่องกรอกด้วยโค้ดที่ถูกแปลง เพื่อให้ผู้ใช้เห็นว่ามีการแปลงเกิดขึ้น)
                     if (episodeEmbedInput) episodeEmbedInput.value = embedCodeToSave; 
 
                 } catch (error) {
@@ -664,22 +985,27 @@
         if (deleteEpisodeBtn) {
             deleteEpisodeBtn.addEventListener('click', async () => {
                 if (!currentEditingId) return;
-                console.log("Deleting episode... (In real app, use a custom confirm modal)");
-                try {
-                    const docSnap = await getDoc(doc(getCollectionRef("episodes"), currentEditingId));
-                    const showId = docSnap.data().showId;
-                    
-                    await deleteDoc(doc(getCollectionRef("episodes"), currentEditingId));
-                    
-                    // (NEW) เรียกอัปเดต Max Episode สำหรับอนิเมะที่เกี่ยวข้องหลังลบ
-                    if (showId) {
-                        await updateMaxEpisodeAndStatus(showId);
-                    }
+                
+                openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบตอนนี้? (การดำเนินการนี้ไม่สามารถย้อนกลับได้)`,
+                    async () => {
+                        try {
+                            const docSnap = await getDoc(doc(getCollectionRef("episodes"), currentEditingId));
+                            const showId = docSnap.data().showId;
+                            
+                            await deleteDoc(doc(getCollectionRef("episodes"), currentEditingId));
+                            
+                            if (showId) {
+                                await updateMaxEpisodeAndStatus(showId);
+                            }
 
-                    if (episodeModal) episodeModal.classList.remove('flex');
-                } catch (error) {
-                    console.error("Error deleting episode: ", error);
-                }
+                            if (episodeModal) episodeModal.classList.remove('flex');
+                        } catch (error) {
+                            console.error("Error deleting episode: ", error);
+                        } finally {
+                            closeConfirmModal();
+                        }
+                    }
+                );
             });
         }
         
@@ -704,11 +1030,11 @@
         function openBannerModal(mode, bannerData = {}, bannerId = null) {
             currentEditingId = bannerId;
             if (mode === 'add') {
-                if (bannerModalTitle) bannerModalTitle.textContent = "เพิ่มแบนเนอร์ใหม่";
+                if (bannerModalTitle) bannerModalTitle.textContent = "เพิ่มแบนเนอร์ (Banner) ใหม่";
                 if (bannerForm) bannerForm.reset();
                 if (deleteBannerBtn) deleteBannerBtn.classList.add('hidden');
             } else {
-                if (bannerModalTitle) bannerModalTitle.textContent = "แก้ไขแบนเนอร์";
+                if (bannerModalTitle) bannerModalTitle.textContent = "แก้ไขแบนเนอร์ (Banner)";
                 if (bannerShowSelect) bannerShowSelect.value = bannerData.showId || '';
                 if (bannerImageUrlInput) bannerImageUrlInput.value = bannerData.bannerImageUrl || '';
                 if (deleteBannerBtn) deleteBannerBtn.classList.remove('hidden');
@@ -729,7 +1055,6 @@
 
                 if (!bannerData.showId || !bannerData.bannerImageUrl) {
                     console.error("Please select a show and provide an image URL.");
-                    // In a real app, show a message box here instead of console.error
                     return;
                 }
 
@@ -752,13 +1077,19 @@
         if (deleteBannerBtn) {
             deleteBannerBtn.addEventListener('click', async () => {
                 if (!currentEditingId) return;
-                console.log("Deleting banner... (In real app, use a custom confirm modal)");
-                try {
-                    await deleteDoc(doc(getCollectionRef("banners"), currentEditingId));
-                    if (bannerModal) bannerModal.classList.remove('flex');
-                } catch (error) {
-                    console.error("Error deleting banner: ", error);
-                }
+                
+                openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบแบนเนอร์นี้?`,
+                    async () => {
+                        try {
+                            await deleteDoc(doc(getCollectionRef("banners"), currentEditingId));
+                            if (bannerModal) bannerModal.classList.remove('flex');
+                        } catch (error) {
+                            console.error("Error deleting banner: ", error);
+                        } finally {
+                            closeConfirmModal();
+                        }
+                    }
+                );
             });
         }
 
@@ -782,6 +1113,18 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            // (NEW) Get search inputs
+            showSearchInput = document.getElementById('show-search-input');
+            episodeSearchInput = document.getElementById('episode-search-input');
+
+            // (NEW) Add search listeners
+            if (showSearchInput) {
+                showSearchInput.addEventListener('input', renderShowTable);
+            }
+            if (episodeSearchInput) {
+                episodeSearchInput.addEventListener('input', renderEpisodeTable);
+            }
+            
             if (episodeNumberInput && episodeTitleInput) {
                 episodeNumberInput.addEventListener('input', () => {
                     const epNumber = episodeNumberInput.value;
@@ -790,14 +1133,6 @@
                     } else {
                         episodeTitleInput.value = '';
                     }
-                });
-            }
-            
-            // (NEW) Event listener for status switch toggle
-            if (episodeStatusToggle) {
-                episodeStatusToggle.addEventListener('click', () => {
-                    const newValue = episodeStatusValue.value === 'active' ? 'broken' : 'active';
-                    updateSwitchToggle(newValue);
                 });
             }
             
@@ -837,7 +1172,8 @@
     <div id="main-content" class="hidden">
 
         <!-- Admin Header -->
-        <header class="bg-gray-800 shadow-md">
+        <header class="bg-gray-800 shadow-md sticky top-0 z-40">
+            <!-- (MODIFIED) Row 1: Title and Logout -->
             <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
                 <!-- (MODIFIED) Logo link -->
                 <a href="admin.html" class="text-2xl font-bold text-white">ANI-END Admin Panel</a>
@@ -846,40 +1182,80 @@
                     ล็อกเอาต์
                 </button>
             </div>
-        </header>
-
-        <!-- Sidebar Navigation -->
-        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 flex">
-            <aside class="w-48 flex-shrink-0">
-                <nav class="flex flex-col space-y-2">
-                    <!-- (NEW) Banner Button -->
+            
+            <!-- (NEW) Row 2: Navigation -->
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <!-- (MOVED) Horizontal Navigation -->
+                <!-- (NEW) Added border-t border-gray-700/50 for separation -->
+                <nav class="flex flex-row space-x-2 pt-2 pb-3 border-t border-gray-700/50">
+                    <!-- (MODIFIED) 1. Banner Button (Now inactive) -->
                     <button id="show-banner-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium">
                         <i class="ri-image-line"></i>
-                        <span>แบนเนอร์</span>
+                        <span>แบนเนอร์ (Banner)</span>
                     </button>
-                    <button id="show-episode-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg bg-gray-900 text-white font-medium">
+                    <!-- (MODIFIED) 2. Show Button (Renamed, Now default active) -->
+                    <button id="show-show-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg bg-gray-900 text-white font-medium">
+                        <i class="ri-play-list-line"></i>
+                        <span>อนิเมะ (Anime)</span>
+                    </button>
+                    <!-- (MODIFIED) 3. Episode Button (Now inactive) -->
+                    <button id="show-episode-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium">
                         <i class="ri-movie-2-line"></i>
                         <span>ตอน (Episodes)</span>
                     </button>
-                    <button id="show-show-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium">
-                        <i class="ri-play-list-line"></i>
-                        <span>เรื่อง</span>
-                    </button>
                 </nav>
-            </aside>
+            </div>
+        </header>
+
+        <!-- (MODIFIED) Main Content Area (Sidebar Removed) -->
+        <!-- (NEW) Added 'relative' for sticky bar positioning -->
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 relative">
+            
+            <!-- (NEW) Bulk Action Bar (Episodes) -->
+            <!-- This bar is sticky and will appear *under* the header when items are selected -->
+            <div id="bulk-action-bar-episodes" class="hidden sticky top-[117px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <span id="selected-episodes-count" class="font-bold text-white">เลือก 0 รายการ</span>
+                    <!-- (Future) Add "Edit" button here -->
+                    <!-- <button id="bulk-edit-episodes-btn" class="text-sm text-blue-400 hover:text-blue-300">แก้ไข</button> -->
+                </div>
+                <button id="bulk-delete-episodes-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center space-x-2">
+                    <i class="ri-delete-bin-line"></i>
+                    <span>ลบรายการที่เลือก</span>
+                </button>
+            </div>
+            
+            <!-- (NEW) Bulk Action Bar (Shows) -->
+            <div id="bulk-action-bar-shows" class="hidden sticky top-[117px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <span id="selected-shows-count" class="font-bold text-white">เลือก 0 รายการ</span>
+                </div>
+                <button id="bulk-delete-shows-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center space-x-2">
+                    <i class="ri-delete-bin-line"></i>
+                    <span>ลบรายการที่เลือก</span>
+                </button>
+            </div>
+
 
             <!-- Main Content Area -->
-            <main class="flex-1 ml-8">
+            <!-- (REMOVED) ml-8 class -->
+            <main class="flex-1">
 
-                <!-- (NEW) Banner List View -->
+                <!-- (MODIFIED) 1. Banner List View (Ensured 'hidden' is present) -->
                 <div id="banner-list-view" class="hidden">
                     <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-3xl font-bold text-white">รายการแบนเนอร์</h2>
+                        <h2 class="text-3xl font-bold text-white">รายการแบนเนอร์ (Banner)</h2>
                         <button id="add-banner-btn" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
                             <i class="ri-add-line"></i>
                             <span>เพิ่มแบนเนอร์</span>
                         </button>
                     </div>
+                    <!-- (NEW) Search Bar for Banners (Not implemented, but placeholder) -->
+                    <!-- 
+                    <div class="mb-4">
+                        <input type="text" placeholder="ค้นหาแบนเนอร์..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    -->
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
                         <table class="w-full">
                             <thead class="bg-gray-900">
@@ -896,52 +1272,70 @@
                     </div>
                 </div>
 
-                <!-- Episode List View -->
-                <div id="episode-list-view">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-3xl font-bold text-white">รายการตอน</h2>
-                        <button id="add-episode-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
-                            <i class="ri-add-line"></i>
-                            <span>เพิ่มตอน</span>
-                        </button>
+                <!-- (MODIFIED) 2. Show List View (Default view, 'hidden' removed) -->
+                <div id="show-list-view">
+                    <!-- (MODIFIED) Header with Search -->
+                    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-white">รายการอนิเมะ (Anime)</h2>
+                        <div class="flex items-center space-x-4">
+                            <!-- (NEW) Show Search Input -->
+                            <input type="text" id="show-search-input" placeholder="ค้นหาอนิเมะ..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button id="add-show-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
+                                <i class="ri-add-line"></i>
+                                <span>เพิ่มเรื่อง</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-                        <table class="w-full">
+                        <!-- (MODIFIED) Added table-fixed and th widths -->
+                        <table class="w-full table-fixed">
                             <thead class="bg-gray-900">
                                 <tr>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ตอนที่</th>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อตอน</th>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
+                                    <th class="w-16 py-3 px-4 text-center">
+                                        <input type="checkbox" id="show-select-all" class="admin-checkbox">
+                                    </th>
+                                    <th class="w-32 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ปก</th>
+                                    <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อเรื่อง</th>
+                                    <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
+                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
                                 </tr>
                             </thead>
-                            <tbody id="episode-table-body" class="divide-y divide-gray-700">
+                            <tbody id="show-table-body" class="divide-y divide-gray-700">
                                 <!-- Data injected by JS -->
                             </tbody>
                         </table>
                     </div>
                 </div>
-
-                <!-- Show List View -->
-                <div id="show-list-view" class="hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-3xl font-bold text-white">รายการเรื่อง</h2>
-                        <button id="add-show-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
-                            <i class="ri-add-line"></i>
-                            <span>เพิ่มเรื่อง</span>
-                        </button>
+                
+                <!-- (FIXED) 3. Episode List View (Restored and set to 'hidden') -->
+                <div id="episode-list-view" class="hidden">
+                    <!-- (MODIFIED) Header with Search -->
+                    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-white">รายการตอน</h2>
+                        <div class="flex items-center space-x-4">
+                            <!-- (NEW) Episode Search Input -->
+                            <input type="text" id="episode-search-input" placeholder="ค้นหาตอน หรือ ชื่อเรื่อง..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
+                            <button id="add-episode-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
+                                <i class="ri-add-line"></i>
+                                <span>เพิ่มตอน</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-                        <table class="w-full">
+                        <!-- (MODIFIED) Added table-fixed and th widths -->
+                        <table class="w-full table-fixed">
                             <thead class="bg-gray-900">
                                 <tr>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ปก</th>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อเรื่อง</th>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
+                                    <th class="w-16 py-3 px-4 text-center">
+                                        <input type="checkbox" id="episode-select-all" class="admin-checkbox">
+                                    </th>
+                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ตอนที่</th>
+                                    <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อตอน</th>
+                                    <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th>
+                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
                                 </tr>
                             </thead>
-                            <tbody id="show-table-body" class="divide-y divide-gray-700">
+                            <tbody id="episode-table-body" class="divide-y divide-gray-700">
                                 <!-- Data injected by JS -->
                             </tbody>
                         </table>
@@ -980,25 +1374,86 @@
                         <input type="text" id="episode-title" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="เช่น ตอนที่ 1: การเริ่มต้น" required>
                     </div>
                     
-                    <!-- (MODIFIED) Status Switch Toggle -->
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">สถานะ (Status)</label>
-                        <div class="flex items-center space-x-3">
-                            <!-- Hidden input to store value -->
-                            <input type="hidden" id="episode-status-value" value="active">
-                            
-                            <button type="button" id="episode-status-toggle" role="switch" aria-checked="false" class="switch-bg relative inline-flex items-center h-6 w-11 flex-shrink-0 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500">
-                                <span id="episode-status-dot" class="switch-dot inline-block h-4 w-4 transform bg-white rounded-full shadow-lg transition-transform duration-200 ease-in-out"></span>
-                            </button>
-                            
-                            <span id="episode-status-label" class="font-medium text-green-500">ปกติ (Active)</span>
+                        <label for="episode-embed-code" class="block text-sm font-medium text-gray-300 mb-1">ลิงก์วิดีโอ (URL) หรือ Embed Code *</label>
+                        <textarea id="episode-embed-code" rows="4" placeholder="เช่น https://ok.ru/video/7229912320757 หรือ https://youtu.be/..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-green-500" required></textarea>
+                    </div>
+
+                </div>
+                <div class="flex items-center justify-between p-5 border-t border-gray-700">
+                    <button type="button" id="delete-episode-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg hidden">
+                        ลบตอน
+                    </button>
+                    <button type="submit" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg">
+                        บันทึก
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Adding/Editing Show -->
+    <div id="show-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <form id="show-form">
+                <div class="flex justify-between items-center p-5 border-b border-gray-700">
+                    <h3 id="show-modal-title" class="text-2xl font-bold text-white">เพิ่มอนิเมะใหม่</h3>
+                    <button type="button" id="close-show-modal" class="text-gray-400 hover:text-white">
+                        <i class="ri-close-line text-2xl"></i>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label for="show-title" class="block text-sm font-medium text-gray-300 mb-1">ชื่อเรื่อง (Title) *</label>
+                        <input type="text" id="show-title" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label for="show-description" class="block text-sm font-medium text-gray-300 mb-1">คำอธิบาย (Description)</label>
+                        <textarea id="show-description" rows="3" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div>
+                        <label for="show-thumbnail" class="block text-sm font-medium text-gray-300 mb-1">URL รูปปก (Thumbnail) *</label>
+                        <input type="url" id="show-thumbnail" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    
+                    <!-- (NEW) View Count Input -->
+                    <div>
+                        <label for="show-view-count" class="block text-sm font-medium text-gray-300 mb-1">ยอดเข้าชม (View Count)</label>
+                        <input type="number" id="show-view-count" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="0">
+                    </div>
+                    
+                    <!-- (MODIFIED/NEW) Checkbox สำหรับสถานะจบ -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">สถานะ</label>
+                        <div class="flex items-center space-x-2">
+                             <!-- Checkbox ตรงตามภาพที่แนบมา -->
+                            <input type="checkbox" id="show-completed-checkbox" class="h-5 w-5 bg-gray-700 border-gray-600 rounded text-green-500 focus:ring-green-500">
+                            <label for="show-completed-checkbox" class="text-gray-200">จบแล้ว (Completed)</label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Tags</label>
+                        <div class="flex flex-wrap gap-x-6 gap-y-2 mt-2">
+                            <label class="flex items-center space-x-2 text-gray-200">
+                                <input type="checkbox" value="อนิเมะ" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
+                                <span>อนิเมะ</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-200">
+                                <input type="checkbox" value="อนิเมะจีน" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
+                                <span>อนิเมะจีน</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-200">
+                                <input type="checkbox" value="อนิเมะพากย์ไทย" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
+                                <span>อนิเมะพากย์ไทย</span>
+                            </label>
                         </div>
                     </div>
 
                 </div>
                 <div class="flex items-center justify-between p-5 border-t border-gray-700">
                     <button type="button" id="delete-show-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg hidden">
-                        ลบเรื่อง
+                        ลบอนิเมะ
                     </button>
                     <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg">
                         บันทึก
@@ -1013,7 +1468,7 @@
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <form id="banner-form">
                 <div class="flex justify-between items-center p-5 border-b border-gray-700">
-                    <h3 id="banner-modal-title" class="text-2xl font-bold text-white">เพิ่มแบนเนอร์ใหม่</h3>
+                    <h3 id="banner-modal-title" class="text-2xl font-bold text-white">เพิ่มแบนเนอร์ (Banner) ใหม่</h3>
                     <button type="button" id="close-banner-modal" class="text-gray-400 hover:text-white">
                         <i class="ri-close-line text-2xl"></i>
                     </button>
@@ -1042,6 +1497,25 @@
             </form>
         </div>
     </div>
+    
+    <!-- (NEW) Confirmation Modal (For All Deletes) -->
+    <div id="confirm-modal" class="modal fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-sm">
+            <div class="p-6">
+                <h3 class="text-xl font-bold text-white mb-4">ยืนยันการดำเนินการ</h3>
+                <p id="confirm-modal-text" class="text-gray-300 mb-6">คุณแน่ใจหรือไม่?</p>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="confirm-modal-cancel-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">
+                        ยกเลิก
+                    </button>
+                    <button type="button" id="confirm-modal-confirm-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
+                        ยืนยัน (ลบ)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
 </body>
 </html>
