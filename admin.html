@@ -89,6 +89,11 @@
             return normalized; 
         }
         // (END NEW FUNCTION)
+        
+        // (FIX) เพิ่มฟังก์ชัน getCollectionRef ที่หายไปกลับเข้ามา
+        function getCollectionRef(collectionName) {
+            return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+        }
 
         // UI Elements
         const loadingIndicator = document.getElementById('loading-indicator');
@@ -246,12 +251,6 @@
             });
         }
 
-        
-        function getCollectionRef(collectionName) {
-            
-            return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
-        }
-
         // (NEW FUNCTION: ดึงตอนสูงสุดเพื่ออัปเดต Show)
         async function updateMaxEpisodeAndStatus(showId) {
             try {
@@ -297,21 +296,20 @@
         }
         // (END NEW FUNCTION)
         
-        // (NEW) Render Function for Shows Table
+        // (FIX) Render Function for Shows Table (ฟังก์ชันนี้หายไป)
         function renderShowTable() {
             if (!showTableBody) return;
             
-            // (MODIFIED)
+            // 1. (FIX) ใช้ normalizeThai สำหรับการค้นหา
             const searchQuery = showSearchInput ? normalizeThai(showSearchInput.value).toLowerCase() : '';
             
             const filteredShows = shows.filter(show => 
-                // (MODIFIED)
+                // (FIX) ใช้ normalizeThai กับชื่อเรื่อง
                 normalizeThai(show.title).toLowerCase().includes(searchQuery)
             );
 
-            // (MODIFIED) Build HTML string first, then set innerHTML once
             let tableHtml = '';
-            selectedShows.clear();
+            selectedShows.clear(); 
             updateBulkActionUIShows(filteredShows.length);
 
             let hasShows = false;
@@ -327,8 +325,8 @@
                         </td>
                         <td class="py-3 px-4">${show.title}</td>
                         <td class="py-3 px-4 text-sm">${(show.tags || []).join(', ')}</td>
-                        <!-- (MODIFIED) เพิ่มคอลัมน์ยอดเข้าชม -->
-                        <td class="py-3 px-4 text-sm text-center">${show.viewCount || 0}</td>
+                        <!-- (FIX) เพิ่มคอลัมน์ View Count (ที่เพิ่มใน request ก่อนหน้า) -->
+                        <td class="py-3 px-4 text-center">${show.viewCount || 0}</td>
                         <td class="py-3 px-4">
                             <button class="text-green-400 hover:text-green-300 edit-show-btn" data-id="${show.id}">แก้ไข</button>
                         </td>
@@ -336,7 +334,7 @@
                 `;
             });
             
-            showTableBody.innerHTML = tableHtml; // Set HTML once
+            showTableBody.innerHTML = tableHtml;
 
             if (showSelectAll) {
                 showSelectAll.checked = false;
@@ -344,23 +342,22 @@
                 showSelectAll.disabled = !hasShows;
             }
         }
-        
-        // (NEW) Render Function for Episodes Table
+
+        // (FIX) Render Function for Episodes Table (ฟังก์ชันนี้หายไป)
         function renderEpisodeTable() {
             if (!episodeTableBody) return;
             
-            // (MODIFIED)
+            // 1. (FIX) ใช้ normalizeThai สำหรับการค้นหา
             const searchQuery = episodeSearchInput ? normalizeThai(episodeSearchInput.value).toLowerCase() : '';
 
             const filteredEpisodes = allEpisodes.filter(ep => {
                 const show = shows.find(s => s.id === ep.showId);
-                // (MODIFIED)
+                // (FIX) ใช้ normalizeThai ทั้งชื่อตอนและชื่อเรื่อง
                 const showTitle = show ? normalizeThai(show.title).toLowerCase() : '';
                 const epTitle = normalizeThai(ep.title).toLowerCase();
                 return epTitle.includes(searchQuery) || showTitle.includes(searchQuery);
             });
 
-            // (MODIFIED) Build HTML string first, then set innerHTML once
             let tableHtml = '';
             selectedEpisodes.clear();
             updateBulkActionUIEpisodes(filteredEpisodes.length);
@@ -368,15 +365,14 @@
             let hasEpisodes = false;
             filteredEpisodes.forEach((data) => {
                 hasEpisodes = true;
-                const show = shows.find(s => s.id === data.showId); // หาชื่อเรื่องจาก ID
+                const show = shows.find(s => s.id === data.showId); 
                 
-                // (NEW) Check for broken status
                 let statusBadge = '';
-                let rowClass = 'border-b border-gray-700 hover:bg-gray-700'; // Default row
+                let rowClass = 'border-b border-gray-700 hover:bg-gray-700'; 
                 
                 if (data.status === 'broken') {
                     statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-red-600 px-2 py-0.5 rounded-full">เสีย</span>';
-                    rowClass = 'border-b border-red-900/50 bg-red-900/20 hover:bg-red-900/30'; // Reddish row
+                    rowClass = 'border-b border-red-900/50 bg-red-900/20 hover:bg-red-900/30'; 
                 }
                 
                 tableHtml += `
@@ -387,7 +383,7 @@
                         <td class="py-3 px-4 text-sm">${data.episodeNumber || '-'}</td>
                         <td class="py-3 px-4">
                             ${data.title}
-                            ${statusBadge} <!-- (NEW) Show badge here -->
+                            ${statusBadge}
                         </td>
                         <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
                         <td class="py-3 px-4">
@@ -397,7 +393,7 @@
                 `;
             });
             
-            episodeTableBody.innerHTML = tableHtml; // Set HTML once
+            episodeTableBody.innerHTML = tableHtml;
 
             if (episodeSelectAll) {
                 episodeSelectAll.checked = false;
@@ -405,14 +401,40 @@
                 episodeSelectAll.disabled = !hasEpisodes;
             }
         }
-
-        // (NEW) Function to Render Report Table
+        
+        // (MODIFIED) Function to Render Report Table (อัปเกรดตรรกะใหม่ทั้งหมด)
         function renderReportTable() {
             if (!reportTableBody) return;
 
             let tableHtml = '';
             
-            if (allReports.length === 0) {
+            // (NEW) 1. สร้าง "To-Do" list map เพื่อรวบรวมตอนที่มีปัญหาทั้งหมด
+            // ใช้ Map เพื่อป้องกัน episodeId ซ้ำซ้อน
+            // Key: episodeId, Value: { episode: (episodeData), report: (reportData or null) }
+            const todoMap = new Map();
+            
+            // (NEW) 2. เพิ่มรายการจาก 'reports' (ที่สคริปต์อัตโนมัติแจ้งมา)
+            allReports.forEach((report) => {
+                const episode = allEpisodes.find(ep => ep.id === report.episodeId);
+                todoMap.set(report.episodeId, {
+                    episode: episode, // ถ้าหาไม่เจอจะเป็น 'undefined' (N/A)
+                    report: report  // มี 'report' doc อยู่จริง
+                });
+            });
+            
+            // (NEW) 3. เพิ่มรายการที่ 'เสีย' (broken) แต่ยังไม่มีใน 'reports' (ที่ผู้ใช้แจ้งจาก player.html)
+            allEpisodes.forEach((episode) => {
+                if (episode.status === 'broken' && !todoMap.has(episode.id)) {
+                    // ตอนนี้ 'เสีย' แต่ไม่มี 'report' doc
+                    todoMap.set(episode.id, {
+                        episode: episode,
+                        report: null // ไม่มี 'report' doc
+                    });
+                }
+            });
+            
+            // (NEW) 4. ตรวจสอบว่า "To-Do" list ว่างหรือไม่
+            if (todoMap.size === 0) {
                 tableHtml = `
                     <tr>
                         <td colspan="3" class="py-6 px-4 text-center text-gray-400">
@@ -422,41 +444,66 @@
                     </tr>
                 `;
             } else {
-                allReports.forEach((report) => {
-                    // หาข้อมูล Episode และ Show ที่เกี่ยวข้อง
-                    const episode = allEpisodes.find(ep => ep.id === report.episodeId);
-                    const show = episode ? shows.find(s => s.id === episode.showId) : null;
+                // (NEW) 5. Render "To-Do" list ที่รวบรวมมาทั้งหมด
+                todoMap.forEach((item, episodeId) => {
+                    const { episode, report } = item;
                     
                     const episodeTitle = episode ? episode.title : 'N/A (อาจถูกลบไปแล้ว)';
+                    const show = episode ? shows.find(s => s.id === episode.showId) : null;
                     const showTitle = show ? show.title : 'N/A';
                     
-                    // (NEW) ตรวจสอบว่าตอนนี้ถูก Mark as broken หรือยัง
                     const isBroken = episode && episode.status === 'broken';
+                    
+                    // (NEW) ตรวจสอบว่าจะแสดงปุ่มไหนบ้าง
+                    const reportId = report ? report.id : null;
+                    const canMarkBroken = episode && !isBroken; // แสดง 'Mark Broken' ต่อเมื่อตอนยังอยู่ และยังไม่ถูก Mark
+                    // (FIX) แสดง 'Edit' ถ้าตอนยังอยู่ *หรือ* ถ้าเป็น N/A (report อยู่ แต่ episode หาย)
+                    const canEdit = episode || (report && !episode);
+                    const canResolve = report; // แสดง 'Resolve' ต่อเมื่อมี 'report' doc อยู่จริง
+                    const isDirectBroken = episode && episode.status === 'broken' && !report; // เคสที่ถูกแจ้งจาก player.html (เสีย แต่ไม่มี report)
 
                     tableHtml += `
                         <tr class="border-b border-gray-700 hover:bg-gray-700">
                             <td class="py-3 px-4">
                                 ${episodeTitle}
+                                <!-- (MODIFIED) แสดงป้าย "เสีย" ถ้าสถานะเป็น 'broken' -->
                                 ${isBroken ? '<span class="ml-2 text-xs font-medium text-white bg-red-600 px-2 py-0.5 rounded-full">เสีย</span>' : ''}
+                                <!-- (NEW) แสดงป้าย "ถูกรายงาน" ถ้ามี report แต่ยังไม่ broken -->
+                                ${report && !isBroken ? '<span class="ml-2 text-xs font-medium text-white bg-blue-600 px-2 py-0.5 rounded-full">ถูกรายงาน</span>' : ''}
                             </td>
                             <td class="py-3 px-4">${showTitle}</td>
                             <td class="py-3 px-4 space-x-2 whitespace-nowrap">
-                                <!-- Action 1: Mark as Broken (ถ้ายังไม่ถูก Mark) -->
-                                ${!isBroken ? `
-                                <button class="text-xs text-red-400 hover:text-red-300 bg-gray-900 px-2 py-1 rounded mark-broken-btn" data-episode-id="${report.episodeId}">
+                                <!-- Action 1: Mark as Broken -->
+                                ${canMarkBroken ? `
+                                <button class="text-xs text-red-400 hover:text-red-300 bg-gray-900 px-2 py-1 rounded mark-broken-btn" data-episode-id="${episodeId}">
                                     <i class="ri-flag-line"></i> Mark Broken
                                 </button>
                                 ` : ''}
                                 
-                                <!-- Action 2: Go to Edit -->
-                                <button class="text-xs text-green-400 hover:text-green-300 bg-gray-900 px-2 py-1 rounded goto-episode-btn" data-episode-id="${report.episodeId}">
+                                <!-- (DELETED) ลบปุ่ม Edit เก่าที่ซ้ำซ้อนออก -->
+                                
+                                <!-- (MODIFIED) Action 2: Go to Edit -->
+                                ${canEdit ? `
+                                <button class="text-xs text-green-400 hover:text-green-300 bg-gray-900 px-2 py-1 rounded goto-episode-btn" 
+                                        data-episode-id="${episodeId}" 
+                                        data-report-id="${reportId || ''}"> <!-- ส่ง reportId ถ้ามี -->
                                     <i class="ri-pencil-line"></i> Edit
                                 </button>
+                                ` : ''}
                                 
                                 <!-- Action 3: Resolve (Delete Report) -->
-                                <button class="text-xs text-blue-400 hover:text-blue-300 bg-gray-900 px-2 py-1 rounded resolve-report-btn" data-report-id="${report.id}">
+                                ${canResolve ? `
+                                <button class="text-xs text-blue-400 hover:text-blue-300 bg-gray-900 px-2 py-1 rounded resolve-report-btn" data-report-id="${reportId}">
                                     <i class="ri-check-line"></i> Resolve
                                 </button>
+                                ` : ''}
+                                
+                                <!-- (NEW) Action 4: Clear 'Broken' status (สำหรับตอนที่แจ้งจาก player.html) -->
+                                ${isDirectBroken ? `
+                                <button class="text-xs text-yellow-400 hover:text-yellow-300 bg-gray-900 px-2 py-1 rounded clear-broken-btn" data-episode-id="${episodeId}">
+                                    <i class="ri-check-line"></i> Clear Status
+                                </button>
+                                ` : ''}
                             </td>
                         </tr>
                     `;
@@ -503,10 +550,24 @@
                 allEpisodes = []; // (NEW) Store in global array
                 
                 const changedShowIds = new Set();
+                
+                // (FIX) แก้ไขตรรกะที่ทำให้เกิด Error
                 snapshot.docChanges().forEach((change) => {
-                    if (change.doc.data().showId) {
-                        if (change.type !== 'modified' || change.doc.data().episodeNumber !== change.oldDoc.data().episodeNumber) {
-                             changedShowIds.add(change.doc.data().showId);
+                    // (FIX) ตรวจสอบข้อมูลก่อน
+                    const showId = change.doc.data()?.showId;
+                    if (!showId) return; // ถ้าไม่มี showId ก็ข้าม
+
+                    if (change.type === 'added' || change.type === 'removed') {
+                        // ถ้ามีการเพิ่มหรือลบตอนใหม่, ให้อัปเดต max episode เสมอ
+                        changedShowIds.add(showId);
+                    } else if (change.type === 'modified') {
+                        // ถ้ามีการแก้ไข, ให้อัปเดตเฉพาะเมื่อ episodeNumber เปลี่ยนไป
+                        // (FIX) ต้องตรวจสอบว่า oldDoc มีอยู่จริงก่อน (ซึ่งควรจะมีใน 'modified')
+                        const oldEpNum = change.oldDoc?.data()?.episodeNumber;
+                        const newEpNum = change.doc.data()?.episodeNumber;
+                        
+                        if (oldEpNum !== newEpNum) {
+                            changedShowIds.add(showId);
                         }
                     }
                 });
@@ -565,13 +626,29 @@
                 console.log("Reports loaded:", allReports.length);
                 renderReportTable(); // (NEW) เรียกใช้ฟังก์ชัน render
                 
-                // (MODIFIED) อัปเดต Badge
+                // (MODIFIED) อัปเดต Badge (ย้ายตรรกะมาจาก renderReportTable)
                 const reportBadge = document.getElementById('report-count-badge');
                 if (reportBadge) {
-                    if (allReports.length > 0) {
-                        reportBadge.textContent = allReports.length;
+                    // (NEW) นับจำนวนที่ "ยังไม่ถูกแก้ไข" จริงๆ
+                    // เราจะนับ 1. รายการใน 'reports' 2. รายการ 'broken' ที่ไม่มีใน 'reports'
+                    // (ใช้ตรรกะเดียวกับ renderReportTable)
+                    const todoMap = new Map();
+                    allReports.forEach((report) => {
+                        todoMap.set(report.episodeId, report);
+                    });
+                    allEpisodes.forEach((episode) => {
+                        if (episode.status === 'broken' && !todoMap.has(episode.id)) {
+                            todoMap.set(episode.id, { isBrokenOnly: true }); // เพิ่มรายการ 'broken'
+                        }
+                    });
+                    
+                    const totalTodoCount = todoMap.size;
+                    
+                    if (totalTodoCount > 0) {
+                        reportBadge.textContent = totalTodoCount;
                         reportBadge.classList.remove('hidden');
                     } else {
+                        reportBadge.textContent = '0';
                         reportBadge.classList.add('hidden');
                     }
                 }
@@ -632,18 +709,45 @@
                         console.log(`Episode ${episodeId} marked as broken.`);
                     }
                     
-                    // Action 2: Go to Edit Episode
+                    // (MODIFIED) Action 2: Go to Edit Episode (ปรับปรุงตรรกะ)
                     else if (target.classList.contains('goto-episode-btn')) {
                         const episodeId = target.dataset.episodeId;
+                        const reportId = target.dataset.reportId; // (NEW) ดึง reportId (อาจจะเป็น "" (สตริงว่าง) ถ้าไม่มี)
+                        
                         if (!episodeId) return;
                         
                         // ใช้ Logic เดิมจากตาราง Episode (ดึงข้อมูลและเปิด Modal)
                         const docRef = doc(getCollectionRef("episodes"), episodeId);
                         const docSnap = await getDoc(docRef);
+                        
                         if (docSnap.exists()) {
+                            // กรณีที่ 1: ตอนยังอยู่ -> เปิดหน้าแก้ไขตอนนั้น
                             openEpisodeModal('edit', docSnap.data(), episodeId);
                         } else {
-                            console.error("Episode not found, cannot edit.");
+                            // กรณีที่ 2: ตอนถูกลบไปแล้ว (N/A)
+                            // เคสนี้จะต้องมี reportId ถึงจะทำงานได้
+                            if (!reportId || reportId === "") { // (FIX) ตรวจสอบ string ว่างด้วย
+                                console.error("Cannot resolve N/A item without a reportId.");
+                                return;
+                            }
+                            console.warn(`Episode ${episodeId} not found. Opening 'Add New Episode' modal and resolving report ${reportId}.`);
+
+                            // 1. เปิดหน้าต่าง "เพิ่มตอนใหม่"
+                            openEpisodeModal('add');
+                            
+                            // 2. ยืนยันและลบรายงานเก่าที่อ้างอิงถึงตอนที่ไม่มีอยู่แล้ว
+                            openConfirmModal(`"ตอน" ที่ถูกอ้างอิง (ID: ${episodeId}) ถูกลบไปแล้ว ระบบจะเปิดหน้า "เพิ่มตอนใหม่" ให้แทน และจะลบรายงานเก่านี้ทิ้ง`, 
+                                async () => {
+                                    try {
+                                        await deleteDoc(doc(getCollectionRef("reports"), reportId));
+                                        console.log(`Orphaned report ${reportId} resolved and deleted.`);
+                                    } catch (error) {
+                                        console.error("Error resolving orphaned report: ", error);
+                                    } finally {
+                                        closeConfirmModal();
+                                    }
+                                }
+                            );
                         }
                     }
                     
@@ -661,6 +765,29 @@
                                     console.log(`Report ${reportId} resolved and deleted.`);
                                 } catch (error) {
                                     console.error("Error resolving report: ", error);
+                                } finally {
+                                    closeConfirmModal();
+                                }
+                            }
+                        );
+                    }
+
+                    // (NEW) Action 4: Clear 'Broken' status (สำหรับตอนที่ถูกแจ้งจาก player.html)
+                    else if (target.classList.contains('clear-broken-btn')) {
+                        const episodeId = target.dataset.episodeId;
+                        if (!episodeId) return;
+
+                        // นี่คือตอนที่ถูก Mark 'broken' โดยตรง (เช่น จาก player.html)
+                        // เราแค่ล้างสถานะ 'broken'
+                        openConfirmModal(`คุณแน่ใจหรือไม่ว่าจัดการปัญหานี้แล้ว และต้องการล้างสถานะ "เสีย" (Broken)?`, 
+                            async () => {
+                                try {
+                                    const docRef = doc(getCollectionRef("episodes"), episodeId);
+                                    // ตั้งค่า status เป็น null (หรือ 'active')
+                                    await updateDoc(docRef, { status: null });
+                                    console.log(`Cleared broken status for ${episodeId}.`);
+                                } catch (error) {
+                                    console.error("Error clearing broken status: ", error);
                                 } finally {
                                     closeConfirmModal();
                                 }
