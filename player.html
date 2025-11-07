@@ -739,11 +739,13 @@
             }
 
             
-            // ** ใช้โครงสร้าง Card Grid แบบเดียวกับใน index.html **
+            // ** ใช้โครงสร้าง Card Grid แบบเดียวกับใน index.html แต่เพิ่มพื้นหลังเทาเข้ม **
             return `
-                <a href="player.html?id=${show.id}" class="block group">
+                <!-- (MODIFIED) เพิ่ม bg-gray-800, rounded-lg, overflow-hidden, และ shadow-lg ให้กับตัวลิงก์การ์ด -->
+                <a href="player.html?id=${show.id}" class="block group bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
                     <!-- 1. ส่วนภาพ (Image Aspect Ratio Container) -->
-                    <div class="aspect-[2/3] rounded-lg overflow-hidden mb-2 relative">
+                    <!-- *** REMOVED rounded-lg from inner div. Rounded is now on parent link. *** -->
+                    <div class="aspect-[2/3] overflow-hidden relative">
                         ${dubBadge}
                         ${episodeBadge} <!-- ป้ายตอนสูงสุด (มุมล่างขวา) -->
                         <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
@@ -751,8 +753,9 @@
                         ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) -->
                     </div>
                     <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
-                    <div class="text-white min-h-10">
-                        <h4 class="font-bold related-card-title text-sm">${title}</h4> 
+                    <!-- *** MODIFIED: ADDED min-h-[3.5rem] for consistent height (2 lines) *** -->
+                    <div class="text-white min-h-[3.5rem] p-3 pt-2">
+                        <h4 class="font-bold related-card-title text-base">${title}</h4> 
                     </div>
                 </a>
             `;
@@ -1303,8 +1306,8 @@
         
         <!-- (MODIFIED) Mobile Search Bar -->
         <div id="mobile-search-bar" class="md:hidden hidden p-2 absolute top-16 left-0 right-0 bg-gray-800 shadow-lg z-40">
-            <div class="relative"> <!-- (NEW) Wrap content in relative div to fix dropdown positioning -->
-                <div class="flex search-container">
+            <div class="relative search-container"> <!-- (NEW) Wrap content in relative div to fix dropdown positioning -->
+                <div class="flex">
                     <input id="mobile-search-input" type="text" placeholder="ค้นหา..." class="flex-1 bg-gray-700 text-white rounded-l-full py-2 px-4 focus:outline-none">
                     <button id="mobile-close-search" class="bg-gray-700 text-gray-400 rounded-r-full px-3">
                         <i class="ri-close-line"></i>
