@@ -146,24 +146,22 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
      }
      
-     /* (NEW - FIX) เพิ่ม CSS สำหรับป้ายตอนล่าสุดที่หายไป */
-     .status-badge-episode {
-        position: absolute;
-        bottom: 8px; /* มุมล่างขวา */
-        right: 8px;
-        z-index: 10;
-        background-color: #4B5563; /* gray-600 */
-        color: white;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 10px;
-        font-weight: 700;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-     }
-     
-     .history-thumb {
-        width: 60px; /* ขนาดรูปปก */
-        height: 80px; 
+     /* (MODIFIED) History Card Styles (ลดขนาด) */
+     .history-card {
+        display: flex;
+        align-items: center;
+        gap: 8px; /* (MODIFIED) Reduced gap */
+        padding: 6px; /* (MODIFIED) Reduced padding */
+        border-radius: 8px;
+        background-color: #1f2937; /* gray-800 */
+        transition: background-color 0.15s;
+    }
+    .history-card:hover {
+        background-color: #374151; /* gray-700 on hover */
+    }
+    .history-thumb {
+        width: 48px; /* (MODIFIED) Reduced size */
+        height: 64px; /* (MODIFIED) Reduced size */
         aspect-ratio: 3/4;
         object-fit: cover;
         flex-shrink: 0;
@@ -571,17 +569,17 @@
             // อัปเดต Swiper ที่มีอยู่สำหรับ Carousels
             
             // Swiper สำหรับ Top 10 (Default Layout: 6.5 up)
-            // (MODIFIED) ปรับค่า slidesPerView ให้น้อยลง เพื่อให้ Card ใหญ่ขึ้น
+            // (MODIFIED) ปรับค่า slidesPerView ให้น้อยลงอีก เพื่อให้ Card ใหญ่ขึ้น
             new Swiper('.swiper-default-up', { 
-                slidesPerView: 2.2, // (MODIFIED)
+                slidesPerView: 1.8, // (MODIFIED)
                 spaceBetween: 16,
                 navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
                 pagination: { el: '.swiper-pagination', clickable: true },
                 breakpoints: {
-                    640: { slidesPerView: 3.2 }, // (MODIFIED)
-                    768: { slidesPerView: 4.2 }, // (MODIFIED)
-                    1024: { slidesPerView: 4.5 }, // (MODIFIED)
-                    1280: { slidesPerView: 5.5 }, // (MODIFIED)
+                    640: { slidesPerView: 2.5 }, // (MODIFIED)
+                    768: { slidesPerView: 3.5 }, // (MODIFIED)
+                    1024: { slidesPerView: 4.2 }, // (MODIFIED)
+                    1280: { slidesPerView: 4.5 }, // (MODIFIED)
                 }
             });
 
@@ -730,38 +728,25 @@
             const title = history.showTitle;
             // (MODIFIED) ใช้ตัวแปรนี้เป็นข้อความหลัก
             const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.lastWatchedEpisodeNumber || 'N/A'}`;
-            const thumbnail = history.showThumbnail || 'https://placehold.co/60x80/333/fff?text=Img';
+            // (MODIFIED) อัปเดตขนาด placeholder
+            const thumbnail = history.showThumbnail || 'https://placehold.co/48x64/333/fff?text=Img'; 
             
             // (REMOVED) ลบการคำนวณ Progress Bar และข้อความ "ดูจบแล้ว"
-            /*
-            const currentEpNum = history.lastWatchedEpisodeNumber || 0;
-            const latestEpNum = history.latestEpisodeNumber || 1; 
-            let progress = Math.min(100, Math.round((currentEpNum / latestEpNum) * 100));
-            if (history.isCompleted === true) {
-                 progress = 100;
-            } else if (currentEpNum === 0) {
-                 progress = 0;
-            } else if (progress === 0 && currentEpNum > 0) {
-                 progress = 1; // Minimum 1% if an episode was watched
-            }
-            const progressColor = progress < 100 ? 'bg-red-500' : 'bg-green-500'; 
-            const progressText = progress < 100 ? `ดูถึง ${episodeTitle}` : `ดูจบแล้ว`; 
-            */
 
+            // (MODIFIED) แก้ไขโครงสร้าง Layout ใหม่ทั้งหมด
             return `
-                <!-- (MODIFIED) ส่ง ep_id ไปใน URL -->
                 <a href="player.html?id=${showId}&ep_id=${episodeId}" class="history-card shadow-md">
+                    <!-- Col 1: Image -->
                     <img src="${thumbnail}" alt="${title}" class="history-thumb shadow-sm">
+                    
+                    <!-- Col 2: Text (Grows) -->
                     <div class="flex-grow min-w-0">
-                        <h4 class="font-bold text-base text-white line-clamp-1">${title}</h4>
-                        <!-- (MODIFIED) แสดงชื่อตอนล่าสุดที่ดู -->
-                        <p class="text-xs text-gray-300 line-clamp-1 mt-1">${episodeTitle}</p>
-                        
-                        <!-- (REMOVED) Progress Bar -->
-                        
+                        <h4 class="font-bold text-sm text-white line-clamp-1">${title}</h4>
+                        <p class="text-xs text-gray-300 line-clamp-1">${episodeTitle}</p>
                     </div>
-                    <!-- ปุ่ม Play -->
-                    <div class="text-white flex-shrink-0">
+                    
+                    <!-- Col 3: Button (Shrinks) -->
+                    <div class="flex-shrink-0 text-white ml-2"> <!-- Add ml-2 for spacing -->
                         <i class="ri-play-circle-fill text-2xl text-green-500 hover:text-green-400"></i>
                     </div>
                 </a>
