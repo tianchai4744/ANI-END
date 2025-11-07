@@ -720,7 +720,7 @@
             const isDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
             const dubBadge = isDub ? `<div class="dub-badge">พากย์ไทย</div>` : '';
             
-            // (NEW) ป้ายสถานะจบแล้ว (มุมล่างซ้าย)
+            // (NEW) ป้ายสถานะจบแล้วสำหรับ Related Card (มุมล่างซ้าย)
             // ใช้ฟิลด์ isCompleted ที่ถูกอัปเดตจาก admin.html
             const isCompleted = show.isCompleted === true;
             const completedBadge = isCompleted ? `
@@ -918,6 +918,8 @@
             try {
                 const urlParams = new URLSearchParams(window.location.search);
                 const showId = urlParams.get('id'); // ดึง ID จาก URL
+                // (NEW) ดึง Episode ID ที่ต้องการเล่นจาก URL (มาจาก History Card)
+                const epIdFromUrl = urlParams.get('ep_id'); 
                 
                 if (!showId) {
                     playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบ ID ของอนิเมะ</p>`;
@@ -992,7 +994,21 @@
 
                 // 5. เล่นตอนแรก (ถ้ามี)
                 if (currentEpisodes.length > 0) {
-                    playEpisode(currentEpisodes[0]);
+                    let episodeToPlay = currentEpisodes[0]; // Default: ตอนที่ 1
+
+                    // (NEW LOGIC - FIX) ตรวจสอบว่ามีตอนที่ระบุใน URL (มาจากหน้า History) หรือไม่
+                    if (epIdFromUrl) {
+                        const targetEpisode = currentEpisodes.find(ep => ep.id === epIdFromUrl);
+                        if (targetEpisode) {
+                             console.log(`Found ep_id=${epIdFromUrl}. Playing specific episode from History.`);
+                             episodeToPlay = targetEpisode;
+                        } else {
+                             console.warn(`ep_id=${epIdFromUrl} found in URL but episode not in list. Defaulting to first episode.`);
+                        }
+                    }
+                    
+                    playEpisode(episodeToPlay); // Play the determined episode
+
                 } else {
                     playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับอนิเมะนี้</p>`;
                     // (NEW) Ensure buttons are disabled if no episodes
