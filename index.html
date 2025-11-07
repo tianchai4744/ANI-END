@@ -499,8 +499,18 @@
             
             let slidesHtml = '';
             banners.forEach(banner => {
+                // (NEW LOGIC) 1. หาประวัติการเข้าชมสำหรับ Show ID นี้
+                const historyItem = historyItems.find(h => h.showId === banner.showId);
+                let targetUrl = `player.html?id=${banner.showId}`;
+                
+                // (NEW LOGIC) 2. ถ้ามีประวัติดูค้างไว้ ให้เพิ่ม ep_id
+                if (historyItem && historyItem.lastWatchedEpisodeId) {
+                    targetUrl = `player.html?id=${banner.showId}&ep_id=${historyItem.lastWatchedEpisodeId}`;
+                }
+
                 slidesHtml += `
-                    <a href="player.html?id=${banner.showId}" class="swiper-slide">
+                    <!-- (MODIFIED) ใช้ targetUrl ที่ถูกปรับแล้ว -->
+                    <a href="${targetUrl}" class="swiper-slide">
                         <img src="${banner.bannerImageUrl}" alt="Banner" class="w-full h-full object-cover">
                     </a>
                 `;
@@ -663,7 +673,7 @@
                 ${rankNumber}
             </div>` : '';
             
-        // (NEW LOGIC) ตรวจสอบประวัติการดูค้าง
+        // (MODIFIED LOGIC) ตรวจสอบประวัติการดูค้าง (ใช้ history ที่ถูกส่งมาจาก caller)
         const watchedEpisodeId = history ? history.lastWatchedEpisodeId : null;
         let targetUrl = `player.html?id=${show.id}`;
         
