@@ -170,19 +170,19 @@
         border-radius: 8px;
         background-color: #1f2937; /* gray-800 */
         transition: background-color 0.15s;
-     }
-     .history-card:hover {
+    }
+    .history-card:hover {
         background-color: #374151; /* gray-700 on hover */
-     }
-     .history-thumb {
-        width: 60px;
-        height: 80px;
+    }
+    .history-thumb {
+        width: 60px; /* ขนาดรูปปก */
+        height: 80px; 
         aspect-ratio: 3/4;
         object-fit: cover;
         flex-shrink: 0;
         border-radius: 4px;
-     }
-     
+    }
+
  </style>
  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
 </head>
@@ -194,8 +194,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, setLogLevel,
-            limit, orderBy, where, startAfter, getDocs,
-            setDoc // (NEW) เพิ่ม setDoc ใน index.html สำหรับ History (ในอนาคต)
+            limit, orderBy, where, startAfter, getDocs 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config เนื่องจาก Canvas ไม่ได้ให้ global vars มาในโหมดนี้ ***)
@@ -209,7 +208,8 @@
             measurementId: "G-VZM1XTPMYL"
         };
         
-        const appId = firebaseConfig.projectId; // (NEW) Global App ID
+        // (NEW) Global App ID
+        const appId = firebaseConfig.projectId;
 
         // (NEW) Constants for Pagination
         const PAGINATION_LIMIT = 28; // 7 columns * 4 rows
@@ -217,6 +217,7 @@
         let db, auth, userId;
         let allShows = []; 
         let allTags = new Set(); 
+        let historyItems = []; // (NEW) For storing the latest history items
         let currentPageId = 'home'; 
         let heroSwiperInstance = null; // ตัวแปรสำหรับ Swiper
         
@@ -227,9 +228,6 @@
         let currentGridTag = null; 
         let gridFilteredShows = []; // (NEW) All matching shows for the current tag
         let currentRenderedIndex = 0; // (NEW) The index up to which shows have been rendered
-        
-        // (NEW) UI Elements for History
-        let historyListContainer; // (NEW)
 
         // (MODIFIED) เปลี่ยนทั้งหมดเป็น let และจะกำหนดค่าใน DOMContentLoaded
         let homeView;
@@ -276,7 +274,7 @@
                         userId = user.uid;
                         console.log("User Authenticated (Anonymous):", userId);
                         await setupListeners();
-                        // (NEW) Setup Listener for History (ต้องอยู่ใน onAuthStateChanged)
+                        // (NEW) Setup History Listener here once user is ready
                         setupHistoryListener();
                     } else {
                         console.log("No user signed in. Attempting sign in...");
@@ -298,42 +296,15 @@
         }
 
         function getCollectionRef(collectionName) {
+            const appId = firebaseConfig.projectId;
             return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
         }
         
-        /**
-         * (NEW) Listener for User's View History
-         */
-        function setupHistoryListener() {
-            if (!userId) {
-                console.warn("User ID not available for history listener.");
-                // (FIX) แสดงปุ่ม/ข้อความที่แจ้งว่าไม่มีประวัติ
-                if(historyListContainer) historyListContainer.innerHTML = createHistoryEmptyState("ไม่มีผู้ใช้ล็อกอิน (Anon ID) หรือไม่ได้เข้าชม");
-                return;
-            }
-            
-            // สร้าง Query สำหรับดึงประวัติการเข้าชม (Private Data)
-            // Path: artifacts/{appId}/users/{userId}/viewHistory
-            const historyCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
-            
-            // Query: เรียงตามเวลาที่ดูล่าสุด (watchedAt) และจำกัด 5 รายการ
-            const historyQuery = query(historyCollectionRef, orderBy("watchedAt", "desc"), limit(5));
-
-            onSnapshot(historyQuery, (snapshot) => {
-                const historyItems = [];
-                snapshot.forEach((doc) => {
-                    historyItems.push({ id: doc.id, ...doc.data() });
-                });
-                
-                console.log("View History loaded:", historyItems.length);
-                renderHistorySection(historyItems);
-                
-            }, (error) => {
-                console.error("Error listening to view history:", error);
-                if(historyListContainer) historyListContainer.innerHTML = createHistoryEmptyState("ไม่สามารถโหลดประวัติได้");
-            });
+        // (NEW) Function to get History Collection Ref
+        function getHistoryCollectionRef() {
+             // (FIXED) ใช้พาธ Private Data
+             return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
         }
-
 
         async function setupListeners() {
             // 1. Listener for Shows (ใช้ onSnapshot และฟิลด์ latestEpisodeNumber ที่ถูกอัปเดตจาก Admin)
@@ -394,6 +365,40 @@
                 const loadingEl = document.getElementById('hero-loading');
                 if (loadingEl) {
                     loadingEl.innerHTML = '<p class="text-red-500">ไม่สามารถโหลดแบนเนอร์ได้</p>';
+                }
+            });
+        }
+        
+        // (NEW FUNCTION) Listener for View History
+        function setupHistoryListener() {
+            if (!userId) {
+                console.log("History listener skipped: userId not available yet.");
+                return;
+            }
+            // (MODIFIED) Limit to 5 latest items for the homepage display
+            const historyQuery = query(
+                getHistoryCollectionRef(), 
+                orderBy("watchedAt", "desc"), 
+                limit(5)
+            );
+            
+            onSnapshot(historyQuery, (snapshot) => {
+                historyItems = [];
+                snapshot.forEach((doc) => {
+                    historyItems.push({ id: doc.id, ...doc.data() });
+                });
+                console.log("Latest history items loaded:", historyItems.length);
+                
+                // (MODIFIED) Only render sections if we are on the home page
+                if (currentPageId === 'home') {
+                    renderSections(); 
+                }
+                
+            }, (error) => {
+                console.error("Error listening to view history:", error);
+                // (FIX) Render sections anyway, but history section will show an error
+                if (currentPageId === 'home') {
+                    renderSections(); 
                 }
             });
         }
@@ -487,18 +492,36 @@
                 .sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)); 
                 
             const top10Shows = sortedShows.slice(0, 10); // 1-10
+
+            // (NEW) สร้าง Grid Container สำหรับ Top 10 และ History
+            const dualGridContainer = document.createElement('div');
+            // (MODIFIED) ใช้ flex-wrap บน Mobile/Tablet และ lg:flex-nowrap บน Desktop
+            dualGridContainer.className = 'flex flex-wrap lg:flex-nowrap gap-6 mb-8'; 
             
-            // (NEW) แยกส่วน Top 10 ออกไปไว้ใน Home View (Grid)
-            const top10Section = createTop10GridSection("10 อันดับอนิเมะยอดนิยม", top10Shows);
+            // --- A. Top 10 Section (ซ้ายบน Desktop) ---
+            if (top10Shows.length > 0) {
+                // (MODIFIED) ใช้ w-full บน Mobile/Tablet และ lg:w-2/3 บน Desktop
+                const top10Section = document.createElement('section');
+                top10Section.className = 'w-full lg:w-2/3'; 
+                top10Section.appendChild(createCarouselSection("10 อันดับอนิเมะยอดนิยม", top10Shows, { showRank: true, swiperClass: 'swiper-default-up' }));
+                dualGridContainer.appendChild(top10Section);
+            }
+            
+            // --- B. History Section (ขวาบน Desktop) ---
+            // (NEW) สร้าง History Section
+            const historySection = document.createElement('section');
+            historySection.className = 'w-full lg:w-1/3 flex-shrink-0'; 
+            historySection.innerHTML = createHistorySection(); 
+            dualGridContainer.appendChild(historySection);
+            
+            // เพิ่ม Dual Grid เข้าไปใน Container หลัก
+            sectionsContainer.appendChild(dualGridContainer);
             
             // 2. "อนิเมะแนะนำ" (อันดับ 11-30) 
             const recommendedShows = sortedShows.slice(10, 30); 
             
-            const dynamicSections = document.createElement('div');
-            dynamicSections.className = 'mt-8';
-
             if (recommendedShows.length > 0) {
-                 dynamicSections.appendChild(createCarouselSection("อนิเมะแนะนำ", recommendedShows, { swiperClass: 'swiper-7-up' })); 
+                 sectionsContainer.appendChild(createCarouselSection("อนิเมะแนะนำ", recommendedShows, { swiperClass: 'swiper-7-up' })); 
             }
 
             // 3. "อนิเมะพากย์ไทย" (กรองตาม Tag, จัดเรียงตามยอดวิว, จำกัด 20 เรื่อง)
@@ -508,13 +531,13 @@
                 .slice(0, 20); 
                 
             if (thaiDubShows.length > 0) {
-                dynamicSections.appendChild(createCarouselSection("อนิเมะพากย์ไทย", thaiDubShows, { swiperClass: 'swiper-7-up' }));
+                sectionsContainer.appendChild(createCarouselSection("อนิเมะพากย์ไทย", thaiDubShows, { swiperClass: 'swiper-7-up' }));
             }
 
             // 5. "อนิเมะอัปเดตใหม่" (จัดเรียงตามวันที่สร้างใหม่ล่าสุด 20 เรื่อง)
             const latestShows = [...allShows]
                 .sort((a, b) => {
-                    // Firestore Timestamp ถูกแปลงเป็น Object ธรรมดาเมื่อโหลด
+                    // (MODIFIED) เปลี่ยนจาก b.updatedAt เป็น b.createdAt เพื่อเรียงตามเรื่องที่เพิ่มเข้ามาใหม่เท่านั้น
                     const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
                     const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
                     return timeB - timeA; // เรียงจากเวลาสร้างล่าสุด (มากที่สุด) ไปยังเวลาเก่าที่สุด (น้อยที่สุด)
@@ -522,23 +545,14 @@
                 .slice(0, 20); 
 
             if (latestShows.length > 0) {
-                 dynamicSections.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up' }));
-            }
-            
-            // 6. ประกอบร่าง Home View
-            if (top10Shows.length > 0) {
-                 sectionsContainer.appendChild(top10Section); // เพิ่มส่วน Top 10 + History
-            }
-
-            if (dynamicSections.children.length > 0) {
-                 sectionsContainer.appendChild(dynamicSections); // เพิ่ม Carousels อื่นๆ
-            } else if (top10Shows.length === 0) {
+                 sectionsContainer.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up' }));
+            } else if(top10Shows.length === 0) { // หากไม่มีข้อมูลเลย
                 sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
             }
 
             // อัปเดต Swiper ที่มีอยู่สำหรับ Carousels
             
-            // Swiper สำหรับ Top 10 (Default Layout: 6.5 up) - *** REUSED CLASS ***
+            // Swiper สำหรับ Top 10 (Default Layout: 6.5 up)
             new Swiper('.swiper-default-up', { 
                 slidesPerView: 2.5,
                 spaceBetween: 16,
@@ -568,50 +582,6 @@
             });
         }
         
-        /**
-         * (NEW) สร้างส่วน Top 10 และ History คู่กัน
-         */
-        function createTop10GridSection(title, shows) {
-            const section = document.createElement('section');
-            section.className = 'mb-8';
-            
-            // โครงสร้าง Grid 2 คอลัมน์ (10 อันดับ และ ประวัติ)
-            section.innerHTML = `
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    <!-- Col 1: Top 10 Carousel (2/3 width on large screens) -->
-                    <div class="lg:col-span-2">
-                        <h3 class="text-2xl font-bold mb-4">${title}</h3>
-                        <div class="swiper relative swiper-default-up">
-                            <div class="swiper-wrapper">
-                                ${shows.map((show, index) => `<div class="swiper-slide">${createContentCard(show, index + 1)}</div>`).join('')}
-                            </div>
-                            <div class="swiper-button-next hidden md:block"></div>
-                            <div class="swiper-button-prev hidden md:block"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Col 2: History Section (1/3 width on large screens) -->
-                    <div class="lg:col-span-1">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-2xl font-bold">ประวัติ</h3>
-                            <!-- (MODIFIED) แก้ไขลิงก์ให้ชี้ไป history.html -->
-                            <a href="history.html" class="text-sm text-gray-400 hover:text-green-500 flex items-center">
-                                ดูทั้งหมด
-                                <i class="ri-arrow-right-s-line ml-1"></i>
-                            </a>
-                        </div>
-                        <div id="history-list-container" class="space-y-3">
-                            <!-- History Cards injected by JS -->
-                            ${createHistoryEmptyState("กำลังโหลด...")}
-                        </div>
-                    </div>
-                </div>
-            `;
-            return section;
-        }
-
-
         function createCarouselSection(title, shows, options = {}) {
             const section = document.createElement('section');
             section.className = 'mb-8';
@@ -691,51 +661,71 @@
             `;
         }
         
+        // (NEW FUNCTION) Render History Section
+        function createHistorySection() {
+            let cardsHtml = '';
+            
+            if (historyItems.length > 0) {
+                historyItems.forEach(item => {
+                    cardsHtml += createHistoryCard(item);
+                });
+            } else {
+                 cardsHtml = `<div class="p-4 text-center text-gray-400 text-sm bg-gray-800 rounded-lg">
+                                <i class="ri-time-line text-2xl mb-2 block"></i>
+                                ไม่พบประวัติการเข้าชม
+                            </div>`;
+            }
+
+            return `
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold">ประวัติ</h3>
+                    <!-- (MODIFIED) ลิงก์ดูทั้งหมด ไปที่หน้าใหม่ -->
+                    <a href="history.html" class="text-green-500 hover:text-green-400 font-medium flex items-center text-sm">
+                        ดูทั้งหมด <i class="ri-arrow-right-s-line ml-1"></i>
+                    </a>
+                </div>
+                <div id="history-list" class="space-y-3">
+                    ${cardsHtml}
+                </div>
+            `;
+        }
+        
         /**
-         * (NEW) สร้าง Card สำหรับประวัติการเข้าชม
+         * (NEW FUNCTION) สร้าง Card สำหรับประวัติการเข้าชม
          */
         function createHistoryCard(history) {
-            // (FIX) ใช้ showId แทน id เพื่อให้ลิงก์ไป player.html ถูกต้อง
             const showId = history.showId; 
+            const episodeId = history.lastWatchedEpisodeId; // (NEW) ดึง Episode ID
             const title = history.showTitle;
             const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.lastWatchedEpisodeNumber || 'N/A'}`;
             const thumbnail = history.showThumbnail || 'https://placehold.co/60x80/333/fff?text=Img';
             
-            // (NEW) คำนวณ % ที่ดูไปแล้ว (จำลอง: ใช้ Episode Number เป็นตัวกำหนด)
-            // ถ้า episodeNumber = 1 และ latestEpisodeNumber = 10, Progress = 10%
             const currentEpNum = history.lastWatchedEpisodeNumber || 0;
-            const latestEpNum = history.latestEpisodeNumber || 1; // ป้องกันหารด้วย 0
+            const latestEpNum = history.latestEpisodeNumber || 1; 
             
-            // ใช้ currentEpNum / latestEpNum * 100 เพื่อให้ % ดูสมจริง
             let progress = Math.min(100, Math.round((currentEpNum / latestEpNum) * 100));
-            // ถ้าจบแล้ว (isCompleted) ให้เป็น 100%
             if (history.isCompleted === true) {
                  progress = 100;
-            } else if (progress === 0 && currentEpNum > 0) {
-                 // ถ้าตอนที่ดู > 0 แต่ progress คำนวณได้ 0 (เช่น latestEpNum ใหญ่มาก) ให้แสดง 1% เป็นอย่างน้อย
-                 progress = 1;
             } else if (currentEpNum === 0) {
-                 // ถ้าไม่มีตอนที่ (ep. 0) ให้เริ่มที่ 1%
-                 progress = 1;
+                 progress = 0;
+            } else if (progress === 0 && currentEpNum > 0) {
+                 progress = 1; // Minimum 1% if an episode was watched
             }
 
-            const progressColor = progress < 100 ? 'bg-green-500' : 'bg-red-500'; // ถ้าดูครบแล้วเป็นสีแดง (จบ)
-            const progressText = progress < 100 ? `Watched up to ${progress}%` : `ดูจบแล้ว`;
+            const progressColor = progress < 100 ? 'bg-red-500' : 'bg-green-500'; // (FIXED) สี Progress Bar
+            const progressText = progress < 100 ? `ดูถึง ${episodeTitle}` : `ดูจบแล้ว`; // (FIXED) ข้อความสถานะ
 
             return `
-                <a href="player.html?id=${showId}" class="history-card">
-                    <img src="${thumbnail}" alt="${title}" class="history-thumb shadow-md">
+                <!-- (MODIFIED) ส่ง ep_id ไปใน URL -->
+                <a href="player.html?id=${showId}&ep_id=${episodeId}" class="history-card shadow-md">
+                    <img src="${thumbnail}" alt="${title}" class="history-thumb shadow-sm">
                     <div class="flex-grow min-w-0">
-                        <!-- ชื่อเรื่อง -->
-                        <h4 class="font-bold text-sm text-white truncate">${title}</h4>
-                        <!-- ชื่อตอนที่ดู/สถานะ -->
-                        <p class="text-xs text-gray-400 truncate mt-0.5">${episodeTitle}</p>
+                        <h4 class="font-bold text-base text-white line-clamp-1">${title}</h4>
+                        <p class="text-xs text-gray-300 line-clamp-1 mt-1">${progressText}</p>
                         <!-- Progress Bar -->
                         <div class="mt-2 w-full bg-gray-600 rounded-full h-1.5">
                             <div class="${progressColor} h-1.5 rounded-full" style="width: ${progress}%;"></div>
                         </div>
-                        <!-- Progress Text -->
-                        <p class="text-xs text-gray-500 mt-1">${progressText}</p>
                     </div>
                     <!-- ปุ่ม Play -->
                     <div class="text-white flex-shrink-0">
@@ -745,38 +735,6 @@
             `;
         }
         
-        /**
-         * (NEW) สร้างสถานะว่างสำหรับ History List
-         */
-        function createHistoryEmptyState(message) {
-             return `<div class="p-4 text-center text-gray-400 text-sm bg-gray-800 rounded-lg">
-                         <i class="ri-time-line text-2xl mb-2 block"></i>
-                         ${message}
-                     </div>`;
-        }
-        
-        /**
-         * (NEW) Render History Section
-         */
-        function renderHistorySection(historyItems) {
-            if (!historyListContainer) {
-                 historyListContainer = document.getElementById('history-list-container');
-            }
-            if (!historyListContainer) return;
-
-            if (historyItems.length === 0) {
-                historyListContainer.innerHTML = createHistoryEmptyState("ไม่พบประวัติการเข้าชม");
-                return;
-            }
-            
-            let html = '';
-            historyItems.forEach(item => {
-                html += createHistoryCard(item);
-            });
-            
-            historyListContainer.innerHTML = html;
-        }
-
         // (NEW) Function to initialize client-side pagination for Grid View
         function initializeGridPaging(tag) {
             currentGridTag = tag;
@@ -1013,7 +971,6 @@
             gridViewContent = document.getElementById('grid-view-content');
             sectionsContainer = document.getElementById('sections-container');
             loadMoreButton = document.getElementById('load-more-btn'); 
-            historyListContainer = document.getElementById('history-list-container'); // (NEW)
 
             searchInput = document.getElementById('search-input');
             searchDropdown = document.getElementById('search-dropdown');
