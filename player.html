@@ -230,6 +230,9 @@
         let currentShow = null;
         let currentEpisodes = [];
         
+        // (NEW) Global History State
+        let historyItems = []; 
+
         // (NEW) Global State for search function
         let allShows = []; // Required for Search Functionality
 
@@ -276,6 +279,27 @@
         // ฟังก์ชันช่วยสำหรับอ้างอิง Collection
         function getCollectionRef(collectionName) {
             return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+        }
+        
+        /**
+         * (NEW FUNCTION) Load History Items Once (สำหรับใช้ใน Related Shows)
+         * โหลดประวัติการดู 50 รายการล่าสุดเพื่อใช้ในการสร้างลิงก์สำหรับ Related Card
+         */
+        async function loadHistoryOnce() {
+            if (!userId) return;
+            try {
+                // Query Top 50 recent history items to cover all possible related shows
+                const historyQuery = query(
+                    collection(db, `artifacts/${appId}/users/${userId}/viewHistory`), 
+                    orderBy("watchedAt", "desc"), 
+                    limit(50) 
+                );
+                const snapshot = await getDocs(historyQuery);
+                historyItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log("Loaded history items for related content checking:", historyItems.length);
+            } catch (error) {
+                console.error("Error loading history for related shows:", error);
+            }
         }
         
         // (NEW FUNCTION) บันทึกประวัติการเข้าชม
@@ -400,10 +424,7 @@
              const lowerQuery = query.toLowerCase().trim();
              if (!lowerQuery) return;
              
-             // *** REMOVED CHECK FOR 'NO RESULTS' TO ALWAYS REDIRECT ***
              // This ensures that even if live search finds no result, the full search is performed on index.html.
-             
-             // 3. Always redirect to index.html to perform full search and display "No results" there if necessary.
              window.location.href = `index.html?search=${encodeURIComponent(query)}`;
         }
         
@@ -711,8 +732,9 @@
 
         /**
          * (MODIFIED) สร้าง Card สำหรับ Related Shows ในรูปแบบ Grid (คล้าย index.html)
+         * (MODIFIED) เพิ่มพารามิเตอร์ history เพื่อใช้ประวัติการดูค้างไว้
          */
-        function createRelatedCard(show) {
+        function createRelatedCard(show, history = null) {
             const title = show.title || "N/A";
             const isDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
             const dubBadge = isDub ? `<div class="dub-badge">พากย์ไทย</div>` : '';
@@ -736,15 +758,32 @@
             }
 
             
+            // (NEW LOGIC) ตรวจสอบประวัติการดูค้าง
+            const watchedEpisodeId = history ? history.lastWatchedEpisodeId : null;
+            let targetUrl = `player.html?id=${show.id}`;
+            
+            if (watchedEpisodeId) {
+                // *** FIX: ถ้ามีประวัติดูค้างไว้ ให้อัปเดต URL ด้วย ep_id เพื่อเริ่มเล่นตอนที่ดูค้างไว้ ***
+                targetUrl = `player.html?id=${show.id}&ep_id=${watchedEpisodeId}`;
+            }
+
+            
             // ** ใช้โครงสร้าง Card Grid แบบเดียวกับใน index.html แต่เพิ่มพื้นหลังเทาเข้ม **
             return `
-                <!-- (MODIFIED) เพิ่ม bg-gray-700/80 เพื่อให้สีพื้นหลังของการ์ดแตกต่างจากกล่องหลัก --><a href="player.html?id=${show.id}" class="block group bg-gray-700/80 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-                    <!-- 1. ส่วนภาพ (Image Aspect Ratio Container) --><!-- *** REMOVED rounded-lg from inner div. Rounded is now on parent link. *** --><div class="aspect-[2/3] overflow-hidden relative">
+                <!-- (MODIFIED) ใช้ targetUrl ที่ถูกปรับแล้ว -->
+                <a href="${targetUrl}" class="block group bg-gray-700/80 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <!-- 1. ส่วนภาพ (Image Aspect Ratio Container) -->
+                    <!-- *** REMOVED rounded-lg from inner div. Rounded is now on parent link. *** -->
+                    <div class="aspect-[2/3] overflow-hidden relative">
                         ${dubBadge}
-                        ${episodeBadge} <!-- ป้ายตอนสูงสุด (มุมล่างขวา) --><img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
+                        ${episodeBadge} <!-- ป้ายตอนสูงสุด (มุมล่างขวา) -->
+                        <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
                              alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                        ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) --></div>
-                    <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) --><!-- *** MODIFIED: เปลี่ยน min-h-[3.5rem] เป็น h-14 เพื่อบังคับความสูง 2 บรรทัดเหมือน index.html *** --><div class="text-white h-14 p-3 pt-2">
+                        ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) -->
+                    </div>
+                    <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
+                    <!-- *** MODIFIED: เปลี่ยน min-h-[3.5rem] เป็น h-14 เพื่อบังคับความสูง 2 บรรทัดเหมือน index.html *** -->
+                    <div class="text-white h-14 p-3 pt-2">
                         <h4 class="font-bold related-card-title text-base">${title}</h4> 
                     </div>
                 </a>
@@ -801,7 +840,11 @@
                 relatedListContainer.innerHTML = ''; // Clear loading text
 
                 relatedShows.forEach(show => {
-                    relatedListContainer.innerHTML += createRelatedCard(show);
+                    // (NEW) 1. Find history item for this related show
+                    const historyItem = historyItems.find(h => h.showId === show.id);
+                    
+                    // (NEW) 2. Pass both show and history item to createRelatedCard
+                    relatedListContainer.innerHTML += createRelatedCard(show, historyItem);
                 });
 
             } catch (error) {
@@ -1037,6 +1080,9 @@
                         
                         console.log("User Authenticated (Anonymous):", userId);
                         
+                        // (NEW) Load history items once (ก่อนโหลด related content)
+                        await loadHistoryOnce(); 
+                        
                         // (NEW) Load all shows for search function
                         await loadAllShowsForSearch();
                         
@@ -1109,24 +1155,6 @@
             const mobileSearchBtn = document.getElementById('mobile-search-button');
             const mobileSearchBar = document.getElementById('mobile-search-bar');
             const mobileCloseSearchBtn = document.getElementById('mobile-close-search');
-            
-            // (REMOVED) Assignments moved up
-            // searchInput = document.getElementById('search-input-desktop');
-            // mobileSearchInput = document.getElementById('mobile-search-input');
-            // searchDropdown = document.getElementById('search-dropdown'); // (NEW)
-            // mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
-            // prevEpisodeBtn = document.getElementById('prev-episode-btn');
-            // nextEpisodeBtn = document.getElementById('next-episode-btn');
-
-
-            if (mobileMenuBtn && mobileMenu) {
-                mobileMenuBtn.addEventListener('click', () => {
-                    mobileMenu.classList.toggle('hidden');
-                    // (NEW) ซ่อนแถบค้นหา Mobile เมื่อเปิด Menu
-                    if (mobileSearchBar) mobileSearchBar.style.display = 'none';
-                    if (searchDropdown) searchDropdown.classList.add('hidden'); // (NEW) ซ่อน Desktop Dropdown
-                });
-            }
             
             // (NEW) Mobile Search Button Logic
             if (mobileSearchBtn && mobileSearchBar) {
