@@ -261,6 +261,7 @@
         let allShows = []; 
         let allTags = new Set(); 
         let historyItems = []; // (NEW) For storing the latest history items
+        let allBanners = []; // (FIX) NEW: Global state for banners
         let currentPageId = 'home'; 
         let heroSwiperInstance = null; // ตัวแปรสำหรับ Swiper
         
@@ -400,13 +401,13 @@
             // 2. Listener for Banners (แยกออกมา)
             const bannerQuery = query(getCollectionRef("banners"), orderBy("updatedAt", "desc"), limit(7));
             onSnapshot(bannerQuery, (snapshot) => {
-                const banners = [];
+                allBanners = []; // (FIX) Store banners in global variable
                 snapshot.forEach((doc) => {
-                    banners.push({ id: doc.id, ...doc.data() });
+                    allBanners.push({ id: doc.id, ...doc.data() });
                 });
-                console.log("Banners loaded:", banners.length);
-                // *** FIX: เรียก renderHeroSlider ด้วยข้อมูลใหม่ ***
-                renderHeroSlider(banners); 
+                console.log("Banners loaded:", allBanners.length);
+                // (FIX) เรียก renderHeroSlider ทันทีที่ข้อมูล Banner มาถึง (ครั้งที่ 1)
+                renderHeroSlider(); 
             }, (error) => {
                 console.error("Error listening to banners:", error);
                 const loadingEl = document.getElementById('hero-loading');
@@ -435,6 +436,10 @@
                     historyItems.push({ id: doc.id, ...doc.data() });
                 });
                 console.log("Latest history items loaded:", historyItems.length);
+                
+                // (FIX) เรียก renderHeroSlider ซ้ำอีกครั้งเมื่อ History โหลดเสร็จ (ครั้งที่ 2)
+                // เพื่อให้ลิงก์ Banner อัปเดตด้วย ep_id ที่ถูกต้อง
+                renderHeroSlider(); 
                 
                 // (MODIFIED) Only render sections if we are on the home page
                 if (currentPageId === 'home') {
@@ -486,8 +491,10 @@
             });
         }
 
-        // *** ตรรกะ Banner: ค้นหา historyItem และสร้างลิงก์ที่มี ep_id ***
-        function renderHeroSlider(banners) {
+        // *** ตรรกะ Banner: ใช้ allBanners และค้นหา historyItem เพื่อสร้างลิงก์ที่มี ep_id ***
+        // (FIX) ไม่มีพารามิเตอร์แล้ว เพราะใช้ allBanners
+        function renderHeroSlider() {
+            const banners = allBanners; // (FIX) ใช้ Global Banners
             const swiperWrapper = document.querySelector('#hero-swiper .swiper-wrapper');
             const loadingEl = document.getElementById('hero-loading');
             
@@ -519,28 +526,32 @@
                 `;
             });
             
+            // (FIX) ตรวจสอบว่า Swiper ถูกสร้างแล้วหรือไม่ ก่อนอัปเดต
+            const shouldReinitialize = swiperWrapper.innerHTML.trim() === '';
             swiperWrapper.innerHTML = slidesHtml;
             loadingEl.classList.add('hidden'); // ซ่อน Loading
             
-            // Initialize Swiper
-            if (heroSwiperInstance) {
-                heroSwiperInstance.destroy(true, true);
+            // Initialize/Reinitialize Swiper
+            if (shouldReinitialize) {
+                 heroSwiperInstance = new Swiper('#hero-swiper', {
+                    loop: banners.length > 1, 
+                    autoplay: {
+                        delay: 4000,
+                        disableOnInteraction: false,
+                    },
+                    pagination: {
+                        el: '.swiper-pagination',
+                        clickable: true,
+                    },
+                    navigation: {
+                        nextEl: '.swiper-button-next',
+                        prevEl: '.swiper-button-prev',
+                    },
+                });
+            } else if (heroSwiperInstance) {
+                 // อัปเดต Swiper Data ถ้ามันถูกสร้างแล้ว
+                 heroSwiperInstance.update();
             }
-            heroSwiperInstance = new Swiper('#hero-swiper', {
-                loop: banners.length > 1, 
-                autoplay: {
-                    delay: 4000,
-                    disableOnInteraction: false,
-                },
-                pagination: {
-                    el: '.swiper-pagination',
-                    clickable: true,
-                },
-                navigation: {
-                    nextEl: '.swiper-button-next',
-                    prevEl: '.swiper-button-prev',
-                },
-            });
         }
 
         function renderSections() {
@@ -852,7 +863,7 @@
             if (showsToRender.length > 0) {
                 showsToRender.forEach((show) => {
                     const historyItem = historyItems.find(h => h.showId === show.id);
-                    createContentCard(show, null, historyItem); // ใช้ createContentCard ที่อัปเดตแล้ว
+                    gridViewContent.innerHTML += createContentCard(show, null, historyItem); // ใช้ createContentCard ที่อัปเดตแล้ว
                 });
             } else if (pageNumber === 1) {
                  // No shows found at all
