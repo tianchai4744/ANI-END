@@ -146,6 +146,21 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
      }
      
+     /* (NEW - FIX) เพิ่ม CSS สำหรับป้ายตอนล่าสุดที่หายไป */
+     .status-badge-episode {
+        position: absolute;
+        bottom: 8px; /* มุมล่างขวา */
+        right: 8px;
+        z-index: 10;
+        background-color: #4B5563; /* gray-600 */
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+     }
+     
      /* (MODIFIED) History Card Styles (ลดขนาด) */
      .history-card {
         display: flex;
@@ -173,27 +188,38 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 2.5rem; /* 40px */
-        height: 2.5rem; /* 40px */
-        padding: 0.25rem 0.75rem;
-        border-radius: 0.5rem; /* rounded-lg */
-        font-weight: 600; /* font-semibold */
+        width: 36px;
+        height: 36px;
+        margin: 0 4px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 14px;
         transition: background-color 0.15s, color 0.15s;
-        border: 1px solid #374151; /* border-gray-700 */
     }
-    .pagination-btn.active {
-        background-color: #00b87c; /* bg-green-500 (custom green) */
-        color: #ffffff;
-        border-color: #00b87c;
+    .pagination-btn.page {
+        background-color: #374151; /* gray-700 */
+        color: #d1d5db; /* gray-300 */
     }
-    .pagination-btn:not(.disabled):not(.active):hover {
-        background-color: #374151; /* bg-gray-700 */
-        color: #f3f4f6; /* text-gray-100 */
+    .pagination-btn.page:hover {
+        background-color: #4b5563; /* gray-600 */
     }
-    .pagination-btn.disabled {
-        color: #6b7280; /* text-gray-500 */
-        background-color: #1f2937; /* bg-gray-800 */
+    .pagination-btn.page.active {
+        background-color: #16a34a; /* green-600 */
+        color: white;
+    }
+    .pagination-btn.nav, .pagination-btn.dots {
+        background-color: transparent;
+        color: #9ca3af; /* gray-400 */
+    }
+    .pagination-btn.nav:hover {
+        background-color: #374151; /* gray-700 */
+    }
+    .pagination-btn.nav:disabled {
+        color: #4b5563; /* gray-600 */
         cursor: not-allowed;
+    }
+    .pagination-btn.nav:disabled:hover {
+        background-color: transparent;
     }
 
 
@@ -225,8 +251,8 @@
         // (NEW) Global App ID
         const appId = firebaseConfig.projectId;
 
-        // (NEW) Constants for Pagination
-        const PAGINATION_LIMIT = 28; // 7 columns * 4 rows
+        // (MODIFIED) Constants for Pagination
+        const ITEMS_PER_PAGE = 28; // 7 columns * 4 rows
         
         let db, auth, userId;
         let allShows = []; 
@@ -241,8 +267,8 @@
         // (MODIFIED) State for Grid View Pagination (Client-Side Paging)
         let currentGridTag = null; 
         let gridFilteredShows = []; // (NEW) All matching shows for the current tag
-        // (MODIFIED) เปลี่ยนจาก 'Load More' เป็น 'Numbered Pages'
-        let currentPage = 1; // (MODIFIED)
+        let currentGridPage = 1; // (NEW) The current page number
+        let totalGridPages = 1; // (NEW) Total pages for the current filter
 
         // (MODIFIED) เปลี่ยนทั้งหมดเป็น let และจะกำหนดค่าใน DOMContentLoaded
         let homeView;
@@ -250,8 +276,8 @@
         let gridViewTitle;
         let gridViewContent;
         let sectionsContainer;
-        let loadMoreButton; // (REMOVED) ไม่ถูกใช้แล้ว แต่เก็บไว้กัน Error (จะถูกแทนที่ด้วย paginationContainer)
-        let paginationContainer; // (NEW)
+        // (MODIFIED)
+        let paginationContainer; // (REPLACED) loadMoreButton;
 
         let searchInput;
         let searchDropdown;
@@ -359,7 +385,8 @@
                     // หากมีการอัพทเดทข้อมูลในขณะที่ Grid View เปิดอยู่ ให้ re-initialize การแบ่งหน้า
                     console.log("Snapshot update: re-initializing Grid View for", currentGridTag);
                     renderDynamicNav(currentGridTag);
-                    renderGridView(currentGridTag); 
+                    // (MODIFIED)
+                    initializeGridPaging(currentGridTag); // Re-initialize and render page 1
                 }
                 
             }, (error) => {
@@ -526,7 +553,8 @@
             // --- B. History Section (ขวาบน Desktop) ---
             // (NEW) สร้าง History Section
             const historySection = document.createElement('section');
-            historySection.className = 'w-full lg:w-1/3 flex-shrink-0'; 
+            // (MODIFIED) เพิ่ม bg-black p-4 rounded-lg ตามที่ผู้ใช้ต้องการ
+            historySection.className = 'w-full lg:w-1/3 flex-shrink-0 bg-black p-4 rounded-lg'; 
             historySection.innerHTML = createHistorySection(); 
             dualGridContainer.appendChild(historySection);
             
@@ -712,7 +740,7 @@
                         ดูทั้งหมด <i class="ri-arrow-right-s-line ml-1"></i>
                     </a>
                 </div>
-                <div id="history-list" class="space-y-3">
+                <div id="history-list" class="space-y-2"> <!-- (MODIFIED) Reduced space-y-3 to space-y-2 -->
                     ${cardsHtml}
                 </div>
             `;
@@ -770,152 +798,131 @@
                     return timeB - timeA; // เรียงจากเวลาล่าสุด (มากที่สุด) ไปยังเวลาเก่าที่สุด (น้อยที่สุด)
                 });
 
-            currentPage = 1; // (MODIFIED) Start rendering from page 1
-            paginationContainer = document.getElementById('pagination-container'); // (NEW)
-            
+            totalGridPages = Math.ceil(gridFilteredShows.length / ITEMS_PER_PAGE);
+            currentGridPage = 1;
+
+            // (MODIFIED)
             gridViewContent.innerHTML = '';
-            // (REMOVED) loadMoreButton.classList.add('hidden');
+            paginationContainer.innerHTML = '';
             gridViewContainer.style.display = 'block';
             homeView.style.display = 'none';
             
             // Show loading text momentarily
             gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">กำลังจัดเรียงและโหลดรายการ...</p>`;
 
-            // 2. Render the first page AND pagination
-            renderPage(1); 
-            renderPaginationControls();
+            // 2. Render the first page
+            renderPage(1);
 
             // 3. Ensure layout is correct
             gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
         }
 
-        // (REMOVED) Function appendNextPage() ...
-        
-        
         // (NEW) Function to render a specific page number
         function renderPage(pageNumber) {
-            if (!gridFilteredShows || gridFilteredShows.length === 0) {
-                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
-                 return;
-            }
+            if (pageNumber < 1 || pageNumber > totalGridPages) return;
             
-            currentPage = pageNumber;
+            currentGridPage = pageNumber;
+            gridViewContent.innerHTML = '';
             
-            const startIndex = (pageNumber - 1) * PAGINATION_LIMIT;
-            const endIndex = startIndex + PAGINATION_LIMIT;
+            const startIndex = (pageNumber - 1) * ITEMS_PER_PAGE;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, gridFilteredShows.length);
             const showsToRender = gridFilteredShows.slice(startIndex, endIndex);
-            
-            gridViewContent.innerHTML = ''; // Clear previous content
-            
+
             if (showsToRender.length > 0) {
                 showsToRender.forEach((show) => {
                     const historyItem = historyItems.find(h => h.showId === show.id);
                     gridViewContent.innerHTML += createContentCard(show, null, historyItem);
                 });
             } else if (pageNumber === 1) {
-                 // This case should be hit if filter is empty
-                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
+                 // No shows found at all
+                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
             }
             
-            // Update pagination buttons to show the new 'active' page
+            // Scroll to top of grid
+            if (gridViewContainer) {
+                 gridViewContainer.scrollIntoView({ behavior: 'smooth' });
+            }
+
             renderPaginationControls();
+        }
+        
+        // (NEW) Function to render pagination buttons
+        function renderPaginationControls() {
+            if (!paginationContainer) return;
+            paginationContainer.innerHTML = '';
             
-            // Scroll to top of the grid view
-            // (Use smooth scroll if available, fallback to instant)
-            const gridViewTop = gridViewContainer.offsetTop;
-            window.scrollTo({
-                top: gridViewTop - 80, // (Offset for sticky header)
-                behavior: 'smooth'
-            });
+            if (totalGridPages <= 1) return; // Don't show if only 1 page
+
+            const maxVisibleButtons = 7; // Max buttons to show (e.g., 1 ... 4 5 6 ... 10)
+            let buttonsHtml = '';
+
+            // Previous Button
+            buttonsHtml += createPageButton('«', currentGridPage - 1, 'nav', currentGridPage === 1);
+
+            if (totalGridPages <= maxVisibleButtons) {
+                // Show all pages
+                for (let i = 1; i <= totalGridPages; i++) {
+                    buttonsHtml += createPageButton(i, i, 'page', false, i === currentGridPage);
+                }
+            } else {
+                // Show truncated pages
+                let start = Math.max(1, currentGridPage - 2);
+                let end = Math.min(totalGridPages, currentGridPage + 2);
+
+                if (currentGridPage - 1 <= 2) {
+                    end = Math.min(totalGridPages, maxVisibleButtons - 2);
+                }
+                if (totalGridPages - currentGridPage <= 2) {
+                    start = Math.max(1, totalGridPages - maxVisibleButtons + 3);
+                }
+
+                // Page 1
+                if (start > 1) {
+                    buttonsHtml += createPageButton(1, 1, 'page');
+                }
+                // ... (dots)
+                if (start > 2) {
+                    buttonsHtml += createPageButton('...', -1, 'dots', true);
+                }
+                
+                // Middle pages
+                for (let i = start; i <= end; i++) {
+                    buttonsHtml += createPageButton(i, i, 'page', false, i === currentGridPage);
+                }
+                
+                // ... (dots)
+                if (end < totalGridPages - 1) {
+                     buttonsHtml += createPageButton('...', -1, 'dots', true);
+                }
+                // Last page
+                if (end < totalGridPages) {
+                    buttonsHtml += createPageButton(totalGridPages, totalGridPages, 'page');
+                }
+            }
+
+            // Next Button
+            buttonsHtml += createPageButton('»', currentGridPage + 1, 'nav', currentGridPage === totalGridPages);
+            
+            paginationContainer.innerHTML = buttonsHtml;
         }
         
         // (NEW) Helper function to create a single pagination button
-        function createPageButton(page, text, isDisabled = false, isActive = false) {
-            const button = document.createElement('button');
-            button.className = 'pagination-btn';
-            button.textContent = text;
-            
-            if (isActive) {
-                button.classList.add('active');
-            }
-            if (isDisabled) {
-                button.classList.add('disabled');
-                button.disabled = true;
-            }
-            if (page) {
-                // Store the page number this button links to
-                button.dataset.page = page; 
-            }
-            return button;
+        function createPageButton(text, page, type, isDisabled = false, isActive = false) {
+             const activeClass = isActive ? 'active' : '';
+             const disabledAttr = isDisabled ? 'disabled' : '';
+             const pageData = type === 'page' ? `data-page="${page}"` : '';
+             const navData = type === 'nav' ? `data-page="${page}"` : '';
+             
+             if (type === 'dots') {
+                return `<button class="pagination-btn dots" disabled>...</button>`;
+             }
+             
+             return `
+                <button class="pagination-btn ${type} ${activeClass}" ${pageData} ${navData} ${disabledAttr}>
+                    ${text}
+                </button>
+             `;
         }
-
-        // (NEW) Function to render the pagination controls
-        function renderPaginationControls() {
-            if (!paginationContainer) {
-                 paginationContainer = document.getElementById('pagination-container');
-                 if (!paginationContainer) return; // Still not found, exit
-            }
-            
-            const totalItems = gridFilteredShows.length;
-            const totalPages = Math.ceil(totalItems / PAGINATION_LIMIT);
-            
-            paginationContainer.innerHTML = ''; // Clear old buttons
-            if (totalPages <= 1) return; // Don't show if only 1 page
-
-            const maxVisibleButtons = 7; // Max visible numeric buttons
-
-            // "Prev" Button
-            paginationContainer.appendChild(createPageButton(currentPage - 1, '«', currentPage === 1));
-
-            let startPage, endPage;
-            if (totalPages <= maxVisibleButtons) {
-                startPage = 1;
-                endPage = totalPages;
-            } else {
-                // Logic to calculate window (e.g., 1 ... 4 5 6 ... 100)
-                const maxPagesBeforeCurrent = Math.floor((maxVisibleButtons - 2) / 2);
-                const maxPagesAfterCurrent = Math.ceil((maxVisibleButtons - 2) / 2);
-
-                if (currentPage <= maxPagesBeforeCurrent + 1) {
-                    startPage = 1;
-                    endPage = maxVisibleButtons - 1; // e.g. 1, 2, 3, 4, 5
-                } else if (currentPage + maxPagesAfterCurrent >= totalPages) {
-                    startPage = totalPages - (maxVisibleButtons - 2); // e.g. 96, 97, 98, 99, 100
-                    endPage = totalPages;
-                } else {
-                    startPage = currentPage - maxPagesBeforeCurrent;
-                    endPage = currentPage + maxPagesAfterCurrent - 1;
-                }
-            }
-            
-            // Add '1' and '...' if needed
-            if (startPage > 1) {
-                paginationContainer.appendChild(createPageButton(1, '1'));
-                if (startPage > 2) {
-                    paginationContainer.appendChild(createPageButton(null, '...', true));
-                }
-            }
-
-            // Add the main numeric buttons
-            for (let i = startPage; i <= endPage; i++) {
-                if (i > 0 && i <= totalPages) {
-                     paginationContainer.appendChild(createPageButton(i, i, false, i === currentPage));
-                }
-            }
-            
-            // Add '...' and 'totalPages' if needed
-            if (endPage < totalPages) {
-                 if (endPage < totalPages - 1) {
-                    paginationContainer.appendChild(createPageButton(null, '...', true));
-                 }
-                paginationContainer.appendChild(createPageButton(totalPages, totalPages));
-            }
-
-
-            // "Next" Button
-            paginationContainer.appendChild(createPageButton(currentPage + 1, '»', currentPage === totalPages));
-        }
-
 
         // (MODIFIED) เปลี่ยน renderGridView ให้เป็นการเรียก initializeGridPaging สำหรับชุดแรก
         function renderGridView(tag) {
@@ -937,8 +944,8 @@
             if (pageId === 'home') {
                 homeView.style.display = 'block';
                 gridViewContainer.style.display = 'none';
-                // (MODIFIED) ซ่อน pagination container ด้วย
-                if(paginationContainer) paginationContainer.innerHTML = ''; 
+                // (MODIFIED)
+                paginationContainer.innerHTML = ''; // ซ่อนปุ่มแบ่งหน้า
                 currentSearchQuery = null;
                 
                 // (MODIFIED) เพิ่ม isSecureEnvironment() check
@@ -956,8 +963,8 @@
                 // We keep search logic separate for now.
                 homeView.style.display = 'none';
                 gridViewContainer.style.display = 'block';
-                // (MODIFIED) ซ่อน pagination container ด้วย
-                if(paginationContainer) paginationContainer.innerHTML = ''; 
+                // (MODIFIED)
+                paginationContainer.innerHTML = ''; // ซ่อนปุ่มแบ่งหน้าสำหรับหน้าค้นหา
                 
                 // Note: performSearch will be called separately/later
                 
@@ -1071,7 +1078,8 @@
                 const historyItem = historyItems.find(h => h.showId === show.id);
                 gridViewContent.innerHTML += createContentCard(show, null, historyItem);
             });
-            // (REMOVED) loadMoreButton.classList.add('hidden');
+            // (MODIFIED)
+            paginationContainer.innerHTML = ''; // Hide pagination for search results
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1082,7 +1090,7 @@
             gridViewTitle = document.getElementById('grid-view-title');
             gridViewContent = document.getElementById('grid-view-content');
             sectionsContainer = document.getElementById('sections-container');
-            // (MODIFIED) GGet the new container
+            // (MODIFIED)
             paginationContainer = document.getElementById('pagination-container'); 
 
             searchInput = document.getElementById('search-input');
@@ -1155,22 +1163,15 @@
             if (searchInput) searchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(searchInput.value));
             if (mobileSearchInput) mobileSearchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(mobileSearchInput.value));
 
-            // (REMOVED) Load More Listener ...
-            
-            // (NEW) Pagination Container Click Listener
+            // (NEW) Pagination Click Listener (Event Delegation)
             if (paginationContainer) {
                 paginationContainer.addEventListener('click', (e) => {
-                    // Find the closest button element
-                    const button = e.target.closest('button');
-                    if (!button) return; // Clicked outside a button
-                    
-                    const page = button.dataset.page;
-                    
-                    if (page && !button.disabled && !button.classList.contains('active')) {
-                        const newPage = parseInt(page, 10);
-                        if (newPage !== currentPage) {
-                            renderPage(newPage);
-                        }
+                    const button = e.target.closest('.pagination-btn');
+                    if (!button || button.disabled || button.classList.contains('dots')) return;
+
+                    const page = parseInt(button.dataset.page, 10);
+                    if (page && page !== currentGridPage) {
+                        renderPage(page);
                     }
                 });
             }
@@ -1325,10 +1326,9 @@
             <div id="grid-view-content" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4">
                 <!-- Cards generated by JS -->
             </div>
-            
-            <!-- (MODIFIED) เปลี่ยนจาก Load More Button เป็น Pagination Container -->
-            <div id="pagination-container" class="flex justify-center items-center flex-wrap gap-2 mt-8">
-                <!-- Pagination buttons injected by JS -->
+            <!-- (NEW) Pagination Container -->
+            <div id="pagination-container" class="flex justify-center items-center mt-8">
+                 <!-- Pagination buttons injected by JS -->
             </div>
         </div>
         
