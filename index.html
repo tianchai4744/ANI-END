@@ -703,17 +703,20 @@
         
         /**
          * (NEW FUNCTION) สร้าง Card สำหรับประวัติการเข้าชม
+         * (MODIFIED by User Request)
          */
         function createHistoryCard(history) {
             const showId = history.showId; 
             const episodeId = history.lastWatchedEpisodeId; // (NEW) ดึง Episode ID
             const title = history.showTitle;
+            // (MODIFIED) ใช้ตัวแปรนี้เป็นข้อความหลัก
             const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.lastWatchedEpisodeNumber || 'N/A'}`;
             const thumbnail = history.showThumbnail || 'https://placehold.co/60x80/333/fff?text=Img';
             
+            // (REMOVED) ลบการคำนวณ Progress Bar และข้อความ "ดูจบแล้ว"
+            /*
             const currentEpNum = history.lastWatchedEpisodeNumber || 0;
             const latestEpNum = history.latestEpisodeNumber || 1; 
-            
             let progress = Math.min(100, Math.round((currentEpNum / latestEpNum) * 100));
             if (history.isCompleted === true) {
                  progress = 100;
@@ -722,9 +725,9 @@
             } else if (progress === 0 && currentEpNum > 0) {
                  progress = 1; // Minimum 1% if an episode was watched
             }
-
-            const progressColor = progress < 100 ? 'bg-red-500' : 'bg-green-500'; // (FIXED) สี Progress Bar
-            const progressText = progress < 100 ? `ดูถึง ${episodeTitle}` : `ดูจบแล้ว`; // (FIXED) ข้อความสถานะ
+            const progressColor = progress < 100 ? 'bg-red-500' : 'bg-green-500'; 
+            const progressText = progress < 100 ? `ดูถึง ${episodeTitle}` : `ดูจบแล้ว`; 
+            */
 
             return `
                 <!-- (MODIFIED) ส่ง ep_id ไปใน URL -->
@@ -732,11 +735,11 @@
                     <img src="${thumbnail}" alt="${title}" class="history-thumb shadow-sm">
                     <div class="flex-grow min-w-0">
                         <h4 class="font-bold text-base text-white line-clamp-1">${title}</h4>
-                        <p class="text-xs text-gray-300 line-clamp-1 mt-1">${progressText}</p>
-                        <!-- Progress Bar -->
-                        <div class="mt-2 w-full bg-gray-600 rounded-full h-1.5">
-                            <div class="${progressColor} h-1.5 rounded-full" style="width: ${progress}%;"></div>
-                        </div>
+                        <!-- (MODIFIED) แสดงชื่อตอนล่าสุดที่ดู -->
+                        <p class="text-xs text-gray-300 line-clamp-1 mt-1">${episodeTitle}</p>
+                        
+                        <!-- (REMOVED) Progress Bar -->
+                        
                     </div>
                     <!-- ปุ่ม Play -->
                     <div class="text-white flex-shrink-0">
