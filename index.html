@@ -54,7 +54,10 @@
             display: -webkit-box;
             -webkit-line-clamp: 2; /* เปลี่ยนเป็น 2 บรรทัด */
             -webkit-box-orient: vertical;
+            /* (NEW FIX) กำหนดความสูงตายตัว 2 บรรทัด (แทน min-height) */
+            line-height: 1.25; /* h-14 / 2 (lines) / text-base (1rem=16px) -> 56/2/16 = 1.75. Tailwinds line-height: normal (1.5) is usually enough, setting 1.25 for tight control. */
         }
+        
         /* (DELETED) ลบสไตล์ card-subtitle ออกไปเนื่องจากไม่ใช้แล้ว */
         .loading-placeholder {
             min-height: 200px; 
@@ -710,8 +713,8 @@
                         ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) -->
                     </div>
                     <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
-                    <!-- *** MODIFIED: ADDED min-h-[3.5rem] for consistent height (2 lines) *** -->
-                    <div class="text-white p-3 pt-2 min-h-[3.5rem]">
+                    <!-- *** MODIFIED: ย้าย min-h-[3.5rem] ออก และใช้ p-3 pt-2 h-14 เพื่อบังคับความสูง 2 บรรทัด (Fix for Carousel Swiper) *** -->
+                    <div class="text-white p-3 pt-2 h-14"> 
                         <!-- (MODIFIED) เปลี่ยนเป็น text-base เพื่อให้ใหญ่ขึ้นและให้พื้นที่มากขึ้น -->
                         <h4 class="font-bold card-title text-base">${show.title}</h4> 
                     </div>
