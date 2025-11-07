@@ -210,7 +210,8 @@
         import { 
             getFirestore, doc, getDoc, onSnapshot, collection, query, where, getDocs,
             setLogLevel,
-            updateDoc, increment, orderBy, limit, serverTimestamp // (MODIFIED) Add serverTimestamp
+            updateDoc, increment, orderBy, limit, serverTimestamp, // (MODIFIED) Add serverTimestamp
+            setDoc // (NEW) เพิ่ม setDoc สำหรับบันทึกประวัติ
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config ...
@@ -223,6 +224,9 @@
             appId: "1:374608108501:web:19a4767c41a020bfb03b5c",
             measurementId: "G-VZM1XTPMYL"
         };
+        
+        // (NEW) Global App ID
+        const appId = firebaseConfig.projectId;
         
         
         let db, auth, userId;
@@ -274,8 +278,49 @@
 
         // ฟังก์ชันช่วยสำหรับอ้างอิง Collection
         function getCollectionRef(collectionName) {
-            const appId = firebaseConfig.projectId;
             return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+        }
+        
+        // (NEW FUNCTION) บันทึกประวัติการเข้าชม
+        async function saveToHistory(episode) {
+            // ตรวจสอบว่ามีข้อมูลครบถ้วนหรือไม่ (userId, currentShow, episode)
+            if (!userId || !currentShow || !episode || !episode.id) {
+                console.warn("ไม่สามารถบันทึกประวัติได้: ข้อมูลไม่ครบถ้วน");
+                return;
+            }
+
+            try {
+                // (FIXED) แก้ไขพาธให้ตรงกับกฎความปลอดภัย Private Data: /artifacts/{appId}/users/{userId}/viewHistory/{showId}
+                const historyRef = doc(db, 
+                    `artifacts/${appId}/users/${userId}/viewHistory`, 
+                    currentShow.id // ใช้ Show ID เป็น Key
+                );
+
+                // ข้อมูลที่เราอยากเก็บไว้
+                const historyData = {
+                    showId: currentShow.id,
+                    showTitle: currentShow.title,
+                    showThumbnail: currentShow.thumbnailUrl || '',
+                    
+                    lastWatchedEpisodeId: episode.id,
+                    lastWatchedEpisodeTitle: episode.title,
+                    lastWatchedEpisodeNumber: episode.episodeNumber,
+                    
+                    // (NEW) เพิ่มฟิลด์ isCompleted และ latestEpisodeNumber จาก Show Data
+                    isCompleted: currentShow.isCompleted === true,
+                    latestEpisodeNumber: currentShow.latestEpisodeNumber || 0,
+                    
+                    watchedAt: serverTimestamp() // บันทึกเวลาล่าสุดที่ดู
+                };
+
+                // ใช้ setDoc (และ merge: true) เพื่อสร้างใหม่ หรือ อัปเดตเฉพาะข้อมูลล่าสุด
+                await setDoc(historyRef, historyData, { merge: true }); 
+                
+                console.log("บันทึกประวัติการเข้าชมเรียบร้อย:", currentShow.title);
+
+            } catch (error) {
+                console.error("เกิดข้อผิดพลาดในการบันทึกประวัติ:", error);
+            }
         }
         
         // (MODIFIED) Function to handle the Iframe embed 
@@ -604,6 +649,12 @@
                     btn.classList.remove('active');
                 }
             });
+            
+            // (NEW) เรียกใช้ฟังก์ชันบันทึกประวัติ
+            // เราจะเรียกใช้หลังจากทุกอย่างพร้อมแล้ว
+            if (currentShow && userId) { // (FIX) ตรวจสอบ userId ก่อนเรียก
+                 saveToHistory(episode);
+            }
             
             // (NEW) Update current index and nav button states
             currentEpisodeIndex = currentEpisodes.findIndex(ep => ep.id === episode.id);
