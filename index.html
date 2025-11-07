@@ -226,7 +226,7 @@
  </style>
  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
 </head>
-<body class="bg-gray-900 text-gray-100">
+<body class="bg-black text-gray-100">
 
     <!-- Firebase SDK and Application Logic -->
     <script type="module">
@@ -553,8 +553,8 @@
             // --- B. History Section (ขวาบน Desktop) ---
             // (NEW) สร้าง History Section
             const historySection = document.createElement('section');
-            // (MODIFIED) เพิ่ม bg-black p-4 rounded-lg ตามที่ผู้ใช้ต้องการ
-            historySection.className = 'w-full lg:w-1/3 flex-shrink-0 bg-black p-4 rounded-lg'; 
+            // (MODIFIED) เปลี่ยน bg-black เป็น bg-gray-900 (เทาดำ)
+            historySection.className = 'w-full lg:w-1/3 flex-shrink-0 bg-gray-900 p-4 rounded-lg'; 
             historySection.innerHTML = createHistorySection(); 
             dualGridContainer.appendChild(historySection);
             
@@ -697,21 +697,23 @@
 
 
         return `
-            <a href="${targetUrl}" class="block group">
+            <!-- (MODIFIED) เพิ่ม bg-gray-800, rounded-lg, overflow-hidden, และ shadow-lg ให้กับตัวลิงก์การ์ด -->
+            <a href="${targetUrl}" class="block group bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
                     <!-- 1. ส่วนภาพ (Image Aspect Ratio Container) -->
-                    <div class="aspect-[2/3] rounded-lg overflow-hidden mb-2 relative">
+                    <!-- *** REMOVED rounded-lg and mb-2 from inner div. Rounded is now on parent link. *** -->
+                    <div class="aspect-[2/3] overflow-hidden relative">
                         ${rankBadge}
                         ${dubBadge}
                         ${episodeBadge} <!-- ป้ายตอนล่าสุด (มุมล่างขวา) -->
                         <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
                              alt="${show.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                         ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) -->
-                        <!-- (REMOVED) ลบ Gradient และ Title ที่อยู่ซ้อนทับภาพออก -->
                     </div>
                     <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
-                    <div class="text-white">
-                        <!-- (MODIFIED) ลบคลาส absolute/bottom ออก และเพิ่ม mb-2 เพื่อให้ห่างจากภาพ -->
-                        <h4 class="font-bold card-title">${show.title}</h4> 
+                    <!-- *** MODIFIED: ADDED min-h-[3.5rem] for consistent height (2 lines) *** -->
+                    <div class="text-white p-3 pt-2 min-h-[3.5rem]">
+                        <!-- (MODIFIED) เปลี่ยนเป็น text-base เพื่อให้ใหญ่ขึ้นและให้พื้นที่มากขึ้น -->
+                        <h4 class="font-bold card-title text-base">${show.title}</h4> 
                     </div>
                 </a>
             `;
