@@ -4,13 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ANI-END - รับชม</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Remixicon Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <!-- Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Remixicon Icons --><link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
     <style>
         body {
-            background-color: #111;
+            background-color: #111; /* (MODIFIED) เปลี่ยนเป็น bg-black (#111) เหมือน index.html */
             color: #fff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
@@ -61,6 +59,8 @@
             display: -webkit-box;
             -webkit-line-clamp: 2; 
             -webkit-box-orient: vertical;
+            /* (NEW FIX) กำหนด line-height เหมือน index.html */
+            line-height: 1.25; 
         }
         
         /* Style สำหรับ Thumbnail ในส่วน Top 10 */
@@ -77,12 +77,12 @@
             display: flex;
             align-items: center;
             padding: 8px;
-            background-color: #1f2937; /* gray-800 เป็นพื้นหลังรายการ */
+            background-color: #374151; /* (MODIFIED) เปลี่ยนเป็น gray-700/80 เพื่อให้ดูเป็น card บนพื้นหลัง gray-800 */
             border-radius: 8px;
             transition: background-color 0.15s;
         }
         .top10-item:hover {
-            background-color: #374151; /* gray-700 on hover */
+            background-color: #4b5563; /* gray-600 on hover */
         }
         
         /* (NEW) สไตล์สำหรับข้อความในรายการ 10 อันดับ */
@@ -201,10 +201,7 @@
 
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100">
-
-    <!-- Firebase SDK and Application Logic -->
-    <script type="module">
+<body class="bg-black text-gray-100"> <!-- (MODIFIED) เปลี่ยนเป็น bg-black (#111) เหมือน index.html --><!-- Firebase SDK and Application Logic --><script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
@@ -741,20 +738,13 @@
             
             // ** ใช้โครงสร้าง Card Grid แบบเดียวกับใน index.html แต่เพิ่มพื้นหลังเทาเข้ม **
             return `
-                <!-- (MODIFIED) เพิ่ม bg-gray-800, rounded-lg, overflow-hidden, และ shadow-lg ให้กับตัวลิงก์การ์ด -->
-                <a href="player.html?id=${show.id}" class="block group bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-                    <!-- 1. ส่วนภาพ (Image Aspect Ratio Container) -->
-                    <!-- *** REMOVED rounded-lg from inner div. Rounded is now on parent link. *** -->
-                    <div class="aspect-[2/3] overflow-hidden relative">
+                <!-- (MODIFIED) เพิ่ม bg-gray-700/80 เพื่อให้สีพื้นหลังของการ์ดแตกต่างจากกล่องหลัก --><a href="player.html?id=${show.id}" class="block group bg-gray-700/80 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <!-- 1. ส่วนภาพ (Image Aspect Ratio Container) --><!-- *** REMOVED rounded-lg from inner div. Rounded is now on parent link. *** --><div class="aspect-[2/3] overflow-hidden relative">
                         ${dubBadge}
-                        ${episodeBadge} <!-- ป้ายตอนสูงสุด (มุมล่างขวา) -->
-                        <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
+                        ${episodeBadge} <!-- ป้ายตอนสูงสุด (มุมล่างขวา) --><img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
                              alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                        ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) -->
-                    </div>
-                    <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
-                    <!-- *** MODIFIED: ADDED min-h-[3.5rem] for consistent height (2 lines) *** -->
-                    <div class="text-white min-h-[3.5rem] p-3 pt-2">
+                        ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) --></div>
+                    <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) --><!-- *** MODIFIED: เปลี่ยน min-h-[3.5rem] เป็น h-14 เพื่อบังคับความสูง 2 บรรทัดเหมือน index.html *** --><div class="text-white h-14 p-3 pt-2">
                         <h4 class="font-bold related-card-title text-base">${title}</h4> 
                     </div>
                 </a>
@@ -885,24 +875,18 @@
                  dubBadge = ' <span class="text-sm text-red-400 font-medium">(พากย์ไทย)</span>';
             }
             
-            // ** ปรับโครงสร้าง HTML เพื่อใส่ป้ายอันดับและลบส่วน Rating ออก **
+            // ** ปรับโครงสร้าง HTML เพื่อใส่ป้ายอันดับและลบส่วน Rating ออกไป **
             return `
-                <a href="player.html?id=${show.id}" class="top10-item hover:shadow-lg">
-                    <!-- 1. ป้ายอันดับตัวเลขใหญ่ -->
-                    <span class="rank-badge-lg ${rankClass}">${rank}</span>
+                <!-- (MODIFIED) เปลี่ยน bg-gray-800 เป็น bg-gray-700 เพื่อให้ดูเป็น Card บนพื้นหลัง gray-800 --><a href="player.html?id=${show.id}" class="top10-item hover:shadow-lg bg-gray-700"> 
+                    <!-- 1. ป้ายอันดับตัวเลขใหญ่ --><span class="rank-badge-lg ${rankClass}">${rank}</span>
                     
-                    <!-- 2. Thumbnail/Cover Image -->
-                    <img src="${show.thumbnailUrl || 'https://placehold.co/60x80/333/fff?text=Img'}" 
+                    <!-- 2. Thumbnail/Cover Image --><img src="${show.thumbnailUrl || 'https://placehold.co/60x80/333/fff?text=Img'}" 
                          alt="${title}" class="rounded-md top10-thumbnail shadow-md">
                     
-                    <!-- 3. Content (Title) -->
-                    <div class="top10-content flex-grow">
-                        <!-- Title (Line Clamp 2) + Dub Badge + Completed Tag -->
-                        <h4 class="font-bold text-white line-clamp-2 text-base leading-snug">${displayTitle}${dubBadge}${completedTag}</h4>
+                    <!-- 3. Content (Title) --><div class="top10-content flex-grow">
+                        <!-- Title (Line Clamp 2) + Dub Badge + Completed Tag --><h4 class="font-bold text-white line-clamp-2 text-base leading-snug">${displayTitle}${dubBadge}${completedTag}</h4>
                         
-                        <!-- (REMOVED) ลบส่วน Rating ออกไป -->
-                        
-                    </div>
+                        <!-- (REMOVED) ลบส่วน Rating ออกไป --></div>
                 </a>
             `;
         }
@@ -1252,47 +1236,37 @@
 
     </script>
 
-    <!-- Header -->
-    <header class="bg-gray-900/80 backdrop-blur-md sticky top-0 z-50">
+    <!-- Header --><header class="bg-gray-900/80 backdrop-blur-md sticky top-0 z-50">
         <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
-                <!-- Logo & Desktop Nav -->
-                <div class="flex items-center">
-                    <!-- (MODIFIED) ยืนยันว่าลิงก์เป็น index.html -->
-                    <a href="index.html" class="flex-shrink-0 flex items-center text-white">
+                <!-- Logo & Desktop Nav --><div class="flex items-center">
+                    <!-- (MODIFIED) ยืนยันว่าลิงก์เป็น index.html --><a href="index.html" class="flex-shrink-0 flex items-center text-white">
                         <span class="font-bold text-2xl">ANI-END</span>
                     </a>
-                    <!-- Desktop Nav Links (Secondary Navigation) -->
-                    <div class="hidden md:block">
+                    <!-- Desktop Nav Links (Secondary Navigation) --><div class="hidden md:block">
                         <div class="ml-10 flex items-baseline space-x-4">
                             <a href="index.html" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
                             
-                            <!-- (แก้ไข) เพิ่ม URL parameter '?page=' เพื่อระบุหน้าที่จะไป -->
-                            <a href="index.html?page=อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                            <!-- (แก้ไข) เพิ่ม URL parameter '?page=' เพื่อระบุหน้าที่จะไป --><a href="index.html?page=อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
                             <a href="index.html?page=อนิเมะจีน" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
                             <a href="index.html?page=อนิเมะพากย์ไทย" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
                         </div>
                     </div>
                 </div>
                 
-                <!-- (MODIFIED) Search & Actions (Desktop) - ลบปุ่ม Admin -->
-                <div class="hidden md:flex items-center space-x-4">
+                <!-- (MODIFIED) Search & Actions (Desktop) - ลบปุ่ม Admin --><div class="hidden md:flex items-center space-x-4">
                     <div class="relative search-container">
-                        <input id="search-input-desktop" type="text" placeholder="ค้นหา..." class="bg-gray-800 text-white rounded-full py-2 px-4 pl-10 focus:outline-none focus:ring-2 focus:ring-green-500 w-64">
+                        <!-- (MODIFIED) ปรับขนาด/สีให้เหมือน index.html --><input id="search-input-desktop" type="text" placeholder="ค้นหา..." class="bg-gray-800 text-white rounded-full py-2 px-4 pl-10 focus:outline-none focus:ring-2 focus:ring-green-500 w-64">
                         <button id="search-button-desktop" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
                             <i class="ri-search-line"></i>
                         </button>
-                        <!-- (NEW) Desktop Search Dropdown -->
-                        <div id="search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
-                            <!-- Search results injected here -->
-                        </div>
+                        <!-- (NEW) Desktop Search Dropdown --><div id="search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
+                            <!-- Search results injected here --></div>
                     </div>
-                    <!-- (REMOVED) Admin Link removed -->
-                </div>
+                    <!-- (REMOVED) Admin Link removed --></div>
                 
                 
-                <!-- Mobile Menu Button & Search -->
-                <div class="flex md:hidden items-center space-x-2">
+                <!-- Mobile Menu Button & Search --><div class="flex md:hidden items-center space-x-2">
                     <a href="#" id="mobile-search-button" class="text-gray-300 hover:text-white p-2 text-xl">
                         <i class="ri-search-line"></i>
                     </a>
@@ -1304,27 +1278,21 @@
             </div>
         </nav>
         
-        <!-- (MODIFIED) Mobile Search Bar -->
-        <div id="mobile-search-bar" class="md:hidden hidden p-2 absolute top-16 left-0 right-0 bg-gray-800 shadow-lg z-40">
-            <div class="relative search-container"> <!-- (NEW) Wrap content in relative div to fix dropdown positioning -->
-                <div class="flex">
-                    <input id="mobile-search-input" type="text" placeholder="ค้นหา..." class="flex-1 bg-gray-700 text-white rounded-l-full py-2 px-4 focus:outline-none">
+        <!-- (MODIFIED) Mobile Search Bar --><div id="mobile-search-bar" class="md:hidden hidden p-2 absolute top-16 left-0 right-0 bg-gray-800 shadow-lg z-40">
+            <div class="relative search-container"> <!-- (NEW) Wrap content in relative div to fix dropdown positioning --><div class="flex">
+                    <!-- (MODIFIED) ปรับขนาด/สีให้เหมือน index.html --><input id="mobile-search-input" type="text" placeholder="ค้นหา..." class="flex-1 bg-gray-700 text-white rounded-l-full py-2 px-4 focus:outline-none">
                     <button id="mobile-close-search" class="bg-gray-700 text-gray-400 rounded-r-full px-3">
                         <i class="ri-close-line"></i>
                     </button>
                 </div>
-                <!-- (NEW) Mobile Search Dropdown (Moved outside flex container) -->
-                <div id="mobile-search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
-                    <!-- Search results injected here -->
-                </div>
+                <!-- (NEW) Mobile Search Dropdown (Moved outside flex container) --><div id="mobile-search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
+                    <!-- Search results injected here --></div>
             </div>
         </div>
         
-        <!-- Mobile Menu (Secondary Navigation) -->
-        <div id="mobile-menu" class="md:hidden hidden bg-gray-900 shadow-lg">
+        <!-- Mobile Menu (Secondary Navigation) --><div id="mobile-menu" class="md:hidden hidden bg-gray-900 shadow-lg">
             <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                <!-- Links (คัดลอกจาก Desktop Nav) -->
-                <a href="index.html" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                <!-- Links (คัดลอกจาก Desktop Nav) --><a href="index.html" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
                 <a href="index.html?page=อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
                 <a href="index.html?page=อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
                 <a href="index.html?page=อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
@@ -1333,40 +1301,28 @@
         
     </header>
 
-    <!-- Main Player Content -->
-    <!-- Loading State -->
-    <div id="loading-player" class="flex items-center justify-center" style="min-height: 80vh;">
+    <!-- Main Player Content --><!-- Loading State --><div id="loading-player" class="flex items-center justify-center" style="min-height: 80vh;">
         <p class="text-2xl text-gray-400">กำลังโหลดเนื้อหา...</p>
     </div>
     
-    <!-- Content (Hidden by default) -->
-    <div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
+    <!-- Content (Hidden by default) --><div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
         
-        <!-- FLEX CONTAINER หลัก: เปลี่ยนจาก lg:flex-row เป็น flex-wrap เพื่อควบคุม order ได้ง่ายขึ้นบน Desktop -->
-        <!-- เราจะจัดเรียง 4 องค์ประกอบหลักใน container นี้ -->
-        <div class="flex flex-wrap gap-6">
+        <!-- FLEX CONTAINER หลัก: เปลี่ยนจาก lg:flex-row เป็น flex-wrap เพื่อควบคุม order ได้ง่ายขึ้นบน Desktop --><!-- เราจะจัดเรียง 4 องค์ประกอบหลักใน container นี้ --><div class="flex flex-wrap gap-6">
             
-            <!-- 1. Player & Info (วิดีโอและรายละเอียด) -->
-            <div class="w-full lg:w-[calc(66.666%-12px)] order-1 lg:order-1">
-                <!-- Responsive Video Player Wrapper -->
-                <div class="video-aspect-wrapper rounded-lg overflow-hidden"> <!-- (MODIFIED) Removed mb-4 -->
-                    <div id="video-player-embed">
-                        <!-- Initial Loading state for player -->
-                        <div class="w-full h-full flex items-center justify-center bg-black">
+            <!-- 1. Player & Info (วิดีโอและรายละเอียด) --><div class="w-full lg:w-[calc(66.666%-12px)] order-1 lg:order-1">
+                <!-- Responsive Video Player Wrapper --><div class="video-aspect-wrapper rounded-lg overflow-hidden"> <!-- (MODIFIED) Removed mb-4 --><div id="video-player-embed">
+                        <!-- Initial Loading state for player --><div class="w-full h-full flex items-center justify-center bg-black">
                             <p class="text-gray-400">กำลังโหลดวิดีโอ...</p>
                         </div>
                     </div>
                 </div>
                 
-                <!-- (NEW) Next/Previous Buttons -->
-                <div id="video-nav-buttons" class="flex justify-between items-center mt-1"> <!-- (MODIFIED) Changed mt-2 to mt-1 and added items-center -->
-                    <button id="prev-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                <!-- (NEW) Next/Previous Buttons --><div id="video-nav-buttons" class="flex justify-between items-center mt-1"> <!-- (MODIFIED) Changed mt-2 to mt-1 and added items-center --><button id="prev-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="ri-arrow-left-s-line mr-1"></i>
                         ตอนก่อนหน้า
                     </button>
                     
-                    <!-- (NEW) Report Broken Video Button -->
-                    <button id="report-broken-btn" class="flex items-center bg-gray-700 hover:bg-red-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <!-- (NEW) Report Broken Video Button --><button id="report-broken-btn" class="flex items-center bg-gray-700 hover:bg-red-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="ri-error-warning-line mr-1"></i>
                         แจ้ง (เสีย)
                     </button>
@@ -1377,54 +1333,39 @@
                     </button>
                 </div>
                 
-                <!-- Show Info -->
-                <div class="text-white mb-6 mt-4"> <!-- (MODIFIED) Added mt-4 for spacing -->
-                    <h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
+                <!-- Show Info --><div class="text-white mb-6 mt-4"> <!-- (MODIFIED) Added mt-4 for spacing --><h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
                     
-                    <!-- (MODIFIED) Description Container -->
-                    <div id="description-container">
-                        <!-- (REVISED) เพิ่ม line-clamp-2 กลับไปเป็นค่าเริ่มต้น -->
-                        <p id="show-description" class="text-gray-300 transition-all duration-200 line-clamp-2">...</p>
+                    <!-- (MODIFIED) Description Container --><div id="description-container">
+                        <!-- (REVISED) เพิ่ม line-clamp-2 กลับไปเป็นค่าเริ่มต้น --><p id="show-description" class="text-gray-300 transition-all duration-200 line-clamp-2">...</p>
                         
-                        <!-- (NEW) Expand/Collapse Button -->
-                        <button id="expand-desc-btn" class="text-green-400 hover:text-green-300 font-medium text-sm mt-1 hidden flex items-center">
+                        <!-- (NEW) Expand/Collapse Button --><button id="expand-desc-btn" class="text-green-400 hover:text-green-300 font-medium text-sm mt-1 hidden flex items-center">
                             เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>
                         </button>
                     </div>
                 </div>
             </div>
             
-            <!-- 2. รายการตอน (Episodes List) - ลำดับ 2 บนมือถือ -->
-            <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-2 lg:order-2">
-                <section class="bg-gray-800 rounded-lg p-4">
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
+            <!-- 2. รายการตอน (Episodes List) - ลำดับ 2 บนมือถือ --><div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-2 lg:order-2">
+                <section class="bg-gray-900/80 rounded-lg p-4"> <!-- (MODIFIED) เปลี่ยนเป็น bg-gray-900/80 --><h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
                     <div id="episode-list-container" class="flex flex-wrap gap-2">
-                        <!-- Episode buttons injected by JS -->
-                        <p class="text-gray-400">กำลังโหลดตอน...</p>
+                        <!-- Episode buttons injected by JS --><p class="text-gray-400">กำลังโหลดตอน...</p>
                     </div>
                 </section>
             </div>
             
-            <!-- 3. อนิเมะที่คุณอาจจะชอบ (Related Shows) - ลำดับ 3 บนมือถือ -->
-            <div class="w-full lg:w-[calc(66.666%-12px)] order-3 lg:order-3">
-                <section class="bg-gray-800 rounded-lg p-4 mb-6">
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">อนิเมะที่คุณอาจจะชอบ</h3>
+            <!-- 3. อนิเมะที่คุณอาจจะชอบ (Related Shows) - ลำดับ 3 บนมือถือ --><div class="w-full lg:w-[calc(66.666%-12px)] order-3 lg:order-3">
+                <section class="bg-gray-900/80 rounded-lg p-4 mb-6"> <!-- (MODIFIED) เปลี่ยนเป็น bg-gray-900/80 --><h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">อนิเมะที่คุณอาจจะชอบ</h3>
                     <div id="related-list-container">
-                        <!-- Related videos injected by JS -->
-                        <p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>
+                        <!-- Related videos injected by JS --><p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>
                     </div>
                 </section>
                 
-                <!-- (REMOVED) SECTION: ระบบคอมเมนต์ -->
-            </div>
+                <!-- (REMOVED) SECTION: ระบบคอมเมนต์ --></div>
             
-            <!-- 4. 10 อันดับอนิเมะยอดนิยม (Top 10 List) - ลำดับ 4 บนมือถือ -->
-            <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-4 lg:order-4">
-                <section class="bg-gray-800 rounded-lg p-4">
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">10 อันดับอนิเมะยอดนิยม</h3>
+            <!-- 4. 10 อันดับอนิเมะยอดนิยม (Top 10 List) - ลำดับ 4 บนมือถือ --><div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-4 lg:order-4">
+                <section class="bg-gray-900/80 rounded-lg p-4"> <!-- (MODIFIED) เปลี่ยนเป็น bg-gray-900/80 --><h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">10 อันดับอนิเมะยอดนิยม</h3>
                     <div id="top10-list-container" class="flex flex-col space-y-1">
-                        <!-- Top 10 cards injected by JS -->
-                        <p class="text-gray-400">กำลังโหลด 10 อันดับ...</p>
+                        <!-- Top 10 cards injected by JS --><p class="text-gray-400">กำลังโหลด 10 อันดับ...</p>
                     </div>
                 </section>
             </div>
