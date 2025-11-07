@@ -500,9 +500,16 @@
             
             if (!swiperWrapper || !loadingEl) return;
             
+            // 1. (FIX) ทำลาย Swiper Instance เก่าก่อนเสมอ หากมีอยู่
+            if (heroSwiperInstance) {
+                heroSwiperInstance.destroy(true, true);
+                heroSwiperInstance = null;
+            }
+
             if (banners.length === 0) {
                 loadingEl.innerHTML = '<p class="text-gray-400">ยังไม่มีแบนเนอร์ในระบบ</p>';
                 loadingEl.classList.remove('hidden');
+                swiperWrapper.innerHTML = ''; // Ensure wrapper is clean
                 return;
             }
             
@@ -526,32 +533,26 @@
                 `;
             });
             
-            // (FIX) ตรวจสอบว่า Swiper ถูกสร้างแล้วหรือไม่ ก่อนอัปเดต
-            const shouldReinitialize = swiperWrapper.innerHTML.trim() === '';
             swiperWrapper.innerHTML = slidesHtml;
             loadingEl.classList.add('hidden'); // ซ่อน Loading
             
-            // Initialize/Reinitialize Swiper
-            if (shouldReinitialize) {
-                 heroSwiperInstance = new Swiper('#hero-swiper', {
-                    loop: banners.length > 1, 
-                    autoplay: {
-                        delay: 4000,
-                        disableOnInteraction: false,
-                    },
-                    pagination: {
-                        el: '.swiper-pagination',
-                        clickable: true,
-                    },
-                    navigation: {
-                        nextEl: '.swiper-button-next',
-                        prevEl: '.swiper-button-prev',
-                    },
-                });
-            } else if (heroSwiperInstance) {
-                 // อัปเดต Swiper Data ถ้ามันถูกสร้างแล้ว
-                 heroSwiperInstance.update();
-            }
+            // 2. (FIX) สร้าง Swiper Instance ใหม่เสมอ เมื่อมี Banner
+            heroSwiperInstance = new Swiper('#hero-swiper', {
+                // (MODIFIED) เปิด loop ถ้ามีมากกว่า 1 สไลด์
+                loop: banners.length > 1, 
+                autoplay: {
+                    delay: 4000,
+                    disableOnInteraction: false,
+                },
+                pagination: {
+                    el: '.swiper-pagination',
+                    clickable: true,
+                },
+                navigation: {
+                    nextEl: '.swiper-button-next',
+                    prevEl: '.swiper-button-prev',
+                },
+            });
         }
 
         function renderSections() {
