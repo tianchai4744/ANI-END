@@ -26,15 +26,7 @@
             font-size: 20px;
             font-weight: 900;
         }
-        /* (MODIFIED) ปรับแต่งจุด Pagination ให้เป็นสีขาว */
-        .swiper-pagination-bullet {
-            background-color: #ffffff;
-            opacity: 0.5;
-        }
-        .swiper-pagination-bullet-active { 
-            background: #ffffff; 
-            opacity: 1;
-        }
+        /* (REMOVED) ลบ Style สำหรับ Pagination Dots ออกไปแล้ว */
         
         /* (NEW) กำหนด cursor pointer ให้กับลิงก์ทั้งหมดเพื่อให้ทำงานถูกต้อง */
         a {
@@ -496,10 +488,10 @@
         // (FIX) ไม่มีพารามิเตอร์แล้ว เพราะใช้ allBanners
         function renderHeroSlider() {
             const banners = allBanners; // (FIX) ใช้ Global Banners
-            const swiperWrapper = document.querySelector('#hero-swiper .swiper-wrapper');
+            const heroSwiperContainer = document.getElementById('hero-swiper'); // ตัวคอนเทนเนอร์ Swiper หลัก
             const loadingEl = document.getElementById('hero-loading');
             
-            if (!swiperWrapper || !loadingEl) return;
+            if (!heroSwiperContainer || !loadingEl) return;
             
             // 1. (FIX) ทำลาย Swiper Instance เก่าก่อนเสมอ หากมีอยู่
             if (heroSwiperInstance) {
@@ -507,21 +499,21 @@
                 heroSwiperInstance = null;
             }
 
-            // (NEW FIX - MODIFIED) Clear pagination elements explicitly AND the wrapper
-            const swiperPagination = document.querySelector('#hero-swiper .swiper-pagination');
-            if (swiperPagination) {
-                // (FIXED) Clear only the generated content inside the container
-                swiperPagination.innerHTML = ''; 
-            }
-            if (swiperWrapper) {
-                 // (FIXED) Clear wrapper content
-                 swiperWrapper.innerHTML = '';
-            }
+            // 2. (NEW FIX - MODIFIED) ล้างเนื้อหาทั้งหมดของคอนเทนเนอร์ Swiper
+            // (MODIFIED: ลบ swiper-pagination ออกจากโครงสร้าง)
+            heroSwiperContainer.innerHTML = `
+                <div class="swiper-wrapper"></div>
+                <!-- Pagination Dot ถูกลบออกจากโครงสร้าง -->
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-button-next"></div>
+            `;
+            
+            // 3. หา Wrapper และ Pagination ที่สร้างขึ้นมาใหม่
+            const swiperWrapper = heroSwiperContainer.querySelector('.swiper-wrapper');
             
             if (banners.length === 0) {
                 loadingEl.innerHTML = '<p class="text-gray-400">ยังไม่มีแบนเนอร์ในระบบ</p>';
                 loadingEl.classList.remove('hidden');
-                swiperWrapper.innerHTML = ''; // Ensure wrapper is clean
                 return;
             }
             
@@ -548,7 +540,7 @@
             swiperWrapper.innerHTML = slidesHtml;
             loadingEl.classList.add('hidden'); // ซ่อน Loading
             
-            // 2. (FIX) สร้าง Swiper Instance ใหม่เสมอ เมื่อมี Banner
+            // 4. (FIX) สร้าง Swiper Instance ใหม่เสมอ เมื่อมี Banner
             heroSwiperInstance = new Swiper('#hero-swiper', {
                 // (MODIFIED) เปิด loop ถ้ามีมากกว่า 1 สไลด์
                 loop: banners.length > 1, 
@@ -556,14 +548,19 @@
                     delay: 4000,
                     disableOnInteraction: false,
                 },
-                pagination: {
-                    el: '.swiper-pagination',
-                    clickable: true,
-                },
+                // (REMOVED) ลบการตั้งค่า Pagination ออก
+                // pagination: {
+                //     el: '.swiper-pagination',
+                //     clickable: true,
+                // },
                 navigation: {
                     nextEl: '.swiper-button-next',
                     prevEl: '.swiper-button-prev',
                 },
+                // (NEW FIX) ตั้งค่า slidesPerView ให้เป็น 1 เสมอสำหรับ Hero Banner
+                slidesPerView: 1, 
+                
+                // (REMOVED) ลบ on: init และ update ที่พยายามแก้ไขปัญหาซิงค์ออก
             });
         }
 
@@ -1362,8 +1359,8 @@
                     <div class="swiper-wrapper">
                         <!-- Slides will be injected by JS -->
                     </div>
-                    <!-- Add Pagination -->
-                    <div class="swiper-pagination"></div>
+                    <!-- (REMOVED) ลบ Pagination Dot ออกไปแล้ว -->
+                    <!-- <div class="swiper-pagination"></div> -->
                     <!-- Add Navigation -->
                     <div class="swiper-button-prev"></div>
                     <div class="swiper-button-next"></div>
