@@ -565,8 +565,11 @@
             
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
+                    // *** (FIX 3) เปลี่ยนไปใช้ Public Path เพื่อหลีกเลี่ยงปัญหา Security Rules ***
+                    // Path: artifacts/{appId}/public/data/reports
+                    const reportsRef = collection(db, `artifacts/${appId}/public/data/reports`);
+                    
                     // 1. Check if a report for this episode already exists (from this user or system)
-                    const reportsRef = getCollectionRef("reports");
                     const q = query(reportsRef, where("episodeId", "==", episodeId));
                     const existingReportSnap = await getDocs(q);
 
@@ -769,7 +772,10 @@
                     brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอสำหรับตอนนี้มีปัญหา (เสีย) กำลังรอการแก้ไขโดยผู้ดูแลระบบ.`;
                 } else {
                     // 2. ถ้าสถานะไม่ 'broken', ให้ตรวจสอบว่ามี 'report' ที่ผู้ใช้แจ้งค้างไว้หรือไม่
-                    const reportsRef = getCollectionRef("reports");
+                    
+                    // *** (FIX 3) เปลี่ยนไปใช้ Public Path เพื่อหลีกเลี่ยงปัญหา Security Rules ***
+                    const reportsRef = collection(db, `artifacts/${appId}/public/data/reports`);
+                    
                     const q = query(reportsRef, where("episodeId", "==", episode.id));
                     const existingReportSnap = await getDocs(q);
 
