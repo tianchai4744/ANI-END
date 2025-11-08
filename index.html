@@ -399,7 +399,8 @@
             });
 
             // 2. Listener for Banners (แยกออกมา)
-            const bannerQuery = query(getCollectionRef("banners"), orderBy("updatedAt", "desc"), limit(7));
+            // (MODIFIED) Removed limit(7) to allow all banners to load
+            const bannerQuery = query(getCollectionRef("banners"), orderBy("updatedAt", "desc"));
             onSnapshot(bannerQuery, (snapshot) => {
                 allBanners = []; // (FIX) Store banners in global variable
                 snapshot.forEach((doc) => {
@@ -506,6 +507,17 @@
                 heroSwiperInstance = null;
             }
 
+            // (NEW FIX - MODIFIED) Clear pagination elements explicitly AND the wrapper
+            const swiperPagination = document.querySelector('#hero-swiper .swiper-pagination');
+            if (swiperPagination) {
+                // (FIXED) Clear only the generated content inside the container
+                swiperPagination.innerHTML = ''; 
+            }
+            if (swiperWrapper) {
+                 // (FIXED) Clear wrapper content
+                 swiperWrapper.innerHTML = '';
+            }
+            
             if (banners.length === 0) {
                 loadingEl.innerHTML = '<p class="text-gray-400">ยังไม่มีแบนเนอร์ในระบบ</p>';
                 loadingEl.classList.remove('hidden');
@@ -682,7 +694,6 @@
             let targetUrl = `player.html?id=${show.id}`;
             
             if (watchedEpisodeId) {
-                // (FIX) ถ้ามีประวัติดูค้างไว้ ให้อัปเดต URL ด้วย ep_id
                 // *** ยืนยัน: ลิงก์จาก Carousel/Grid Card จะพาไปยังตอนที่ดูค้างไว้ (ep_id) ***
                 targetUrl = `player.html?id=${show.id}&ep_id=${watchedEpisodeId}`;
             }
