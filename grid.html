@@ -279,7 +279,7 @@
                     performSearch(currentSearchQuery);
                 } else if (currentGridTag) {
                     // If data updates while on tag view, re-initialize
-                    initializeGridPaging(currentGridTag); 
+                    initializeGridPaging(currentGridTag, currentGridPage); // Pass current page to re-render
                 }
                 
                 renderDynamicNav(currentGridTag || 'home'); 
@@ -319,6 +319,8 @@
             const urlParams = new URLSearchParams(window.location.search);
             const tagFromUrl = urlParams.get('tag');
             const searchFromUrl = urlParams.get('search'); 
+            // (NEW) Read page number from URL on initial load
+            const pageFromUrl = parseInt(urlParams.get('page')) || 1; 
 
             if (searchFromUrl) {
                 const query = decodeURIComponent(searchFromUrl);
@@ -327,12 +329,12 @@
                 renderDynamicNav('search-results');
             } else if (tagFromUrl) {
                 currentGridTag = decodeURIComponent(tagFromUrl);
-                initializeGridPaging(currentGridTag);
+                initializeGridPaging(currentGridTag, pageFromUrl); // Pass pageFromUrl
                 renderDynamicNav(currentGridTag);
             } else {
                  // No tag or search specified, default to 'อนิเมะ' 
                  currentGridTag = 'อนิเมะ';
-                 initializeGridPaging(currentGridTag);
+                 initializeGridPaging(currentGridTag, pageFromUrl); // Pass pageFromUrl
                  renderDynamicNav(currentGridTag);
             }
         }
@@ -405,8 +407,8 @@
                 `;
             }
 
-        // (KEEP) Pagination Logic
-        function initializeGridPaging(tag) {
+        // (MODIFIED) Pagination Logic - Added initialPage
+        function initializeGridPaging(tag, initialPage = 1) {
             currentGridTag = tag;
             gridViewTitle.textContent = tag;
             currentSearchQuery = null;
@@ -420,14 +422,16 @@
                 });
 
             totalGridPages = Math.ceil(gridFilteredShows.length / ITEMS_PER_PAGE);
-            currentGridPage = 1;
+            
+            // (NEW) Set current page based on URL, ensuring it's valid
+            currentGridPage = Math.max(1, Math.min(initialPage, totalGridPages));
 
             gridViewContent.innerHTML = '';
             paginationContainer.innerHTML = '';
             
             gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">กำลังจัดเรียงและโหลดรายการ...</p>`;
 
-            renderPage(1);
+            renderPage(currentGridPage);
 
             gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
         }
@@ -456,8 +460,35 @@
             if (gridViewContainer) {
                  gridViewContainer.scrollIntoView({ behavior: 'smooth' });
             }
+            
+            // (NEW) Update URL using pushState
+            updatePageUrl(pageNumber);
 
             renderPaginationControls();
+        }
+        
+        // (NEW) Update URL function
+        function updatePageUrl(pageNumber) {
+            if (window.history.pushState && window.location.protocol !== 'file:') {
+                let newUrl;
+                if (currentSearchQuery) {
+                    // Handle search URL: grid.html?search=query&page=X
+                    newUrl = `grid.html?search=${encodeURIComponent(currentSearchQuery)}&page=${pageNumber}`;
+                } else if (currentGridTag) {
+                    // Handle tag URL: grid.html?tag=tagname&page=X
+                    newUrl = `grid.html?tag=${encodeURIComponent(currentGridTag)}&page=${pageNumber}`;
+                } else {
+                    return;
+                }
+                
+                // Only push state if page number changes OR it's the first render and not page 1
+                const urlParams = new URLSearchParams(window.location.search);
+                const currentPage = parseInt(urlParams.get('page')) || 1;
+                
+                if (pageNumber !== currentPage) {
+                     window.history.pushState({ path: newUrl }, '', newUrl);
+                }
+            }
         }
         
         function renderPaginationControls() {
@@ -569,14 +600,17 @@
              searchDropdown.classList.add('hidden');
              mobileSearchDropdown.classList.add('hidden');
              
+             // (MODIFIED) Use pushState to update URL without reloading index.html
              if (window.history.pushState && window.location.protocol !== 'file:') {
                  const newUrl = `grid.html?search=${encodeURIComponent(query)}`;
-                 window.history.pushState({path: newUrl}, '', newUrl);
+                 // Push state to change URL
+                 window.history.pushState({ path: newUrl }, '', newUrl);
              }
              
              currentGridTag = null; 
              currentSearchQuery = query;
              
+             // Run search logic immediately
              performSearch(query);
              
              const mobileSearchBarEl = document.getElementById('mobile-search-bar');
@@ -679,6 +713,12 @@
                 }
             });
 
+            // (NEW) Add popstate listener for back/forward buttons
+            window.addEventListener('popstate', (e) => {
+                 // On popstate, re-read URL parameters and re-render
+                 checkInitialLoad();
+            });
+
             // Search Listeners
             const searchButton = document.getElementById('search-button');
             if (searchInput) searchInput.addEventListener('input', handleSearchInput);
@@ -687,18 +727,7 @@
             if (searchInput) searchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(searchInput.value));
             if (mobileSearchInput) mobileSearchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(mobileSearchInput.value));
 
-            // Pagination Click Listener (Event Delegation)
-            if (paginationContainer) {
-                paginationContainer.addEventListener('click', (e) => {
-                    const button = e.target.closest('.pagination-btn');
-                    if (!button || button.disabled || button.classList.contains('dots')) return;
-
-                    const page = parseInt(button.dataset.page, 10);
-                    if (page && page !== currentGridPage) {
-                        renderPage(page);
-                    }
-                });
-            }
+            // Initial URL check is now done inside initializeFirebase -> setupListeners -> checkInitialLoad
         });
     </script>
     
