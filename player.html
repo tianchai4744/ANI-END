@@ -1163,6 +1163,15 @@
             }
         }
 
+// (NEW FUNCTION) เชื่อมต่อ Listener ของปุ่มแจ้งเสียเมื่อ Auth พร้อม
+function setupReportButtonListener() {
+    if (reportBrokenBtn) {
+        // (NEW FIX 2) เชื่อมต่อ listener เมื่อ userId พร้อมแล้วเท่านั้น
+        reportBrokenBtn.addEventListener('click', markEpisodeAsBroken);
+        console.log("Report button listener attached.");
+    }
+}
+
 
         async function initializeFirebase() {
             try {
@@ -1182,6 +1191,9 @@
                         
                         // (NEW) Load all shows for search function
                         await loadAllShowsForSearch();
+                        
+                        // *** (NEW FIX) เรียกตั้งค่าปุ่มแจ้งเสียตรงนี้ เมื่อ userId พร้อมแล้ว ***
+                        setupReportButtonListener(); 
                         
                         await loadContent(); 
                         await loadGlobalContent();
@@ -1338,11 +1350,10 @@
                  prevEpisodeBtn.addEventListener('click', handlePrevEpisode);
                  nextEpisodeBtn.addEventListener('click', handleNextEpisode);
             }
-            // (NEW) Event Listener for Report Button
-            if (reportBrokenBtn) {
-                reportBrokenBtn.addEventListener('click', markEpisodeAsBroken);
-            }
-
+            
+            // *** (REMOVED) Event Listener for Report Button from here ***
+            // The listener is now attached inside initializeFirebase -> onAuthStateChanged
+            
             // (NEW) Event Listener for Expand/Collapse Button
             if(expandDescBtn) { // (FIX) Add null check
                 expandDescBtn.addEventListener('click', () => {
