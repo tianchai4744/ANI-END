@@ -536,6 +536,17 @@
 
         // (MODIFIED) Function to report an episode (Creates a report, does not update episode)
         async function markEpisodeAsBroken() {
+            // (FIX) Add Guard Clause for Auth State
+            if (!userId) {
+                console.error("Cannot report: User is not authenticated yet.");
+                if (brokenAlertDiv) {
+                    brokenAlertDiv.classList.remove('hidden');
+                    brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> ไม่สามารถแจ้งได้: กรุณารอสักครู่และลองใหม่.`;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+                return; // Stop execution
+            }
+
             if (currentEpisodeIndex < 0 || !currentEpisodes[currentEpisodeIndex]) {
                 console.warn("No current episode selected to report.");
                 return;
