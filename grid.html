@@ -157,7 +157,10 @@
         let allTags = new Set(); 
         let historyItems = []; 
         
-        let isDataLoaded = false; 
+        // (MODIFIED) Data loading flags
+        let isShowsLoaded = false;
+        let isHistoryLoaded = false;
+        let initialLoadDone = false; // Flag to track if initial load logic completed
         
         // State for Grid View Pagination
         let currentGridTag = null; 
@@ -180,8 +183,6 @@
         
         let initialQueryFromUrl = null;
         let currentSearchQuery = null; 
-
-        // (REMOVED) isUrlSet flag removed
 
         // Thai Normalization (KEEP)
         function normalizeThai(text) {
@@ -237,22 +238,8 @@
                 });
                 
                 console.log("Shows loaded:", allShows.length);
-                
-                const wasDataLoaded = isDataLoaded;
-                isDataLoaded = true; 
-                
-                // (MODIFIED) Check initial load/URL parameters
-                if (!wasDataLoaded) {
-                    checkInitialLoad();
-                } else if (currentSearchQuery) {
-                    // If data updates while on search, re-run search
-                    performSearch(currentSearchQuery);
-                } else if (currentGridTag) {
-                    // If data updates while on tag view, re-initialize
-                    initializeGridPaging(currentGridTag); // (MODIFIED) Removed page number
-                }
-                
-                // (REMOVED) renderDynamicNav call moved to DOMContentLoaded and checkInitialLoad
+                isShowsLoaded = true; // (NEW) Set flag
+                attemptInitialLoad(); // (NEW) Call gatekeeper
                 
             }, (error) => {
                 console.error("Error listening to shows:", error);
@@ -265,36 +252,42 @@
         
         function setupHistoryListener() {
             if (!userId) return;
+            // (MODIFIED) Load 50 items to ensure all cards can check for history
             const historyQuery = query(getHistoryCollectionRef(), orderBy("watchedAt", "desc"), limit(50));
             onSnapshot(historyQuery, (snapshot) => {
                 historyItems = [];
                 snapshot.forEach((doc) => {
                     historyItems.push({ id: doc.id, ...doc.data() });
                 });
-                console.log("Latest history items loaded:", historyItems.length);
+                console.log("History loaded:", historyItems.length);
+                isHistoryLoaded = true; // (NEW) Set flag
+                attemptInitialLoad(); // (NEW) Call gatekeeper
                 
-                // (MODIFIED) Re-render the *current* view to update card links
-                if (currentSearchQuery) {
-                    // We need to re-render, but "Load More" logic complicates this.
-                    // For now, we just update historyItems, existing cards won't update links.
-                } else if (currentGridTag) {
-                    // We can't re-run renderPage, as it appends.
-                    // This is a trade-off for "Load More".
-                }
             }, (error) => {
                 console.error("Error listening to view history:", error);
+                // If history fails, still try to load.
+                isHistoryLoaded = true; 
+                attemptInitialLoad();
             });
         }
         
+        // (NEW) Gatekeeper function to ensure both data sets are ready
+        function attemptInitialLoad() {
+            // Run only if both data sets are loaded AND the initial load hasn't run yet
+            if (isShowsLoaded && isHistoryLoaded && !initialLoadDone) {
+                console.log("Data Gatekeeper: Shows and History are loaded. Proceeding with initial render.");
+                initialLoadDone = true; // Mark as run
+                checkInitialLoad(); // Run the original initial load logic
+            }
+        }
+
+        
         // (MODIFIED) Check URL parameters on initial load
-        let initialLoadDone = false; // Flag to track if initial load logic completed
         function checkInitialLoad() {
             const urlParams = new URLSearchParams(window.location.search);
             const tagFromUrl = urlParams.get('tag');
             const searchFromUrl = urlParams.get('search'); 
             
-            // (REMOVED) pageFromUrl removed, as we always start at page 1
-
             if (searchFromUrl) {
                 const query = decodeURIComponent(searchFromUrl);
                 currentSearchQuery = query;
@@ -310,7 +303,6 @@
                  initializeGridPaging(currentGridTag); 
                  renderDynamicNav(currentGridTag); 
             }
-            initialLoadDone = true;
         }
 
         // --- Navigation Rendering (Adjusted for grid.html) ---
