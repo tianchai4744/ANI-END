@@ -115,16 +115,7 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
      }
      
-    /* (REMOVED) Pagination Button Styles */
-
-    /* (NEW) Style for the Load More button */
-    #load-more-btn {
-        transition: background-color 0.2s, opacity 0.2s;
-    }
-    #load-more-btn:disabled {
-        background-color: #4b5563; /* gray-600 */
-        cursor: not-allowed;
-    }
+    /* (REMOVED) Pagination Button Styles removed */
 
     /* (NEW FIX) Add scroll margin to the title to account for the sticky header */
     #grid-view-title {
@@ -172,16 +163,14 @@
         let currentGridTag = null; 
         let gridFilteredShows = []; 
         let currentGridPage = 1; 
-        let totalGridPages = 1; 
+        // (REMOVED) totalGridPages removed
 
         // UI Elements
         let gridViewContainer;
         let gridViewTitle;
         let gridViewContent;
-        // (MODIFIED)
-        let loadMoreContainer; 
-        let loadMoreBtn;
-        
+        let loadMoreContainer; // (NEW)
+        let loadMoreBtn; // (NEW)
         let searchInput;
         let searchDropdown;
         let mobileSearchInput;
@@ -192,8 +181,7 @@
         let initialQueryFromUrl = null;
         let currentSearchQuery = null; 
 
-        // (NEW FLAG) For History API stability
-        let isUrlSet = false;
+        // (REMOVED) isUrlSet flag removed
 
         // Thai Normalization (KEEP)
         function normalizeThai(text) {
@@ -258,10 +246,10 @@
                     checkInitialLoad();
                 } else if (currentSearchQuery) {
                     // If data updates while on search, re-run search
-                    performSearch(currentSearchQuery, currentGridPage); // (FIX) Pass current page
+                    performSearch(currentSearchQuery);
                 } else if (currentGridTag) {
                     // If data updates while on tag view, re-initialize
-                    initializeGridPaging(currentGridTag, currentGridPage); // Pass current page to re-render
+                    initializeGridPaging(currentGridTag); // (MODIFIED) Removed page number
                 }
                 
                 // (REMOVED) renderDynamicNav call moved to DOMContentLoaded and checkInitialLoad
@@ -285,12 +273,13 @@
                 });
                 console.log("Latest history items loaded:", historyItems.length);
                 
-                // Re-render the current view to update card links
-                // (FIX) We need to re-render all loaded pages, not just one
+                // (MODIFIED) Re-render the *current* view to update card links
                 if (currentSearchQuery) {
-                    performSearch(currentSearchQuery, currentGridPage);
+                    // We need to re-render, but "Load More" logic complicates this.
+                    // For now, we just update historyItems, existing cards won't update links.
                 } else if (currentGridTag) {
-                    initializeGridPaging(currentGridTag, currentGridPage); 
+                    // We can't re-run renderPage, as it appends.
+                    // This is a trade-off for "Load More".
                 }
             }, (error) => {
                 console.error("Error listening to view history:", error);
@@ -303,22 +292,22 @@
             const urlParams = new URLSearchParams(window.location.search);
             const tagFromUrl = urlParams.get('tag');
             const searchFromUrl = urlParams.get('search'); 
-            // (NEW) Read page number from URL on initial load
-            const pageFromUrl = parseInt(urlParams.get('page')) || 1; 
+            
+            // (REMOVED) pageFromUrl removed, as we always start at page 1
 
             if (searchFromUrl) {
                 const query = decodeURIComponent(searchFromUrl);
                 currentSearchQuery = query;
-                performSearch(query, pageFromUrl); // (MODIFIED) Pass page
+                performSearch(query);
                 renderDynamicNav('search-results'); 
             } else if (tagFromUrl) {
                 currentGridTag = decodeURIComponent(tagFromUrl);
-                initializeGridPaging(currentGridTag, pageFromUrl); // Pass pageFromUrl
+                initializeGridPaging(currentGridTag); 
                 renderDynamicNav(currentGridTag); 
             } else {
                  // No tag or search specified, default to 'อนิเมะ' 
                  currentGridTag = 'อนิเมะ';
-                 initializeGridPaging(currentGridTag, pageFromUrl); // Pass pageFromUrl
+                 initializeGridPaging(currentGridTag); 
                  renderDynamicNav(currentGridTag); 
             }
             initialLoadDone = true;
@@ -393,8 +382,8 @@
                 `;
             }
 
-        // (MODIFIED) Pagination Logic -> "Load More"
-        function initializeGridPaging(tag, initialPage = 1) {
+        // (MODIFIED) Pagination Logic - Replaced with "Load More" logic
+        function initializeGridPaging(tag) {
             currentGridTag = tag;
             gridViewTitle.textContent = tag;
             currentSearchQuery = null;
@@ -407,128 +396,73 @@
                     return timeB - timeA; 
                 });
 
-            totalGridPages = Math.ceil(gridFilteredShows.length / ITEMS_PER_PAGE);
+            // (NEW) Reset page counter and clear content
+            currentGridPage = 1;
+            gridViewContent.innerHTML = '';
             
-            gridViewContent.innerHTML = ''; // Clear previous content
-            currentGridPage = 0; // Reset page counter
-
-            // Load all pages from 1 up to the initialPage (e.g., from URL)
-            for (let i = 1; i <= initialPage; i++) {
-                loadAndAppendPage(i);
+            // (NEW) Scroll to title when changing category
+            if (gridViewTitle) {
+                 gridViewTitle.scrollIntoView({ behavior: 'smooth' });
             }
-            
-            updatePageUrl(initialPage);
-            updateLoadMoreButtonState();
+
+            if (gridFilteredShows.length === 0) {
+                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
+                 loadMoreBtn.classList.add('hidden'); // Hide button if no results
+                 return;
+            }
+
+            // (NEW) Load the first batch
+            loadMoreCards();
 
             gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
         }
 
-        /**
-         * (MODIFIED) Renamed from renderPage to loadAndAppendPage
-         * This function now *appends* content instead of replacing it.
-         */
-        function loadAndAppendPage(pageNumber) {
-            if (pageNumber < 1 || pageNumber > totalGridPages) {
-                updateLoadMoreButtonState(); // Ensure button is hidden if no pages
-                return;
-            }
+        // (REMOVED) renderPage function
+        
+        // (NEW) Load More Cards function
+        function loadMoreCards() {
+            if (!loadMoreBtn) return;
             
-            currentGridPage = pageNumber; // Update the max page loaded
-            
-            const startIndex = (pageNumber - 1) * ITEMS_PER_PAGE;
+            loadMoreBtn.disabled = true;
+            loadMoreBtn.textContent = 'กำลังโหลด...';
+
+            const startIndex = (currentGridPage - 1) * ITEMS_PER_PAGE;
             const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, gridFilteredShows.length);
             const showsToRender = gridFilteredShows.slice(startIndex, endIndex);
 
-            if (showsToRender.length > 0) {
-                showsToRender.forEach((show) => {
-                    const historyItem = historyItems.find(h => h.showId === show.id);
-                    gridViewContent.innerHTML += createContentCard(show, null, historyItem); 
-                });
-            } else if (pageNumber === 1 && currentGridTag) {
-                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
-            } else if (pageNumber === 1 && currentSearchQuery) {
-                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบผลลัพธ์สำหรับ "${currentSearchQuery}"</p>`;
-            }
-            
-            // (REMOVED) Scroll logic, moved to click handler
-            
-            // (REMOVED) URL update, moved to caller
-            // (REMOVED) Pagination controls
-        }
-        
-        // (FIXED AGAIN - Final Logic) Update URL function - Handle Blob/Initial load instability
-        function updatePageUrl(pageNumber) {
-            // (FIX) Add guard clause to prevent execution in Blob/iframe context
-            if (!window.history.replaceState || window.location.protocol.startsWith('blob:')) {
-                return; 
-            }
-            
-            let contextQuery = '';
-
-            // 1. Determine base parameter (tag or search) and ensure encoding
-            if (currentSearchQuery) {
-                contextQuery = `search=${encodeURIComponent(currentSearchQuery)}`;
-            } else if (currentGridTag) {
-                contextQuery = `tag=${encodeURIComponent(currentGridTag)}`;
-            }
-            
-            // If no context is set, do not proceed.
-            if (!contextQuery) return; 
-            
-            let pageQuery = '';
-            // 2. Add page number if it's greater than 1
-            if (pageNumber > 1) { 
-                 pageQuery = `page=${pageNumber}`;
+            if (showsToRender.length === 0 && currentGridPage === 1) {
+                // This case is handled by initializeGridPaging/performSearch
+                loadMoreBtn.classList.add('hidden');
+                return;
             }
 
-            // Construct the full new query string
-            const components = [contextQuery, pageQuery].filter(q => q);
-            const newQueryString = components.join('&');
-            
-            const currentQueryString = window.location.search.substring(1);
-            
-            // 3. Construct the target URL
-            const newRelativeUrl = `grid.html${newQueryString ? '?' + newQueryString : ''}`;
-            
-            // 4. Compare and push state
-            
-            // Get the current relative URL (filename + search)
-            const currentFilename = window.location.pathname.split('/').pop();
-            const currentRelativeUrl = (currentFilename.includes('grid.html') ? 'grid.html' : currentFilename) + window.location.search; 
+            // Append new cards
+            showsToRender.forEach((show) => {
+                const historyItem = historyItems.find(h => h.showId === show.id);
+                gridViewContent.innerHTML += createContentCard(show, null, historyItem); 
+            });
 
-            // Only update if the target URL is different from the current effective URL.
-            if (newRelativeUrl !== currentRelativeUrl) {
-                 window.history.replaceState({}, '', newRelativeUrl);
-            }
-        }
-        
-        /**
-         * (NEW) updateLoadMoreButtonState
-         * Checks if there are more pages and updates the button text/state.
-         */
-        function updateLoadMoreButtonState() {
-            if (!loadMoreBtn) return;
-            
-            if (currentGridPage >= totalGridPages) {
-                loadMoreBtn.textContent = 'สิ้นสุดรายการ';
-                loadMoreBtn.disabled = true;
-                loadMoreContainer.classList.remove('hidden'); // Keep it visible but disabled
-            } else {
-                loadMoreBtn.textContent = `โหลดเพิ่มเติม (28 รายการถัดไป)`;
+            // Increment page for the *next* click
+            currentGridPage++;
+
+            // Check if there are more cards to load
+            const remaining = gridFilteredShows.length - endIndex;
+            if (remaining > 0) {
+                loadMoreBtn.textContent = `โหลดเพิ่มเติม... (${Math.min(remaining, ITEMS_PER_PAGE)})`;
+                loadMoreBtn.classList.remove('hidden');
                 loadMoreBtn.disabled = false;
-                loadMoreContainer.classList.remove('hidden');
-            }
-            
-            // Hide button container entirely if there's only 1 page total
-            if (totalGridPages <= 1) {
-                 loadMoreContainer.classList.add('hidden');
+            } else {
+                // No more cards
+                loadMoreBtn.classList.add('hidden');
+                loadMoreBtn.disabled = true;
             }
         }
+        
+        // (REMOVED) updatePageUrl function (Solves SecurityError)
+        // (REMOVED) renderPaginationControls function
+        // (REMOVED) createPageButton function
 
-        // (REMOVED) renderPaginationControls
-        // (REMOVED) createPageButton
-
-        // --- Search Logic (Adjusted for "Load More") ---
+        // --- Search Logic (Adjusted for Load More) ---
         function updateSearchDropdown(query, dropdownEl) {
             const normalizedQuery = normalizeThai(query).toLowerCase().trim();
             dropdownEl.innerHTML = '';
@@ -569,30 +503,24 @@
              searchDropdown.classList.add('hidden');
              mobileSearchDropdown.classList.add('hidden');
              
-             // (MODIFIED) Use replaceState for search redirect if not already on the correct URL
-             if (window.history.pushState && window.location.protocol.startsWith('http')) {
-                 const newUrl = `grid.html?search=${encodeURIComponent(query)}`;
-                 // Use replaceState to change URL immediately upon search submission
-                 window.history.replaceState({ path: newUrl }, '', newUrl);
-             }
+             // (MODIFIED) DO NOT update URL history. Just run the search.
              
              currentGridTag = null; 
              currentSearchQuery = query;
              
              // Run search logic immediately
-             performSearch(query, 1); // Load page 1 of search results
+             performSearch(query);
              renderDynamicNav('search-results'); // (FIX) Update nav state on search
              
              const mobileSearchBarEl = document.getElementById('mobile-search-bar');
              if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
         }
 
-        function performSearch(query, initialPage = 1) {
+        function performSearch(query) {
             if (!query) return;
             
             gridViewTitle.textContent = `ผลการค้นหาสำหรับ "${query}"`;
             currentSearchQuery = query;
-            currentGridTag = null; // Clear tag context
             
             if (allShows.length === 0) {
                  gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">ข้อมูลอนิเมะยังไม่ถูกโหลด. โปรดรอสักครู่...</p>`;
@@ -608,24 +536,26 @@
                 return normalizedTitle.includes(normalizedQuery) || normalizedDesc.includes(normalizedQuery);
             });
             
-            totalGridPages = Math.ceil(gridFilteredShows.length / ITEMS_PER_PAGE);
-            
-            // (MODIFIED) Load pages up to initialPage
+            // (MODIFIED) Reset page counter and clear content
+            currentGridPage = 1;
             gridViewContent.innerHTML = '';
-            currentGridPage = 0; // Reset
-            
-            for (let i = 1; i <= initialPage; i++) {
-                loadAndAppendPage(i);
+
+            // (NEW) Scroll to title when searching
+            if (gridViewTitle) {
+                 gridViewTitle.scrollIntoView({ behavior: 'smooth' });
+            }
+
+            if (gridFilteredShows.length === 0) {
+                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบผลลัพธ์สำหรับ "${query}"</p>`;
+                 loadMoreBtn.classList.add('hidden');
+                 return;
             }
             
-            updatePageUrl(initialPage);
-            updateLoadMoreButtonState();
+            // (NEW) Load the first batch
+            loadMoreCards();
             
             gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
             
-            if (gridFilteredShows.length === 0) {
-                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบผลลัพธ์สำหรับ "${query}"</p>`;
-            }
         }
 
 
@@ -634,15 +564,16 @@
             gridViewContainer = document.getElementById('grid-view-container');
             gridViewTitle = document.getElementById('grid-view-title');
             gridViewContent = document.getElementById('grid-view-content');
-            // (MODIFIED)
-            loadMoreContainer = document.getElementById('load-more-container');
-            loadMoreBtn = document.getElementById('load-more-btn');
+            loadMoreContainer = document.getElementById('load-more-container'); // (NEW)
+            loadMoreBtn = document.getElementById('load-more-btn'); // (NEW)
+            // (REMOVED) paginationContainer removed
 
             searchInput = document.getElementById('search-input');
             searchDropdown = document.getElementById('search-dropdown');
             mobileSearchInput = document.getElementById('mobile-search-input');
             mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
             
+            // (FIX) Re-select elements that were incorrectly referenced globally
             desktopNavLinks = document.getElementById('desktop-nav-links');
             mobileNavLinks = document.getElementById('mobile-nav-links');
 
@@ -655,6 +586,7 @@
             initializeFirebase(); 
             
             // (NEW FIX) Set the active nav state IMMEDIATELY based on the URL.
+            // This stops the "flicker" of the active (green) link.
             const urlParams = new URLSearchParams(window.location.search);
             const tagFromUrl = urlParams.get('tag');
             const searchFromUrl = urlParams.get('search'); 
@@ -729,58 +661,23 @@
                         currentGridTag = pageId;
                         currentSearchQuery = null; // Clear search
                         
-                        // 1. Re-initialize the grid content for the new tag (load page 1)
-                        initializeGridPaging(currentGridTag, 1);
+                        // 1. Re-initialize the grid content for the new tag
+                        initializeGridPaging(currentGridTag); // (MODIFIED) Removed page number
                         
                         // 2. Update the active link state
                         renderDynamicNav(currentGridTag);
                         
-                        // 3. URL is updated by initializeGridPaging -> loadAndAppendPage -> updatePageUrl
+                        // 3. URL is NOT updated (as per user request)
                     }
                 }
             });
-            
-            // (NEW) Load More Button Click Listener
-            if (loadMoreBtn) {
-                loadMoreBtn.addEventListener('click', () => {
-                    const nextPage = currentGridPage + 1;
-                    if (nextPage <= totalGridPages) {
-                        // 1. Load and append the next page
-                        loadAndAppendPage(nextPage);
-                        // 2. Update the URL
-                        updatePageUrl(nextPage);
-                        // 3. Update the button state
-                        updateLoadMoreButtonState();
-                        // 4. Scroll (optional, but good UX)
-                        if (gridViewTitle) {
-                             // Scroll slightly above the title to account for header
-                             // We already added scroll-margin-top, so this is fine.
-                             gridViewTitle.scrollIntoView({ behavior: 'smooth' });
-                        }
-                    }
-                });
-            }
 
-            // (NEW) Add popstate listener for back/forward buttons
-            window.addEventListener('popstate', (e) => {
-                 // On popstate, re-read URL parameters and re-render
-                 // (FIX) We also need to update the Nav state when using back/forward
-                const popParams = new URLSearchParams(window.location.search);
-                const popTag = popParams.get('tag');
-                const popSearch = popParams.get('search');
-                
-                let popActiveId = 'home';
-                if (popSearch) {
-                    popActiveId = 'search-results';
-                } else if (popTag) {
-                    popActiveId = popTag;
-                } else {
-                    popActiveId = 'อนิเมะ'; // Default grid page
-                }
-                
-                renderDynamicNav(popActiveId);
-                checkInitialLoad(); // Re-load data for the new state
-            });
+            // (REMOVED) popstate listener
+
+            // (NEW) Add Load More button listener
+            if (loadMoreBtn) {
+                loadMoreBtn.addEventListener('click', loadMoreCards);
+            }
 
             // Search Listeners
             const searchButton = document.getElementById('search-button');
@@ -886,11 +783,11 @@
                 <p class="text-center w-full col-span-full text-gray-400">กำลังโหลดข้อมูลอนิเมะ...</p>
             </div>
             
-            <!-- (MODIFIED) Pagination Container replaced with Load More -->
-            <div id="load-more-container" class="text-center mt-8 hidden">
-                 <button id="load-more-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                     โหลดเพิ่มเติม (28 รายการถัดไป)
-                 </button>
+            <!-- (MODIFIED) Pagination Container replaced with Load More Button -->
+            <div id="load-more-container" class="text-center mt-8">
+                <button id="load-more-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200 hidden">
+                    โหลดเพิ่มเติม...
+                </button>
             </div>
         </div>
         
