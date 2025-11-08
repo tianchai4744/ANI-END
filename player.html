@@ -561,67 +561,89 @@
 
             console.log(`User ${userId} reporting episode ${episodeId} (${episode.title}) as broken...`);
             
-            try {
-                // (NEW LOGIC AS PER USER REQUEST)
-                // 1. Check if a report for this episode already exists (from this user or system)
-                const reportsRef = getCollectionRef("reports");
-                const q = query(reportsRef, where("episodeId", "==", episodeId));
-                const existingReportSnap = await getDocs(q);
+            const maxRetries = 2; // ลองใหม่สูงสุด 2 ครั้ง
+            
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    // 1. Check if a report for this episode already exists (from this user or system)
+                    const reportsRef = getCollectionRef("reports");
+                    const q = query(reportsRef, where("episodeId", "==", episodeId));
+                    const existingReportSnap = await getDocs(q);
 
-                if (!existingReportSnap.empty) {
-                    console.warn(`Report for episode ${episodeId} already exists.`);
-                    // Already reported, just update UI
+                    if (!existingReportSnap.empty) {
+                        console.warn(`Report for episode ${episodeId} already exists.`);
+                        // Already reported, just update UI
+                        reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
+                        reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
+                        reportBrokenBtn.classList.remove('hover:bg-red-600');
+                        
+                        brokenAlertDiv.classList.remove('hidden');
+                        brokenAlertDiv.innerHTML = `<i class="ri-information-line mr-2"></i> ปัญหาวิดีโอนี้ถูกแจ้งไปแล้ว กำลังรอการแก้ไข.`;
+                        
+                        // (FIX) Also check if the *status* is broken (from admin) and show that alert
+                        if (episode.status === 'broken') {
+                            brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกยืนยันว่ามีปัญหา กำลังรอการแก้ไข.`;
+                        }
+                        
+                        return; // สำเร็จ (มีรายงานอยู่แล้ว)
+                    }
+
+                    // 2. If no report exists, create a new one.
+                    const reportData = {
+                        episodeId: episodeId,
+                        showId: currentShow.id,
+                        reportedBy: 'user', 
+                        userId: userId, 
+                        createdAt: serverTimestamp()
+                    };
+                    
+                    await addDoc(reportsRef, reportData);
+
+                    // (MODIFIED) Update UI to "Reported"
                     reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
                     reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
                     reportBrokenBtn.classList.remove('hover:bg-red-600');
                     
-                    brokenAlertDiv.classList.remove('hidden');
-                    brokenAlertDiv.innerHTML = `<i class="ri-information-line mr-2"></i> ปัญหาวิดีโอนี้ถูกแจ้งไปแล้ว กำลังรอการแก้ไข.`;
-                    
-                    // (FIX) Also check if the *status* is broken (from admin) and show that alert
-                    if (episode.status === 'broken') {
-                         brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกยืนยันว่ามีปัญหา กำลังรอการแก้ไข.`;
+                    // (MODIFIED) Show "Thank you" message
+                    if (brokenAlertDiv) {
+                        brokenAlertDiv.classList.remove('hidden');
+                        brokenAlertDiv.innerHTML = `<i class="ri-check-line mr-2"></i> ขอบคุณสำหรับการแจ้งปัญหา! เราจะเร่งแก้ไขโดยเร็วที่สุด.`;
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
                     
-                    return;
-                }
+                    return; // สำเร็จ (เพิ่มรายงานใหม่)
 
-                // 2. If no report exists, create a new one.
-                const reportData = {
-                    episodeId: episodeId,
-                    showId: currentShow.id,
-                    reportedBy: 'user', 
-                    userId: userId, 
-                    createdAt: serverTimestamp()
-                };
-                
-                await addDoc(reportsRef, reportData);
+                } catch (error) {
+                    console.error(`Attempt ${attempt} failed. Retrying...`, error);
 
-                // (MODIFIED) Update UI to "Reported"
-                reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
-                reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
-                reportBrokenBtn.classList.remove('hover:bg-red-600');
-                
-                // (MODIFIED) Show "Thank you" message
-                if (brokenAlertDiv) {
-                    brokenAlertDiv.classList.remove('hidden');
-                    brokenAlertDiv.innerHTML = `<i class="ri-check-line mr-2"></i> ขอบคุณสำหรับการแจ้งปัญหา! เราจะเร่งแก้ไขโดยเร็วที่สุด.`;
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    if (attempt === maxRetries) {
+                        // ถ้าเป็นการลองครั้งสุดท้าย ให้แสดงข้อผิดพลาดและออกจากฟังก์ชัน
+                        reportBrokenBtn.disabled = false; // Re-enable button
+                        reportBrokenBtn.innerHTML = 'แจ้ง (ล้มเหลว)';
+                        
+                        // *** (แก้ไขใหม่) แสดงข้อความผิดพลาดโดยละเอียดจาก Firebase ***
+                        if (brokenAlertDiv) {
+                            brokenAlertDiv.classList.remove('hidden');
+                            let errorMessage = error.message || 'เกิดข้อผิดพลาดที่ไม่ระบุ';
+                            
+                            // ลบ FirebaseError: ออกจากข้อความเพื่อให้อ่านง่ายขึ้น
+                            if (errorMessage.startsWith('FirebaseError: ')) {
+                                errorMessage = errorMessage.substring('FirebaseError: '.length);
+                            }
+                            
+                            brokenAlertDiv.innerHTML = `
+                                <i class="ri-error-warning-line mr-2"></i> 
+                                ไม่สามารถส่งรายงานได้: ${errorMessage}.
+                            `;
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                        return;
+                    }
+                    
+                    // รอนิดหน่อยก่อนลองใหม่ (Exponential Backoff แบบง่ายๆ)
+                    await new Promise(resolve => setTimeout(resolve, 100 * attempt)); 
                 }
-
-            } catch (error) {
-                console.error("Error creating report:", error);
-                // (KEEP) Show fail message if something goes wrong (e.g., Firestore rules deny creation)
-                reportBrokenBtn.disabled = false; // Re-enable button
-                reportBrokenBtn.innerHTML = 'แจ้ง (ล้มเหลว)';
-                
-                // (NEW) Show specific alert for failure
-                if (brokenAlertDiv) {
-                    brokenAlertDiv.classList.remove('hidden');
-                    brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> ไม่สามารถส่งรายงานได้ กรุณาลองใหม่อีกครั้ง.`;
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-            }
+            } // end for loop
         }
 
 
@@ -1350,9 +1372,6 @@ function setupReportButtonListener() {
                  prevEpisodeBtn.addEventListener('click', handlePrevEpisode);
                  nextEpisodeBtn.addEventListener('click', handleNextEpisode);
             }
-            
-            // *** (REMOVED) Event Listener for Report Button from here ***
-            // The listener is now attached inside initializeFirebase -> onAuthStateChanged
             
             // (NEW) Event Listener for Expand/Collapse Button
             if(expandDescBtn) { // (FIX) Add null check
