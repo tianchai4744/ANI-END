@@ -44,7 +44,7 @@
             onSnapshot, collection, query, serverTimestamp,
             setLogLevel, 
             where, getDocs, 
-            writeBatch // (NEW) Import writeBatch for bulk delete
+            writeBatch 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         
@@ -106,21 +106,22 @@
         const episodeListView = document.getElementById('episode-list-view');
         const showListView = document.getElementById('show-list-view');
         const bannerListView = document.getElementById('banner-list-view'); 
-        const reportListView = document.getElementById('report-list-view'); // (NEW)
+        const reportListView = document.getElementById('report-list-view'); 
         
         const episodeTableBody = document.getElementById('episode-table-body');
         const showTableBody = document.getElementById('show-table-body');
         const bannerTableBody = document.getElementById('banner-table-body'); 
-        const reportTableBody = document.getElementById('report-table-body'); // (NEW)
+        const reportTableBody = document.getElementById('report-table-body'); 
         
         const showEpisodeListBtn = document.getElementById('show-episode-list-btn');
         const showShowListBtn = document.getElementById('show-show-list-btn');
         const showBannerListBtn = document.getElementById('show-banner-list-btn');
-        const showReportListBtn = document.getElementById('show-report-list-btn'); // (NEW)
+        const showReportListBtn = document.getElementById('show-report-list-btn'); 
         
         // (NEW) Search Inputs
         let showSearchInput;
         let episodeSearchInput;
+        let reportSearchInput; // (NEW FIX 2) Report Search Input
 
         // Modal: Episode
         const episodeModal = document.getElementById('episode-modal');
@@ -142,7 +143,7 @@
         const showDescInput = document.getElementById('show-description');
         const showThumbnailInput = document.getElementById('show-thumbnail');
         const showViewCountInput = document.getElementById('show-view-count'); 
-        const showCompletedCheckbox = document.getElementById('show-completed-checkbox'); // (NEW)
+        const showCompletedCheckbox = document.getElementById('show-completed-checkbox'); 
         const closeShowModalBtn = document.getElementById('close-show-modal');
         const addShowBtn = document.getElementById('add-show-btn');
         const deleteShowBtn = document.getElementById('delete-show-btn');
@@ -405,49 +406,62 @@
         // (MODIFIED) Function to Render Report Table (อัปเกรดตรรกะใหม่ทั้งหมด)
         function renderReportTable() {
             if (!reportTableBody) return;
+            
+            // (NEW FIX 2) Get and normalize search query
+            const searchQuery = reportSearchInput ? normalizeThai(reportSearchInput.value).toLowerCase() : '';
 
             let tableHtml = '';
             
-            // (NEW) 1. สร้าง "To-Do" list map เพื่อรวบรวมตอนที่มีปัญหาทั้งหมด
-            // ใช้ Map เพื่อป้องกัน episodeId ซ้ำซ้อน
-            // Key: episodeId, Value: { episode: (episodeData), report: (reportData or null) }
+            // 1. สร้าง "To-Do" list map เพื่อรวบรวมตอนที่มีปัญหาทั้งหมด
             const todoMap = new Map();
             
-            // (NEW) 2. เพิ่มรายการจาก 'reports' (ที่สคริปต์อัตโนมัติแจ้งมา)
+            // 2. เพิ่มรายการจาก 'reports' (ที่สคริปต์อัตโนมัติแจ้งมา)
             allReports.forEach((report) => {
                 const episode = allEpisodes.find(ep => ep.id === report.episodeId);
                 todoMap.set(report.episodeId, {
-                    episode: episode, // ถ้าหาไม่เจอจะเป็น 'undefined' (N/A)
-                    report: report  // มี 'report' doc อยู่จริง
+                    episode: episode, 
+                    report: report  
                 });
             });
             
-            // (NEW) 3. เพิ่มรายการที่ 'เสีย' (broken) แต่ยังไม่มีใน 'reports' (ที่ผู้ใช้แจ้งจาก player.html)
+            // 3. เพิ่มรายการที่ 'เสีย' (broken) แต่ยังไม่มีใน 'reports' (ที่ผู้ใช้แจ้งจาก player.html)
             allEpisodes.forEach((episode) => {
                 if (episode.status === 'broken' && !todoMap.has(episode.id)) {
-                    // ตอนนี้ 'เสีย' แต่ไม่มี 'report' doc
                     todoMap.set(episode.id, {
                         episode: episode,
-                        report: null // ไม่มี 'report' doc
+                        report: null 
                     });
                 }
             });
             
-            // (NEW) 4. ตรวจสอบว่า "To-Do" list ว่างหรือไม่
-            if (todoMap.size === 0) {
+            // 4. กรองรายการตามคำค้นหา (FIX 2)
+            const filteredTodoItems = Array.from(todoMap.values()).filter(item => {
+                if (!searchQuery) return true; // ถ้าไม่มีคำค้นหา ให้แสดงทั้งหมด
+                
+                const episodeTitle = item.episode ? normalizeThai(item.episode.title).toLowerCase() : 'n/a';
+                const show = item.episode ? shows.find(s => s.id === item.episode.showId) : null;
+                const showTitle = show ? normalizeThai(show.title).toLowerCase() : 'n/a';
+                
+                return episodeTitle.includes(searchQuery) || showTitle.includes(searchQuery);
+            });
+            
+            
+            // 5. ตรวจสอบว่า "To-Do" list ว่างหรือไม่
+            if (filteredTodoItems.length === 0) {
                 tableHtml = `
                     <tr>
                         <td colspan="3" class="py-6 px-4 text-center text-gray-400">
                             <i class="ri-check-double-line text-4xl mb-2"></i>
-                            <p>เยี่ยม! ไม่มีรายงานปัญหาในขณะนี้</p>
+                            <p>${searchQuery ? `ไม่พบรายงานสำหรับ "${reportSearchInput.value}"` : 'เยี่ยม! ไม่มีรายงานปัญหาในขณะนี้'}</p>
                         </td>
                     </tr>
                 `;
             } else {
-                // (NEW) 5. Render "To-Do" list ที่รวบรวมมาทั้งหมด
-                todoMap.forEach((item, episodeId) => {
+                // 6. Render "To-Do" list ที่กรองแล้ว
+                filteredTodoItems.forEach((item) => {
                     const { episode, report } = item;
                     
+                    const episodeId = episode ? episode.id : (report ? report.episodeId : 'unknown');
                     const episodeTitle = episode ? episode.title : 'N/A (อาจถูกลบไปแล้ว)';
                     const show = episode ? shows.find(s => s.id === episode.showId) : null;
                     const showTitle = show ? show.title : 'N/A';
@@ -456,11 +470,10 @@
                     
                     // (NEW) ตรวจสอบว่าจะแสดงปุ่มไหนบ้าง
                     const reportId = report ? report.id : null;
-                    const canMarkBroken = episode && !isBroken; // แสดง 'Mark Broken' ต่อเมื่อตอนยังอยู่ และยังไม่ถูก Mark
-                    // (FIX) แสดง 'Edit' ถ้าตอนยังอยู่ *หรือ* ถ้าเป็น N/A (report อยู่ แต่ episode หาย)
+                    const canMarkBroken = episode && !isBroken; 
                     const canEdit = episode || (report && !episode);
-                    const canResolve = report; // แสดง 'Resolve' ต่อเมื่อมี 'report' doc อยู่จริง
-                    const isDirectBroken = episode && episode.status === 'broken' && !report; // เคสที่ถูกแจ้งจาก player.html (เสีย แต่ไม่มี report)
+                    const canResolve = report; 
+                    const isDirectBroken = episode && episode.status === 'broken' && !report; 
 
                     tableHtml += `
                         <tr class="border-b border-gray-700 hover:bg-gray-700">
@@ -480,13 +493,11 @@
                                 </button>
                                 ` : ''}
                                 
-                                <!-- (DELETED) ลบปุ่ม Edit เก่าที่ซ้ำซ้อนออก -->
-                                
                                 <!-- (MODIFIED) Action 2: Go to Edit -->
                                 ${canEdit ? `
                                 <button class="text-xs text-green-400 hover:text-green-300 bg-gray-900 px-2 py-1 rounded goto-episode-btn" 
                                         data-episode-id="${episodeId}" 
-                                        data-report-id="${reportId || ''}"> <!-- ส่ง reportId ถ้ามี -->
+                                        data-report-id="${reportId || ''}"> 
                                     <i class="ri-pencil-line"></i> Edit
                                 </button>
                                 ` : ''}
@@ -512,6 +523,40 @@
             
             reportTableBody.innerHTML = tableHtml;
         }
+        
+        // (NEW FUNCTION) Helper function to update the report badge count
+        function updateReportBadge() {
+            const reportBadge = document.getElementById('report-count-badge');
+            if (!reportBadge) return;
+            
+            // 1. สร้าง To-Do Map ที่สมบูรณ์แบบ (ใช้ตรรกะเดียวกับ renderReportTable)
+            const todoMap = new Map();
+            
+            // 2. เพิ่มรายการจาก 'reports'
+            allReports.forEach((report) => {
+                todoMap.set(report.episodeId, report);
+            });
+            
+            // 3. เพิ่มรายการที่ 'เสีย' (broken) แต่ยังไม่มีใน 'reports'
+            allEpisodes.forEach((episode) => {
+                if (episode.status === 'broken' && !todoMap.has(episode.id)) {
+                    todoMap.set(episode.id, { isBrokenOnly: true }); 
+                }
+            });
+            
+            const totalTodoCount = todoMap.size;
+
+            if (totalTodoCount > 0) {
+                reportBadge.textContent = totalTodoCount;
+                reportBadge.classList.remove('hidden');
+            } else {
+                reportBadge.textContent = '0';
+                reportBadge.classList.add('hidden');
+            }
+            console.log("Badge updated. Total To-Do Items:", totalTodoCount);
+        }
+        // (END NEW FUNCTION)
+
 
         async function setupListeners() {
             // 1. Listen to Shows (อนิเมะ)
@@ -540,7 +585,8 @@
                 
                 // (NEW) Call render function
                 renderShowTable();
-                renderReportTable(); // (NEW) Re-render reports in case show names changed
+                renderReportTable(); // Re-render reports
+                updateReportBadge(); // Update badge 
                 
             }, (error) => console.error("Error listening to shows:", error));
 
@@ -585,7 +631,8 @@
                 
                 // (NEW) Call render function
                 renderEpisodeTable();
-                renderReportTable(); // (NEW) Re-render reports in case episode names/status changed
+                renderReportTable(); // Re-render reports
+                updateReportBadge(); // <--- NEW: Update badge when episodes change (FIX FOR USER ISSUE)
                 
             }, (error) => console.error("Error listening to episodes:", error));
 
@@ -615,7 +662,7 @@
                 console.log("Banners loaded:", snapshot.size);
             }, (error) => console.error("Error listening to banners:", error));
 
-            // (NEW) 4. Listen to Reports
+            // 4. Listen to Reports
             const reportQuery = query(getCollectionRef("reports"));
             onSnapshot(reportQuery, (snapshot) => {
                 allReports = [];
@@ -626,32 +673,8 @@
                 console.log("Reports loaded:", allReports.length);
                 renderReportTable(); // (NEW) เรียกใช้ฟังก์ชัน render
                 
-                // (MODIFIED) อัปเดต Badge (ย้ายตรรกะมาจาก renderReportTable)
-                const reportBadge = document.getElementById('report-count-badge');
-                if (reportBadge) {
-                    // (NEW) นับจำนวนที่ "ยังไม่ถูกแก้ไข" จริงๆ
-                    // เราจะนับ 1. รายการใน 'reports' 2. รายการ 'broken' ที่ไม่มีใน 'reports'
-                    // (ใช้ตรรกะเดียวกับ renderReportTable)
-                    const todoMap = new Map();
-                    allReports.forEach((report) => {
-                        todoMap.set(report.episodeId, report);
-                    });
-                    allEpisodes.forEach((episode) => {
-                        if (episode.status === 'broken' && !todoMap.has(episode.id)) {
-                            todoMap.set(episode.id, { isBrokenOnly: true }); // เพิ่มรายการ 'broken'
-                        }
-                    });
-                    
-                    const totalTodoCount = todoMap.size;
-                    
-                    if (totalTodoCount > 0) {
-                        reportBadge.textContent = totalTodoCount;
-                        reportBadge.classList.remove('hidden');
-                    } else {
-                        reportBadge.textContent = '0';
-                        reportBadge.classList.add('hidden');
-                    }
-                }
+                // (MODIFIED) Replaced inline logic with helper function
+                updateReportBadge();
 
             }, (error) => console.error("Error listening to reports:", error));
         }
@@ -661,12 +684,12 @@
             if (episodeListView) episodeListView.classList.add('hidden');
             if (showListView) showListView.classList.add('hidden');
             if (bannerListView) bannerListView.classList.add('hidden'); 
-            if (reportListView) reportListView.classList.add('hidden'); // (NEW)
+            if (reportListView) reportListView.classList.add('hidden'); 
 
             if (showEpisodeListBtn) showEpisodeListBtn.classList.remove('bg-gray-900', 'text-white');
             if (showShowListBtn) showShowListBtn.classList.remove('bg-gray-900', 'text-white');
             if (showBannerListBtn) showBannerListBtn.classList.remove('bg-gray-900', 'text-white'); 
-            if (showReportListBtn) showReportListBtn.classList.remove('bg-gray-900', 'text-white'); // (NEW)
+            if (showReportListBtn) showReportListBtn.classList.remove('bg-gray-900', 'text-white'); 
 
             if (viewId === 'episode') {
                 if (episodeListView) episodeListView.classList.remove('hidden');
@@ -677,7 +700,7 @@
             } else if (viewId === 'banner') {
                 if (bannerListView) bannerListView.classList.remove('hidden');
                 if (showBannerListBtn) showBannerListBtn.classList.add('bg-gray-900', 'text-white');
-            } else if (viewId === 'report') { // (NEW)
+            } else if (viewId === 'report') { 
                 if (reportListView) reportListView.classList.remove('hidden');
                 if (showReportListBtn) showReportListBtn.classList.add('bg-gray-900', 'text-white');
             }
@@ -688,7 +711,7 @@
         if (showEpisodeListBtn) showEpisodeListBtn.addEventListener('click', () => switchView('episode'));
         if (showShowListBtn) showShowListBtn.addEventListener('click', () => switchView('show'));
         if (showBannerListBtn) showBannerListBtn.addEventListener('click', () => switchView('banner')); 
-        if (showReportListBtn) showReportListBtn.addEventListener('click', () => switchView('report')); // (NEW)
+        if (showReportListBtn) showReportListBtn.addEventListener('click', () => switchView('report')); 
 
         
         // (NEW) Event Listeners for Report Actions
@@ -1160,7 +1183,7 @@
                             
                             if (showModal) showModal.classList.remove('flex');
                         } catch (error) {
-                            console.error("Error deleting show and its episodes: ", error);
+                            console.error("Error during bulk show delete:", error);
                         } finally {
                             closeConfirmModal();
                         }
@@ -1444,6 +1467,7 @@
             // (NEW) Get search inputs
             showSearchInput = document.getElementById('show-search-input');
             episodeSearchInput = document.getElementById('episode-search-input');
+            reportSearchInput = document.getElementById('report-search-input'); // (NEW FIX 2)
 
             // (NEW) Add search listeners
             if (showSearchInput) {
@@ -1451,6 +1475,9 @@
             }
             if (episodeSearchInput) {
                 episodeSearchInput.addEventListener('input', renderEpisodeTable);
+            }
+            if (reportSearchInput) { // (NEW FIX 2) Add listener for report search
+                reportSearchInput.addEventListener('input', renderReportTable);
             }
             
             if (episodeNumberInput && episodeTitleInput) {
@@ -1541,12 +1568,12 @@
                         <span>อนิเมะ (Anime)</span>
                     </button>
                     <!-- (MODIFIED) 3. Episode Button (Now inactive) -->
-                    <button id="show-episode-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
+                    <button id="show-episode-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 font-medium flex-shrink-0">
                         <i class="ri-movie-2-line"></i>
                         <span>ตอน (Episodes)</span>
                     </button>
                     <!-- (MODIFIED) 4. Report Button (เพิ่ม relative และป้าย Badge) -->
-                    <button id="show-report-list-btn" class="relative flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
+                    <button id="show-report-list-btn" class="relative flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 font-medium flex-shrink-0">
                         <i class="ri-flag-line"></i>
                         <span>รายงาน (Reports)</span>
                         <!-- (NEW) Notification Badge (เหมือนในรูปภาพ) -->
@@ -1691,8 +1718,12 @@
 
                 <!-- (NEW) 4. Report List View -->
                 <div id="report-list-view" class="hidden">
-                    <div class="flex justify-between items-center mb-6">
+                    <!-- (NEW FIX 2) Header with Search Input for Reports -->
+                    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
                         <h2 class="text-3xl font-bold text-white">รายการแจ้งปัญหา (Reports)</h2>
+                        <div class="flex items-center space-x-4">
+                            <input type="text" id="report-search-input" placeholder="ค้นหาชื่อตอน หรือ ชื่อเรื่อง..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-500">
+                        </div>
                     </div>
                     
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
