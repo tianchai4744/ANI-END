@@ -687,7 +687,7 @@
             }
         }
         
-        // (MODIFIED) ฟังก์ชันเล่นวิดีโอ
+        // (MODIFIED) ฟังก์ชันเล่นวิดีโอ (Must be async to check reports)
         async function playEpisode(episode) {
             console.log(`Playing: ${episode.title}`, episode.embedCode);
             
@@ -722,7 +722,7 @@
             console.log("Current episode index:", currentEpisodeIndex);
             updateNavButtonStates();
             
-            // (MODIFIED) อัปเดตสถานะปุ่ม "แจ้งเสีย"
+            // (MODIFIED) อัปเดตสถานะปุ่ม "แจ้งเสีย" (ต้องเป็น async)
             if (reportBrokenBtn && brokenAlertDiv) {
                 // 1. ตรวจสอบสถานะ 'broken' ที่ยืนยันโดย Admin/Script
                 if (episode.status === 'broken') {
