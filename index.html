@@ -33,9 +33,6 @@
         }
 
         .nav-link.active { color: #00b87c; } 
-        /* (MODIFIED) ให้ Grid View ถูกซ่อน (แม้ว่า HTML จะไม่มีแล้ว แต่เผื่อไว้) */
-        #grid-view-container { display: none !important; } 
-        #home-view { display: block; } 
         #mobile-search-bar { display: none; }
         
         /* (MODIFIED) ชื่อเรื่องแสดงได้ 2 บรรทัด */
@@ -197,16 +194,12 @@
         
         let db, auth, userId;
         let allShows = []; 
-        let allTags = new Set(); 
         let historyItems = []; 
         let allBanners = []; 
-        let currentPageId = 'home';
         let heroSwiperInstance = null; 
-        
         let isDataLoaded = false; 
         
         // UI Elements
-        let homeView;
         let sectionsContainer;
         let searchInput;
         let searchDropdown;
@@ -216,7 +209,6 @@
         let mobileNavLinks;
         
         let initialQueryFromUrl = null;
-        let currentSearchQuery = null; 
 
         // Thai Normalization (KEEP)
         function normalizeThai(text) {
@@ -265,11 +257,9 @@
             const showsQuery = query(getCollectionRef("shows"));
             onSnapshot(showsQuery, (snapshot) => {
                 allShows = [];
-                allTags.clear();
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     allShows.push({ id: doc.id, ...data });
-                    (data.tags || []).forEach(tag => allTags.add(tag));
                 });
                 
                 console.log("Shows loaded:", allShows.length);
@@ -277,12 +267,10 @@
                 const wasDataLoaded = isDataLoaded;
                 isDataLoaded = true; 
                 
-                // (MODIFIED) Check initial search from URL (always redirects to grid.html now)
                 if (!wasDataLoaded) {
                     checkInitialSearch();
                 }
                 
-                // (MODIFIED) Always render HOME sections
                 renderDynamicNav('home'); 
                 renderSections(); 
                 
@@ -333,11 +321,9 @@
             });
         }
         
-        // (NEW) Function to check if a search was requested via URL on initial load (only for redirect now)
         function checkInitialSearch() {
             if (initialQueryFromUrl) {
                 console.log("Redirecting initial search to grid.html:", initialQueryFromUrl);
-                // (MODIFIED) Redirect immediately instead of running the search on this page
                 window.location.replace(`grid.html?search=${encodeURIComponent(initialQueryFromUrl)}`);
             }
         }
@@ -353,7 +339,7 @@
             const mainTags = ['อนิเมะ', 'อนิเมะจีน', 'อนิเมะพากย์ไทย'];
             
             mainTags.forEach(tag => {
-                // (MODIFIED) Update link to point to the new grid.html
+                // (MODIFIED) LInk to grid.html
                 const tagUrl = `grid.html?tag=${encodeURIComponent(tag)}`; 
                 const link = `<a href="${tagUrl}" data-page="${tag}" class="nav-link px-3 py-2 rounded-md text-sm font-medium ${activePageId === tag ? 'active text-green-500' : 'text-gray-300 hover:text-white hover:bg-gray-700'}">${tag}</a>`;
                 const mobileLink = `<a href="${tagUrl}" data-page="${tag}" class="nav-link block px-3 py-2 rounded-md text-base font-medium ${activePageId === tag ? 'active text-green-500' : 'text-gray-300 hover:text-white hover:bg-gray-700'}">${tag}</a>`;
@@ -486,7 +472,7 @@
             sectionsContainer.appendChild(historyMobileSection);
 
 
-            if(top10Shows.length === 0 && recommendedShows.length === 0 && thaiDubShows.length === 0 && latestShows.length === 0) { 
+            if(sortedShows.length === 0) { 
                 sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
             }
 
@@ -520,14 +506,7 @@
             });
         }
 
-        // (KEEP) Card Rendering Logic
         function createContentCard(show, rankNumber = null, history = null) {
-            
-            const rankBadge = rankNumber ? `
-                <div class="rank-badge">
-                    ${rankNumber}
-                </div>` : '';
-                
             const watchedEpisodeId = history ? history.lastWatchedEpisodeId : null;
             let targetUrl = `player.html?id=${show.id}`;
             
@@ -558,7 +537,7 @@
             return `
                 <a href="${targetUrl}" class="block group bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
                         <div class="aspect-[2/3] overflow-hidden relative">
-                            ${rankBadge}
+                            ${rankNumber ? `<div class="rank-badge">${rankNumber}</div>` : ''}
                             ${dubBadge}
                             ${episodeBadge} 
                             <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
@@ -647,7 +626,7 @@
             `;
         }
         
-        // --- Live Search (Keep only redirection logic) ---
+        // --- Live Search ---
         function updateSearchDropdown(query, dropdownEl) {
             const normalizedQuery = normalizeThai(query).toLowerCase().trim();
             dropdownEl.innerHTML = '';
@@ -688,30 +667,26 @@
              searchDropdown.classList.add('hidden');
              mobileSearchDropdown.classList.add('hidden');
              
-             // (MODIFIED) Redirect to the new grid.html file with search parameter
+             // (MODIFIED) Redirect to the grid.html file with search parameter
              window.location.href = `grid.html?search=${encodeURIComponent(query)}`;
         }
-        // (REMOVED) performSearch logic is removed
-
+        
         document.addEventListener('DOMContentLoaded', () => {
             
-            // (MODIFIED) Assign UI Elements (Only those remaining)
-            homeView = document.getElementById('home-view');
             sectionsContainer = document.getElementById('sections-container');
             searchInput = document.getElementById('search-input');
             searchDropdown = document.getElementById('search-dropdown');
             mobileSearchInput = document.getElementById('mobile-search-input');
             mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
             
+            // (FIX) Re-select elements that were incorrectly referenced globally
             desktopNavLinks = document.getElementById('desktop-nav-links');
             mobileNavLinks = document.getElementById('mobile-nav-links');
 
-            // Mobile Menu Elements
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
             const mobileMenu = document.getElementById('mobile-menu');
             const mobileSearchBtn = document.getElementById('mobile-search-button');
             const mobileSearchBar = document.getElementById('mobile-search-bar');
-            // FIX: แก้ไขบรรทัดที่ทำให้เกิด TypeError: Cannot set property document
             const mobileCloseSearchBtn = document.getElementById('mobile-close-search');
             
             initializeFirebase(); 
@@ -748,7 +723,6 @@
                  }
                 const navLink = e.target.closest('.nav-link');
                 if (navLink) {
-                    // Let the href handle navigation
                     if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
                         mobileMenu.classList.add('hidden');
                     }
@@ -762,14 +736,13 @@
             if (searchButton && searchInput) searchButton.addEventListener('click', () => handleSearchSubmit(searchInput.value));
             if (searchInput) searchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(searchInput.value));
             if (mobileSearchInput) mobileSearchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(mobileSearchInput.value));
-            
+
             // Initial URL check (only for search redirection)
             const urlParams = new URLSearchParams(window.location.search);
             const searchFromUrl = urlParams.get('search'); 
 
             if (searchFromUrl) {
                 initialQueryFromUrl = decodeURIComponent(searchFromUrl);
-                // The checkInitialSearch() will handle the immediate redirect after data loads.
             } 
         });
     </script>
@@ -778,7 +751,8 @@
     <header class="bg-gray-900/80 backdrop-blur-md sticky top-0 z-50">
         <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
-                <!-- 1. LEFT GROUP: Logo + Nav Links -->
+                <!-- 1. LEFT GROUP: Logo + Nav Links (รวมกันเพื่อจัดตำแหน่ง) -->
+                <!-- (FIXED) ลบ class="hidden md:block" ออกจาก div ภายในแล้ว -->
                 <div class="flex items-center">
                     <!-- Logo -->
                     <a href="index.html" class="flex-shrink-0 flex items-center text-white">
@@ -818,7 +792,7 @@
                 <div class="flex md:hidden items-center space-x-2">
                     <a href="#" id="mobile-search-button" class="text-gray-300 hover:text-white p-2">
                         <i class="ri-search-line text-xl"></i>
-                    </button>
+                    </a>
                     <button id="mobile-menu-btn" class="text-gray-300 hover:text-white p-2">
                         <i class="ri-menu-line text-2xl"></i>
                     </button>
@@ -843,10 +817,6 @@
         <div id="mobile-menu" class="md:hidden hidden">
             <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                 <!-- Links generated by JS -->
-                <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
-                <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
                 <!-- ลิงก์ Admin สำหรับ Mobile -->
                 <a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
                     <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
