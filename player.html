@@ -565,15 +565,14 @@
             
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
-                    // *** (FIX 3) เปลี่ยนไปใช้ Public Path เพื่อหลีกเลี่ยงปัญหา Security Rules ***
-                    // Path: artifacts/{appId}/public/data/reports
+                    // *** (FIX 3) ใช้ Public Path สำหรับ Reports ***
                     const reportsRef = collection(db, `artifacts/${appId}/public/data/reports`);
                     
-                    // 1. Check if a report for this episode already exists (from this user or system)
-                    const q = query(reportsRef, where("episodeId", "==", episodeId));
-                    const existingReportSnap = await getDocs(q);
+                    // *** (FIX 4 - NEW LOGIC) เปลี่ยนจากการ Query เป็นการดึง Doc โดยตรงด้วย episodeId ***
+                    const reportDocRef = doc(reportsRef, episodeId);
+                    const existingReportSnap = await getDoc(reportDocRef);
 
-                    if (!existingReportSnap.empty) {
+                    if (existingReportSnap.exists()) { // ตรวจสอบว่าเอกสารรายงานนี้มีอยู่แล้วหรือไม่
                         console.warn(`Report for episode ${episodeId} already exists.`);
                         // Already reported, just update UI
                         reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
@@ -591,16 +590,17 @@
                         return; // สำเร็จ (มีรายงานอยู่แล้ว)
                     }
 
-                    // 2. If no report exists, create a new one.
+                    // 2. If no report exists, create or update a new one using SET (merge)
                     const reportData = {
-                        episodeId: episodeId,
+                        episodeId: episodeId, // ใช้เป็น ID ของเอกสารด้วย
                         showId: currentShow.id,
                         reportedBy: 'user', 
                         userId: userId, 
                         createdAt: serverTimestamp()
                     };
                     
-                    await addDoc(reportsRef, reportData);
+                    // *** (FIX 4) ใช้ setDoc แทน addDoc และใช้ episodeId เป็น Document ID ***
+                    await setDoc(reportDocRef, reportData, { merge: true });
 
                     // (MODIFIED) Update UI to "Reported"
                     reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
@@ -773,13 +773,14 @@
                 } else {
                     // 2. ถ้าสถานะไม่ 'broken', ให้ตรวจสอบว่ามี 'report' ที่ผู้ใช้แจ้งค้างไว้หรือไม่
                     
-                    // *** (FIX 3) เปลี่ยนไปใช้ Public Path เพื่อหลีกเลี่ยงปัญหา Security Rules ***
+                    // *** (FIX 3) ใช้ Public Path สำหรับ Reports ***
                     const reportsRef = collection(db, `artifacts/${appId}/public/data/reports`);
                     
-                    const q = query(reportsRef, where("episodeId", "==", episode.id));
-                    const existingReportSnap = await getDocs(q);
+                    // *** (FIX 4) ใช้ doc/getDoc โดยใช้ episodeId เป็น Document ID ***
+                    const reportDocRef = doc(reportsRef, episode.id);
+                    const existingReportSnap = await getDoc(reportDocRef);
 
-                    if (!existingReportSnap.empty) {
+                    if (existingReportSnap.exists()) {
                         // มีคนแจ้งแล้ว
                         reportBrokenBtn.disabled = true;
                         reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
