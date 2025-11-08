@@ -425,7 +425,7 @@
         }
         
         // (MODIFIED) Search Logic: Always redirect to grid.html with the query
-        function handleSearchSubmit(query, isDesktop) {
+        function handleSearchSubmit(query) { // (FIX) Removed isDesktop param as it's not used
              const lowerQuery = query.toLowerCase().trim();
              if (!lowerQuery) return;
              
@@ -485,8 +485,13 @@
             
             results.forEach(show => {
                 const item = document.createElement('a');
-                item.href = `player.html?id=${show.id}`;
-                // ใช้คลาส search-dropdown-item ใน CSS ที่กำหนดไว้
+                // (FIX) Use the standard link target logic (no history check here)
+                const historyItem = historyItems.find(h => h.showId === show.id);
+                const targetUrl = historyItem ? `player.html?id=${show.id}&ep_id=${historyItem.lastWatchedEpisodeId}` : `player.html?id=${show.id}`;
+                item.href = targetUrl;
+
+                // item.href = `player.html?id=${show.id}`; // Old code
+                
                 item.className = 'search-dropdown-item block p-3 text-sm font-medium text-gray-200';
                 
                 // Highlight คำที่ค้นหา (ใช้ query เดิมสำหรับการเน้น)
@@ -1283,6 +1288,15 @@ function setupReportButtonListener() {
             const mobileSearchBtn = document.getElementById('mobile-search-button');
             const mobileSearchBar = document.getElementById('mobile-search-bar');
             const mobileCloseSearchBtn = document.getElementById('mobile-close-search');
+
+            // (NEW) Mobile Menu Button Logic
+            if (mobileMenuBtn && mobileMenu) {
+                mobileMenuBtn.addEventListener('click', () => {
+                    mobileMenu.classList.toggle('hidden');
+                    toggleMobileSearch(false); // ปิดแถบค้นหา (ถ้าเปิดอยู่)
+                    if (searchDropdown) searchDropdown.classList.add('hidden'); // (NEW) ซ่อน Desktop Dropdown
+                });
+            }
             
             // (NEW) Mobile Search Button Logic
             if (mobileSearchBtn && mobileSearchBar) {
@@ -1308,8 +1322,8 @@ function setupReportButtonListener() {
             if (searchButtonDesktop && searchInput) {
                 searchButtonDesktop.addEventListener('click', (e) => {
                     e.preventDefault();
-                    // Pass true for isDesktop
-                    handleSearchSubmit(searchInput.value, true);
+                    // Pass only the query
+                    handleSearchSubmit(searchInput.value);
                 });
             }
             if (searchInput) {
@@ -1318,8 +1332,8 @@ function setupReportButtonListener() {
                 searchInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault(); // Prevent default form submit (which might reload the page)
-                        // Pass true for isDesktop
-                        handleSearchSubmit(searchInput.value, true);
+                        // Pass only the query
+                        handleSearchSubmit(searchInput.value);
                     }
                 });
             }
@@ -1329,8 +1343,8 @@ function setupReportButtonListener() {
                 mobileSearchInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault(); // Prevent default form submit (which might reload the page)
-                        // Pass false for isDesktop
-                        handleSearchSubmit(mobileSearchInput.value, false);
+                        // Pass only the query
+                        handleSearchSubmit(mobileSearchInput.value);
                     }
                 });
             }
@@ -1389,85 +1403,84 @@ function setupReportButtonListener() {
 
     </script>
 
-    <!-- Header -->
-    <header class="bg-gray-900 sticky top-0 z-50"> <!-- (MODIFIED) Removed /80 and backdrop-blur-md -->
+    <!-- (MODIFIED HEADER) -->
+    <!-- Header (Copied from index.html and modified) -->
+    <header class="bg-gray-900 sticky top-0 z-50">
         <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <!-- 1. LEFT GROUP: Logo + Nav Links (รวมกันเพื่อจัดตำแหน่ง) -->
                 <div class="flex items-center">
                     <!-- Logo -->
                     <a href="index.html" class="flex-shrink-0 flex items-center text-white">
-                        <span class="font-bold text-2xl">ANI-END</span>
+                        <span class="font-bold text-2xl">ANI-END</span> 
                     </a>
+                    
                     <!-- Desktop Nav Links (Secondary Navigation) -->
                     <div class="hidden md:block">
-                        <div class="ml-10 flex items-baseline space-x-4">
-                            <a href="index.html" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
-                            
-                            <!-- (แก้ไข) เพิ่ม URL parameter '?tag=' เพื่อระบุหน้าที่จะไป (สำหรับ grid.html) -->
-                            <a href="grid.html?tag=อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                            <a href="grid.html?tag=อนิเมะจีน" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                            <a href="grid.html?tag=อนิเมะพากย์ไทย" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
+                        <div id="desktop-nav-links" class="ml-6 flex items-baseline space-x-4">
+                            <!-- Links are now hardcoded in HTML for instant display -->
+                            <a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                            <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                            <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
+                            <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
                         </div>
                     </div>
                 </div>
                 
-                <!-- (MODIFIED) Search & Actions (Desktop) - ลบปุ่ม Admin -->
+                <!-- 2. RIGHT GROUP: Search & Actions -->
                 <div class="hidden md:flex items-center space-x-4">
                     <div class="relative search-container">
-                        <!-- (MODIFIED) ปรับขนาด/สีให้เหมือน index.html -->
+                        <!-- (MODIFIED) Changed ID for player.html script -->
                         <input id="search-input-desktop" type="text" placeholder="ค้นหา..." class="bg-gray-800 text-white rounded-full py-2 px-4 pl-10 focus:outline-none focus:ring-2 focus:ring-green-500 w-64">
+                        <!-- (MODIFIED) Changed ID for player.html script -->
                         <button id="search-button-desktop" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
                             <i class="ri-search-line"></i>
                         </button>
-                        <!-- (NEW) Desktop Search Dropdown -->
                         <div id="search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
                             <!-- Search results injected here -->
                         </div>
                     </div>
-                    <!-- (REMOVED) Admin Link removed -->
+                    <!-- (REMOVED) Admin Button -->
                 </div>
                 
-                
-                <!-- Mobile Menu Button & Search -->
+                <!-- 3. Mobile Menu Button & Search -->
                 <div class="flex md:hidden items-center space-x-2">
-                    <a href="#" id="mobile-search-button" class="text-gray-300 hover:text-white p-2 text-xl">
-                        <i class="ri-search-line"></i>
+                    <a href="#" id="mobile-search-button" class="text-gray-300 hover:text-white p-2">
+                        <i class="ri-search-line text-xl"></i>
+                    </a>
+                    <button id="mobile-menu-btn" class="text-gray-300 hover:text-white p-2">
+                        <i class="ri-menu-line text-2xl"></i>
                     </button>
                 </div>
-                
             </div>
-        </nav>
-        
-        <!-- (MODIFIED) Mobile Search Bar -->
-        <div id="mobile-search-bar" class="md:hidden hidden p-2 absolute top-16 left-0 right-0 bg-gray-800 shadow-lg z-40">
-            <div class="relative search-container"> <!-- (NEW) Wrap content in relative div to fix dropdown positioning -->
-                <div class="flex">
-                    <!-- (MODIFIED) ปรับขนาด/สีให้เหมือน index.html -->
+            
+            <!-- Mobile Search Bar -->
+            <div id="mobile-search-bar" class="md:hidden hidden p-2 absolute top-16 left-0 right-0 bg-gray-800 shadow-lg z-40">
+                <div class="flex relative search-container">
                     <input id="mobile-search-input" type="text" placeholder="ค้นหา..." class="flex-1 bg-gray-700 text-white rounded-l-full py-2 px-4 focus:outline-none">
                     <button id="mobile-close-search" class="bg-gray-700 text-gray-400 rounded-r-full px-3">
                         <i class="ri-close-line"></i>
                     </button>
-                </div>
-                <!-- (NEW) Mobile Search Dropdown (Moved outside flex container) -->
-                <div id="mobile-search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
-                    <!-- Search results injected here -->
+                      <div id="mobile-search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
+                           <!-- Search results injected here -->
+                      </div>
                 </div>
             </div>
-        </div>
+        </nav>
         
-        <!-- Mobile Menu (Secondary Navigation) -->
-        <div id="mobile-menu" class="md:hidden hidden bg-gray-900 shadow-lg">
-            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                <!-- Links (คัดลอกจาก Desktop Nav) -->
-                <a href="index.html" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
-                <a href="grid.html?tag=อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                <a href="grid.html?tag=อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                <a href="grid.html?tag=อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="md:hidden hidden">
+            <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <!-- Links are now hardcoded in HTML for instant display -->
+                <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
+                <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
+                <!-- (REMOVED) Mobile Admin Link -->
             </div>
         </div>
-        
     </header>
+    <!-- (END MODIFIED HEADER) -->
 
     <!-- Main Player Content -->
     <!-- Loading State -->
