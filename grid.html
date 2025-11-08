@@ -260,14 +260,30 @@
                     historyItems.push({ id: doc.id, ...doc.data() });
                 });
                 console.log("History loaded:", historyItems.length);
-                isHistoryLoaded = true; // (NEW) Set flag
-                attemptInitialLoad(); // (NEW) Call gatekeeper
+                
+                if (!isHistoryLoaded) {
+                    isHistoryLoaded = true; // (NEW) Set flag
+                    attemptInitialLoad(); // (NEW) Call gatekeeper
+                } else {
+                    // (FIXED) This is a History UPDATE. Re-render the current view.
+                    console.log("History updated. Re-rendering current grid view.");
+                    
+                    if (currentSearchQuery) {
+                        // Re-run the search, which will clear and call loadMoreCards
+                        performSearch(currentSearchQuery); 
+                    } else if (currentGridTag) {
+                        // Re-run the tag initialization, which will clear and call loadMoreCards
+                        initializeGridPaging(currentGridTag); 
+                    }
+                }
                 
             }, (error) => {
                 console.error("Error listening to view history:", error);
                 // If history fails, still try to load.
-                isHistoryLoaded = true; 
-                attemptInitialLoad();
+                if (!isHistoryLoaded) {
+                    isHistoryLoaded = true; 
+                    attemptInitialLoad();
+                }
             });
         }
         
