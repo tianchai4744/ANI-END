@@ -210,7 +210,7 @@
             getFirestore, doc, getDoc, onSnapshot, collection, query, where, getDocs,
             setLogLevel,
             updateDoc, increment, orderBy, limit, serverTimestamp, 
-            setDoc 
+            setDoc, addDoc // (MODIFIED) Import addDoc
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config ...
@@ -534,7 +534,7 @@
             }
         }
 
-        // (NEW) Function to mark an episode as broken
+        // (MODIFIED) Function to report an episode (Creates a report, does not update episode)
         async function markEpisodeAsBroken() {
             if (currentEpisodeIndex < 0 || !currentEpisodes[currentEpisodeIndex]) {
                 console.warn("No current episode selected to report.");
@@ -542,44 +542,73 @@
             }
             
             const episode = currentEpisodes[currentEpisodeIndex];
-            if (episode.status === 'broken') {
-                console.warn("Episode already marked as broken.");
-                return;
-            }
+            const episodeId = episode.id;
 
-            console.log(`Reporting episode ${episode.id} (${episode.title}) as broken...`);
+            // (NEW) Disable button immediately to prevent double click
+            reportBrokenBtn.disabled = true;
+            reportBrokenBtn.innerHTML = '<i class="ri-loader-4-line animate-spin mr-1"></i> กำลังแจ้ง...';
+
+            console.log(`User ${userId} reporting episode ${episodeId} (${episode.title}) as broken...`);
             
             try {
-                const episodeRef = doc(getCollectionRef("episodes"), episode.id);
-                // (MODIFIED) อัปเดตสถานะและเวลา
-                await updateDoc(episodeRef, {
-                    status: 'broken',
-                    updatedAt: serverTimestamp() 
-                });
+                // (NEW LOGIC AS PER USER REQUEST)
+                // 1. Check if a report for this episode already exists (from this user or system)
+                const reportsRef = getCollectionRef("reports");
+                const q = query(reportsRef, where("episodeId", "==", episodeId));
+                const existingReportSnap = await getDocs(q);
 
-                // อัปเดตสถานะปุ่มทันที
-                if (reportBrokenBtn) {
-                    reportBrokenBtn.disabled = true;
-                    reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว (เสีย)';
+                if (!existingReportSnap.empty) {
+                    console.warn(`Report for episode ${episodeId} already exists.`);
+                    // Already reported, just update UI
+                    reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
                     reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
                     reportBrokenBtn.classList.remove('hover:bg-red-600');
+                    
+                    brokenAlertDiv.classList.remove('hidden');
+                    brokenAlertDiv.innerHTML = `<i class="ri-information-line mr-2"></i> ปัญหาวิดีโอนี้ถูกแจ้งไปแล้ว กำลังรอการแก้ไข.`;
+                    
+                    // (FIX) Also check if the *status* is broken (from admin) and show that alert
+                    if (episode.status === 'broken') {
+                         brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกยืนยันว่ามีปัญหา กำลังรอการแก้ไข.`;
+                    }
+                    
+                    return;
                 }
+
+                // 2. If no report exists, create a new one.
+                const reportData = {
+                    episodeId: episodeId,
+                    showId: currentShow.id,
+                    reportedBy: 'user', 
+                    userId: userId, 
+                    createdAt: serverTimestamp()
+                };
                 
-                // อัปเดตข้อมูลในเครื่องเพื่อป้องกันการแจ้งซ้ำ
-                currentEpisodes[currentEpisodeIndex].status = 'broken';
+                await addDoc(reportsRef, reportData);
+
+                // (MODIFIED) Update UI to "Reported"
+                reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
+                reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
+                reportBrokenBtn.classList.remove('hover:bg-red-600');
                 
-                // (NEW FIX 1) แสดง Alert ทันทีที่แจ้ง
+                // (MODIFIED) Show "Thank you" message
                 if (brokenAlertDiv) {
                     brokenAlertDiv.classList.remove('hidden');
-                    brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> ${currentShow.title} - ${episode.title} : วิดีโอเสีย. ขอบคุณสำหรับการแจ้ง! เราจะเร่งแก้ไขโดยเร็วที่สุด.`;
-                    // Scroll to alert
+                    brokenAlertDiv.innerHTML = `<i class="ri-check-line mr-2"></i> ขอบคุณสำหรับการแจ้งปัญหา! เราจะเร่งแก้ไขโดยเร็วที่สุด.`;
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
 
             } catch (error) {
-                console.error("Error reporting broken episode:", error);
-                if (reportBrokenBtn) {
-                    reportBrokenBtn.innerHTML = 'แจ้ง (ล้มเหลว)';
+                console.error("Error creating report:", error);
+                // (KEEP) Show fail message if something goes wrong (e.g., Firestore rules deny creation)
+                reportBrokenBtn.disabled = false; // Re-enable button
+                reportBrokenBtn.innerHTML = 'แจ้ง (ล้มเหลว)';
+                
+                // (NEW) Show specific alert for failure
+                if (brokenAlertDiv) {
+                    brokenAlertDiv.classList.remove('hidden');
+                    brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> ไม่สามารถส่งรายงานได้ กรุณาลองใหม่อีกครั้ง.`;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
             }
         }
@@ -659,7 +688,7 @@
         }
         
         // (MODIFIED) ฟังก์ชันเล่นวิดีโอ
-        function playEpisode(episode) {
+        async function playEpisode(episode) {
             console.log(`Playing: ${episode.title}`, episode.embedCode);
             
             playerEmbedDiv.innerHTML = ''; 
@@ -693,10 +722,10 @@
             console.log("Current episode index:", currentEpisodeIndex);
             updateNavButtonStates();
             
-            // (NEW FIX 1) อัปเดตสถานะปุ่ม "แจ้งเสีย" และ Alert ตามตอนที่เล่น
+            // (MODIFIED) อัปเดตสถานะปุ่ม "แจ้งเสีย"
             if (reportBrokenBtn && brokenAlertDiv) {
+                // 1. ตรวจสอบสถานะ 'broken' ที่ยืนยันโดย Admin/Script
                 if (episode.status === 'broken') {
-                    // ถ้าตอนนี้ถูกแจ้งเสียไว้แล้ว
                     reportBrokenBtn.disabled = true;
                     reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว (เสีย)';
                     reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
@@ -706,14 +735,26 @@
                     brokenAlertDiv.classList.remove('hidden');
                     brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอสำหรับตอนนี้มีปัญหา (เสีย) กำลังรอการแก้ไขโดยผู้ดูแลระบบ.`;
                 } else {
-                    // ถ้าตอนนี้ยังปกติ
-                    reportBrokenBtn.disabled = false;
-                    reportBrokenBtn.innerHTML = '<i class="ri-error-warning-line mr-1"></i> แจ้ง (เสีย)';
-                    reportBrokenBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-red-600');
-                    reportBrokenBtn.classList.add('hover:bg-red-600');
-                    
-                    // ซ่อน Alert
-                    brokenAlertDiv.classList.add('hidden');
+                    // 2. ถ้าสถานะไม่ 'broken', ให้ตรวจสอบว่ามี 'report' ที่ผู้ใช้แจ้งค้างไว้หรือไม่
+                    const reportsRef = getCollectionRef("reports");
+                    const q = query(reportsRef, where("episodeId", "==", episode.id));
+                    const existingReportSnap = await getDocs(q);
+
+                    if (!existingReportSnap.empty) {
+                        // มีคนแจ้งแล้ว
+                        reportBrokenBtn.disabled = true;
+                        reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
+                        reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
+                        reportBrokenBtn.classList.remove('hover:bg-red-600');
+                        brokenAlertDiv.classList.add('hidden'); // ซ่อน Alert (เพราะยังไม่ยืนยันว่าเสีย)
+                    } else {
+                        // ยังไม่มีใครแจ้ง และยังไม่เสีย (สถานะปกติ)
+                        reportBrokenBtn.disabled = false;
+                        reportBrokenBtn.innerHTML = '<i class="ri-error-warning-line mr-1"></i> แจ้ง (เสีย)';
+                        reportBrokenBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-red-600');
+                        reportBrokenBtn.classList.add('hover:bg-red-600');
+                        brokenAlertDiv.classList.add('hidden'); // ซ่อน Alert
+                    }
                 }
             }
             
