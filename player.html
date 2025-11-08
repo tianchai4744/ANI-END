@@ -561,12 +561,12 @@
 
             console.log(`User ${userId} reporting episode ${episodeId} (${episode.title}) as broken...`);
             
-            // *** (FIX 5) ลบ Retry และ SetDoc ออก กลับไปใช้ AddDoc ตาม Rules ใหม่ ***
+            // *** (FIX 6) ลบการตรวจสอบซ้ำซ้อนออก และพยายาม addDoc ทันทีเพื่อให้ Rules ผ่าน
             try {
                 // 1. กำหนด Reports Collection (Public Path)
                 const reportsRef = collection(db, `artifacts/${appId}/public/data/reports`);
                 
-                // 2. ตรวจสอบรายงานที่มีอยู่ก่อน (Rules อนุญาตให้อ่านได้)
+                // 2. ตรวจสอบรายงานที่มีอยู่ก่อน (ใช้ Query)
                 const q = query(reportsRef, where("episodeId", "==", episodeId));
                 const existingReportSnap = await getDocs(q);
 
@@ -596,6 +596,7 @@
                 };
                 
                 // Rules ตรวจสอบว่ามีฟิลด์เหล่านี้ครบถ้วนและ request.method == 'create'
+                // หาก Rules ยังคงล้มเหลวที่บรรทัดนี้ แสดงว่าเงื่อนไขใน Rules ผิดพลาดแน่นอน
                 await addDoc(reportsRef, reportData);
 
                 // 4. Update UI to "Reported"
@@ -1432,9 +1433,6 @@ function setupReportButtonListener() {
                 <div class="flex md:hidden items-center space-x-2">
                     <a href="#" id="mobile-search-button" class="text-gray-300 hover:text-white p-2 text-xl">
                         <i class="ri-search-line"></i>
-                    </a>
-                    <button id="mobile-menu-btn" class="text-gray-300 hover:text-white p-2">
-                        <i class="ri-menu-line text-2xl"></i>
                     </button>
                 </div>
                 
