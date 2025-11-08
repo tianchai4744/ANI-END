@@ -115,45 +115,21 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
      }
      
-    /* (NEW) Pagination Button Styles */
-    .pagination-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 36px;
-        height: 36px;
-        margin: 0 4px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 14px;
-        transition: background-color 0.15s, color 0.15s;
-    }
-    .pagination-btn.page {
-        background-color: #374151; /* gray-700 */
-        color: #d1d5db; /* gray-300 */
-    }
-    .pagination-btn.page:hover {
-        background-color: #4b5563; /* gray-600 */
-    }
-    .pagination-btn.page.active {
-        background-color: #16a34a; /* green-600 */
-        color: white;
-    }
-    .pagination-btn.nav, .pagination-btn.dots {
-        background-color: transparent;
-        color: #9ca3af; /* gray-400 */
-    }
-    .pagination-btn.nav:hover {
-        background-color: #374151; /* gray-700 */
-    }
-        .pagination-btn.nav:disabled:hover {
-            background-color: transparent;
-        }
+    /* (REMOVED) Pagination Button Styles */
 
-        /* (NEW FIX) Add scroll margin to the title to account for the sticky header */
-        #grid-view-title {
-            scroll-margin-top: 80px; /* (Header height h-16 is 4rem/64px + padding) */
-        }
+    /* (NEW) Style for the Load More button */
+    #load-more-btn {
+        transition: background-color 0.2s, opacity 0.2s;
+    }
+    #load-more-btn:disabled {
+        background-color: #4b5563; /* gray-600 */
+        cursor: not-allowed;
+    }
+
+    /* (NEW FIX) Add scroll margin to the title to account for the sticky header */
+    #grid-view-title {
+        scroll-margin-top: 80px; /* (Header height h-16 is 4rem/64px + padding) */
+    }
 
  </style>
  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
@@ -202,7 +178,10 @@
         let gridViewContainer;
         let gridViewTitle;
         let gridViewContent;
-        let paginationContainer; 
+        // (MODIFIED)
+        let loadMoreContainer; 
+        let loadMoreBtn;
+        
         let searchInput;
         let searchDropdown;
         let mobileSearchInput;
@@ -279,7 +258,7 @@
                     checkInitialLoad();
                 } else if (currentSearchQuery) {
                     // If data updates while on search, re-run search
-                    performSearch(currentSearchQuery);
+                    performSearch(currentSearchQuery, currentGridPage); // (FIX) Pass current page
                 } else if (currentGridTag) {
                     // If data updates while on tag view, re-initialize
                     initializeGridPaging(currentGridTag, currentGridPage); // Pass current page to re-render
@@ -307,10 +286,11 @@
                 console.log("Latest history items loaded:", historyItems.length);
                 
                 // Re-render the current view to update card links
+                // (FIX) We need to re-render all loaded pages, not just one
                 if (currentSearchQuery) {
-                    performSearch(currentSearchQuery);
+                    performSearch(currentSearchQuery, currentGridPage);
                 } else if (currentGridTag) {
-                    renderPage(currentGridPage); 
+                    initializeGridPaging(currentGridTag, currentGridPage); 
                 }
             }, (error) => {
                 console.error("Error listening to view history:", error);
@@ -329,17 +309,17 @@
             if (searchFromUrl) {
                 const query = decodeURIComponent(searchFromUrl);
                 currentSearchQuery = query;
-                performSearch(query);
-                renderDynamicNav('search-results'); // (FIX) Call renderDynamicNav *after* setting context
+                performSearch(query, pageFromUrl); // (MODIFIED) Pass page
+                renderDynamicNav('search-results'); 
             } else if (tagFromUrl) {
                 currentGridTag = decodeURIComponent(tagFromUrl);
                 initializeGridPaging(currentGridTag, pageFromUrl); // Pass pageFromUrl
-                renderDynamicNav(currentGridTag); // (FIX) Call renderDynamicNav *after* setting context
+                renderDynamicNav(currentGridTag); 
             } else {
                  // No tag or search specified, default to 'อนิเมะ' 
                  currentGridTag = 'อนิเมะ';
                  initializeGridPaging(currentGridTag, pageFromUrl); // Pass pageFromUrl
-                 renderDynamicNav(currentGridTag); // (FIX) Call renderDynamicNav *after* setting context
+                 renderDynamicNav(currentGridTag); 
             }
             initialLoadDone = true;
         }
@@ -413,7 +393,7 @@
                 `;
             }
 
-        // (MODIFIED) Pagination Logic - Added initialPage
+        // (MODIFIED) Pagination Logic -> "Load More"
         function initializeGridPaging(tag, initialPage = 1) {
             currentGridTag = tag;
             gridViewTitle.textContent = tag;
@@ -429,24 +409,31 @@
 
             totalGridPages = Math.ceil(gridFilteredShows.length / ITEMS_PER_PAGE);
             
-            // (NEW) Set current page based on URL, ensuring it's valid
-            currentGridPage = Math.max(1, Math.min(initialPage, totalGridPages));
+            gridViewContent.innerHTML = ''; // Clear previous content
+            currentGridPage = 0; // Reset page counter
 
-            gridViewContent.innerHTML = '';
-            paginationContainer.innerHTML = '';
+            // Load all pages from 1 up to the initialPage (e.g., from URL)
+            for (let i = 1; i <= initialPage; i++) {
+                loadAndAppendPage(i);
+            }
             
-            gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">กำลังจัดเรียงและโหลดรายการ...</p>`;
-
-            renderPage(currentGridPage);
+            updatePageUrl(initialPage);
+            updateLoadMoreButtonState();
 
             gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
         }
 
-        function renderPage(pageNumber) {
-            if (pageNumber < 1 || pageNumber > totalGridPages) return;
+        /**
+         * (MODIFIED) Renamed from renderPage to loadAndAppendPage
+         * This function now *appends* content instead of replacing it.
+         */
+        function loadAndAppendPage(pageNumber) {
+            if (pageNumber < 1 || pageNumber > totalGridPages) {
+                updateLoadMoreButtonState(); // Ensure button is hidden if no pages
+                return;
+            }
             
-            currentGridPage = pageNumber;
-            gridViewContent.innerHTML = '';
+            currentGridPage = pageNumber; // Update the max page loaded
             
             const startIndex = (pageNumber - 1) * ITEMS_PER_PAGE;
             const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, gridFilteredShows.length);
@@ -463,16 +450,10 @@
                  gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบผลลัพธ์สำหรับ "${currentSearchQuery}"</p>`;
             }
             
-            // (FIX) Scroll to the title (h2) instead of the whole container
-            // to prevent the title from being hidden under the sticky header.
-            if (gridViewTitle) {
-                 gridViewTitle.scrollIntoView({ behavior: 'smooth' });
-            }
+            // (REMOVED) Scroll logic, moved to click handler
             
-            // (NEW) Update URL using pushState
-            updatePageUrl(pageNumber);
-
-            renderPaginationControls();
+            // (REMOVED) URL update, moved to caller
+            // (REMOVED) Pagination controls
         }
         
         // (FIXED AGAIN - Final Logic) Update URL function - Handle Blob/Initial load instability
@@ -521,75 +502,33 @@
             }
         }
         
-        function renderPaginationControls() {
-            if (!paginationContainer) return;
-            paginationContainer.innerHTML = '';
+        /**
+         * (NEW) updateLoadMoreButtonState
+         * Checks if there are more pages and updates the button text/state.
+         */
+        function updateLoadMoreButtonState() {
+            if (!loadMoreBtn) return;
             
-            if (totalGridPages <= 1) return; 
-
-            const maxVisibleButtons = 7; 
-            let buttonsHtml = '';
-
-            buttonsHtml += createPageButton('«', currentGridPage - 1, 'nav', currentGridPage === 1);
-
-            if (totalGridPages <= maxVisibleButtons) {
-                for (let i = 1; i <= totalGridPages; i++) {
-                    buttonsHtml += createPageButton(i, i, 'page', false, i === currentGridPage);
-                }
+            if (currentGridPage >= totalGridPages) {
+                loadMoreBtn.textContent = 'สิ้นสุดรายการ';
+                loadMoreBtn.disabled = true;
+                loadMoreContainer.classList.remove('hidden'); // Keep it visible but disabled
             } else {
-                let start = Math.max(1, currentGridPage - 2);
-                let end = Math.min(totalGridPages, currentGridPage + 2);
-
-                if (currentGridPage - 1 <= 2) {
-                    end = Math.min(totalGridPages, maxVisibleButtons - 2);
-                }
-                if (totalGridPages - currentGridPage <= 2) {
-                    start = Math.max(1, totalGridPages - maxVisibleButtons + 3);
-                }
-
-                if (start > 1) {
-                    buttonsHtml += createPageButton(1, 1, 'page');
-                }
-                if (start > 2) {
-                    buttonsHtml += createPageButton('...', -1, 'dots', true);
-                }
-                
-                for (let i = start; i <= end; i++) {
-                    buttonsHtml += createPageButton(i, i, 'page', false, i === currentGridPage);
-                }
-                
-                if (end < totalGridPages - 1) {
-                     buttonsHtml += createPageButton('...', -1, 'dots', true);
-                }
-                if (end < totalGridPages) {
-                    buttonsHtml += createPageButton(totalGridPages, totalGridPages, 'page');
-                }
+                loadMoreBtn.textContent = `โหลดเพิ่มเติม (28 รายการถัดไป)`;
+                loadMoreBtn.disabled = false;
+                loadMoreContainer.classList.remove('hidden');
             }
-
-            buttonsHtml += createPageButton('»', currentGridPage + 1, 'nav', currentGridPage === totalGridPages);
             
-            paginationContainer.innerHTML = buttonsHtml;
-        }
-        
-        function createPageButton(text, page, type, isDisabled = false, isActive = false) {
-             const activeClass = isActive ? 'active bg-green-600 !text-white' : '';
-             const disabledAttr = isDisabled ? 'disabled' : '';
-             const pageData = type === 'page' ? `data-page="${page}"` : '';
-             const navData = type === 'nav' ? `data-page="${page}"` : '';
-             
-             if (type === 'dots') {
-                return `<button class="pagination-btn dots" disabled>...</button>`;
-             }
-             
-             // (MODIFIED) Added bg-gray-700/80 to ensure style consistency
-             return `
-                <button class="pagination-btn ${type} ${activeClass} ${type === 'page' ? 'bg-gray-700/80 hover:bg-gray-600' : ''}" ${pageData} ${navData} ${disabledAttr}>
-                    ${text}
-                </button>
-             `;
+            // Hide button container entirely if there's only 1 page total
+            if (totalGridPages <= 1) {
+                 loadMoreContainer.classList.add('hidden');
+            }
         }
 
-        // --- Search Logic (Adjusted to be primary content) ---
+        // (REMOVED) renderPaginationControls
+        // (REMOVED) createPageButton
+
+        // --- Search Logic (Adjusted for "Load More") ---
         function updateSearchDropdown(query, dropdownEl) {
             const normalizedQuery = normalizeThai(query).toLowerCase().trim();
             dropdownEl.innerHTML = '';
@@ -641,18 +580,19 @@
              currentSearchQuery = query;
              
              // Run search logic immediately
-             performSearch(query);
+             performSearch(query, 1); // Load page 1 of search results
              renderDynamicNav('search-results'); // (FIX) Update nav state on search
              
              const mobileSearchBarEl = document.getElementById('mobile-search-bar');
              if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
         }
 
-        function performSearch(query) {
+        function performSearch(query, initialPage = 1) {
             if (!query) return;
             
             gridViewTitle.textContent = `ผลการค้นหาสำหรับ "${query}"`;
             currentSearchQuery = query;
+            currentGridTag = null; // Clear tag context
             
             if (allShows.length === 0) {
                  gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">ข้อมูลอนิเมะยังไม่ถูกโหลด. โปรดรอสักครู่...</p>`;
@@ -669,16 +609,23 @@
             });
             
             totalGridPages = Math.ceil(gridFilteredShows.length / ITEMS_PER_PAGE);
-            currentGridPage = 1;
-
-            renderPage(1);
+            
+            // (MODIFIED) Load pages up to initialPage
+            gridViewContent.innerHTML = '';
+            currentGridPage = 0; // Reset
+            
+            for (let i = 1; i <= initialPage; i++) {
+                loadAndAppendPage(i);
+            }
+            
+            updatePageUrl(initialPage);
+            updateLoadMoreButtonState();
             
             gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
             
             if (gridFilteredShows.length === 0) {
                  gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบผลลัพธ์สำหรับ "${query}"</p>`;
             }
-            
         }
 
 
@@ -687,14 +634,15 @@
             gridViewContainer = document.getElementById('grid-view-container');
             gridViewTitle = document.getElementById('grid-view-title');
             gridViewContent = document.getElementById('grid-view-content');
-            paginationContainer = document.getElementById('pagination-container'); 
+            // (MODIFIED)
+            loadMoreContainer = document.getElementById('load-more-container');
+            loadMoreBtn = document.getElementById('load-more-btn');
 
             searchInput = document.getElementById('search-input');
             searchDropdown = document.getElementById('search-dropdown');
             mobileSearchInput = document.getElementById('mobile-search-input');
             mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
             
-            // (FIX) Re-select elements that were incorrectly referenced globally
             desktopNavLinks = document.getElementById('desktop-nav-links');
             mobileNavLinks = document.getElementById('mobile-nav-links');
 
@@ -707,7 +655,6 @@
             initializeFirebase(); 
             
             // (NEW FIX) Set the active nav state IMMEDIATELY based on the URL.
-            // This stops the "flicker" of the active (green) link.
             const urlParams = new URLSearchParams(window.location.search);
             const tagFromUrl = urlParams.get('tag');
             const searchFromUrl = urlParams.get('search'); 
@@ -782,16 +729,37 @@
                         currentGridTag = pageId;
                         currentSearchQuery = null; // Clear search
                         
-                        // 1. Re-initialize the grid content for the new tag
+                        // 1. Re-initialize the grid content for the new tag (load page 1)
                         initializeGridPaging(currentGridTag, 1);
                         
                         // 2. Update the active link state
                         renderDynamicNav(currentGridTag);
                         
-                        // 3. URL is updated by initializeGridPaging -> renderPage -> updatePageUrl
+                        // 3. URL is updated by initializeGridPaging -> loadAndAppendPage -> updatePageUrl
                     }
                 }
             });
+            
+            // (NEW) Load More Button Click Listener
+            if (loadMoreBtn) {
+                loadMoreBtn.addEventListener('click', () => {
+                    const nextPage = currentGridPage + 1;
+                    if (nextPage <= totalGridPages) {
+                        // 1. Load and append the next page
+                        loadAndAppendPage(nextPage);
+                        // 2. Update the URL
+                        updatePageUrl(nextPage);
+                        // 3. Update the button state
+                        updateLoadMoreButtonState();
+                        // 4. Scroll (optional, but good UX)
+                        if (gridViewTitle) {
+                             // Scroll slightly above the title to account for header
+                             // We already added scroll-margin-top, so this is fine.
+                             gridViewTitle.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    }
+                });
+            }
 
             // (NEW) Add popstate listener for back/forward buttons
             window.addEventListener('popstate', (e) => {
@@ -917,9 +885,12 @@
                 <!-- Cards generated by JS -->
                 <p class="text-center w-full col-span-full text-gray-400">กำลังโหลดข้อมูลอนิเมะ...</p>
             </div>
-            <!-- Pagination Container -->
-            <div id="pagination-container" class="flex justify-center items-center mt-8">
-                 <!-- Pagination buttons injected by JS -->
+            
+            <!-- (MODIFIED) Pagination Container replaced with Load More -->
+            <div id="load-more-container" class="text-center mt-8 hidden">
+                 <button id="load-more-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                     โหลดเพิ่มเติม (28 รายการถัดไป)
+                 </button>
             </div>
         </div>
         
