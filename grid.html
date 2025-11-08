@@ -213,6 +213,9 @@
         let initialQueryFromUrl = null;
         let currentSearchQuery = null; 
 
+        // (NEW FLAG) For History API stability
+        let isUrlSet = false;
+
         // Thai Normalization (KEEP)
         function normalizeThai(text) {
             if (typeof text !== 'string') return text;
@@ -282,7 +285,7 @@
                     initializeGridPaging(currentGridTag, currentGridPage); // Pass current page to re-render
                 }
                 
-                renderDynamicNav(currentGridTag || 'home'); 
+                // (REMOVED) renderDynamicNav call moved to DOMContentLoaded and checkInitialLoad
                 
             }, (error) => {
                 console.error("Error listening to shows:", error);
@@ -315,6 +318,7 @@
         }
         
         // (MODIFIED) Check URL parameters on initial load
+        let initialLoadDone = false; // Flag to track if initial load logic completed
         function checkInitialLoad() {
             const urlParams = new URLSearchParams(window.location.search);
             const tagFromUrl = urlParams.get('tag');
@@ -326,39 +330,41 @@
                 const query = decodeURIComponent(searchFromUrl);
                 currentSearchQuery = query;
                 performSearch(query);
-                renderDynamicNav('search-results');
+                renderDynamicNav('search-results'); // (FIX) Call renderDynamicNav *after* setting context
             } else if (tagFromUrl) {
                 currentGridTag = decodeURIComponent(tagFromUrl);
                 initializeGridPaging(currentGridTag, pageFromUrl); // Pass pageFromUrl
-                renderDynamicNav(currentGridTag);
+                renderDynamicNav(currentGridTag); // (FIX) Call renderDynamicNav *after* setting context
             } else {
                  // No tag or search specified, default to 'อนิเมะ' 
                  currentGridTag = 'อนิเมะ';
                  initializeGridPaging(currentGridTag, pageFromUrl); // Pass pageFromUrl
-                 renderDynamicNav(currentGridTag);
+                 renderDynamicNav(currentGridTag); // (FIX) Call renderDynamicNav *after* setting context
             }
+            initialLoadDone = true;
         }
 
         // --- Navigation Rendering (Adjusted for grid.html) ---
         function renderDynamicNav(activePageId) {
             if (!desktopNavLinks || !mobileNavLinks) return;
-
-            // Nav links now point to grid.html or index.html directly
-            const homeLink = `<a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium ${activePageId === 'home' ? 'active text-green-500' : 'text-gray-300 hover:text-white hover:bg-gray-700'}">หน้าแรก</a>`;
-            desktopNavLinks.innerHTML = homeLink;
-            mobileNavLinks.innerHTML = `<a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium ${activePageId === 'home' ? 'active text-green-500' : 'text-gray-300 hover:text-white hover:bg-gray-700'}">หน้าแรก</a>`;
-
-            const mainTags = ['อนิเมะ', 'อนิเมะจีน', 'อนิเมะพากย์ไทย'];
             
-            mainTags.forEach(tag => {
-                // (MODIFIED) LInk uses grid.html?tag=...
-                const tagUrl = `grid.html?tag=${encodeURIComponent(tag)}`;
-                const isActive = activePageId === tag;
-                
-                const link = `<a href="${tagUrl}" data-page="${tag}" class="nav-link px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'active text-green-500' : 'text-gray-300 hover:text-white hover:bg-gray-700'}">${tag}</a>`;
-                const mobileLink = `<a href="${tagUrl}" data-page="${tag}" class="nav-link block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'active text-green-500' : 'text-gray-300 hover:text-white hover:bg-gray-700'}">${tag}</a>`;
-                desktopNavLinks.innerHTML += link;
-                mobileNavLinks.innerHTML += mobileLink;
+            // 1. Reset all links to inactive state first (if they exist)
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active', 'text-green-500');
+                link.classList.add('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            });
+
+            // 2. Determine which link to set as active (based on currentGridTag or 'home')
+            let targetPageId = activePageId;
+            if (activePageId === 'search-results') {
+                // If it's a search result, don't activate any tag link, default to 'home' visually
+                targetPageId = 'home';
+            }
+            
+            // 3. Set the active link(s)
+            document.querySelectorAll(`.nav-link[data-page="${targetPageId}"]`).forEach(link => {
+                link.classList.add('active', 'text-green-500');
+                link.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
             });
         }
         
@@ -467,26 +473,47 @@
             renderPaginationControls();
         }
         
-        // (NEW) Update URL function
+        // (FIXED AGAIN - Final Logic) Update URL function - Handle Blob/Initial load instability
         function updatePageUrl(pageNumber) {
             if (window.history.pushState && window.location.protocol !== 'file:') {
-                let newUrl;
+                
+                let contextQuery = '';
+
+                // 1. Determine base parameter (tag or search) and ensure encoding
                 if (currentSearchQuery) {
-                    // Handle search URL: grid.html?search=query&page=X
-                    newUrl = `grid.html?search=${encodeURIComponent(currentSearchQuery)}&page=${pageNumber}`;
+                    contextQuery = `search=${encodeURIComponent(currentSearchQuery)}`;
                 } else if (currentGridTag) {
-                    // Handle tag URL: grid.html?tag=tagname&page=X
-                    newUrl = `grid.html?tag=${encodeURIComponent(currentGridTag)}&page=${pageNumber}`;
-                } else {
-                    return;
+                    contextQuery = `tag=${encodeURIComponent(currentGridTag)}`;
                 }
                 
-                // Only push state if page number changes OR it's the first render and not page 1
-                const urlParams = new URLSearchParams(window.location.search);
-                const currentPage = parseInt(urlParams.get('page')) || 1;
+                // If no context is set, do not proceed.
+                if (!contextQuery) return; 
                 
-                if (pageNumber !== currentPage) {
-                     window.history.pushState({ path: newUrl }, '', newUrl);
+                let pageQuery = '';
+                // 2. Add page number if it's greater than 1
+                if (pageNumber > 1) { 
+                     pageQuery = `page=${pageNumber}`;
+                }
+
+                // Construct the full new query string
+                const components = [contextQuery, pageQuery].filter(q => q);
+                const newQueryString = components.join('&');
+                
+                const currentQueryString = window.location.search.substring(1);
+                
+                // 3. Construct the target URL
+                const newRelativeUrl = `grid.html${newQueryString ? '?' + newQueryString : ''}`;
+                
+                // 4. Compare and push state
+                
+                // Get the current relative URL (filename + search)
+                const currentFilename = window.location.pathname.split('/').pop();
+                // Ensure we are comparing against 'grid.html' even if the initial load is a blob
+                const currentRelativeUrl = (currentFilename.includes('grid.html') ? 'grid.html' : currentFilename) + window.location.search; 
+
+                // Only update if the target URL is different from the current effective URL.
+                if (newRelativeUrl !== currentRelativeUrl) {
+                     window.history.replaceState({}, '', newRelativeUrl);
                 }
             }
         }
@@ -600,11 +627,11 @@
              searchDropdown.classList.add('hidden');
              mobileSearchDropdown.classList.add('hidden');
              
-             // (MODIFIED) Use pushState to update URL without reloading index.html
+             // (MODIFIED) Use replaceState for search redirect if not already on the correct URL
              if (window.history.pushState && window.location.protocol !== 'file:') {
                  const newUrl = `grid.html?search=${encodeURIComponent(query)}`;
-                 // Push state to change URL
-                 window.history.pushState({ path: newUrl }, '', newUrl);
+                 // Use replaceState to change URL immediately upon search submission
+                 window.history.replaceState({ path: newUrl }, '', newUrl);
              }
              
              currentGridTag = null; 
@@ -612,6 +639,7 @@
              
              // Run search logic immediately
              performSearch(query);
+             renderDynamicNav('search-results'); // (FIX) Update nav state on search
              
              const mobileSearchBarEl = document.getElementById('mobile-search-bar');
              if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
@@ -675,6 +703,22 @@
             
             initializeFirebase(); 
             
+            // (NEW FIX) Set the active nav state IMMEDIATELY based on the URL.
+            // This stops the "flicker" of the active (green) link.
+            const urlParams = new URLSearchParams(window.location.search);
+            const tagFromUrl = urlParams.get('tag');
+            const searchFromUrl = urlParams.get('search'); 
+
+            let activePageId = 'home'; // Default
+            if (searchFromUrl) {
+                activePageId = 'search-results'; // This will visually default to 'home'
+            } else if (tagFromUrl) {
+                activePageId = tagFromUrl;
+            } else {
+                activePageId = 'อนิเมะ'; // Default grid page
+            }
+            renderDynamicNav(activePageId);
+            
             if (mobileMenuBtn && mobileMenu) {
                 mobileMenuBtn.addEventListener('click', () => {
                     mobileMenu.classList.toggle('hidden');
@@ -716,7 +760,22 @@
             // (NEW) Add popstate listener for back/forward buttons
             window.addEventListener('popstate', (e) => {
                  // On popstate, re-read URL parameters and re-render
-                 checkInitialLoad();
+                 // (FIX) We also need to update the Nav state when using back/forward
+                const popParams = new URLSearchParams(window.location.search);
+                const popTag = popParams.get('tag');
+                const popSearch = popParams.get('search');
+                
+                let popActiveId = 'home';
+                if (popSearch) {
+                    popActiveId = 'search-results';
+                } else if (popTag) {
+                    popActiveId = popTag;
+                } else {
+                    popActiveId = 'อนิเมะ'; // Default grid page
+                }
+                
+                renderDynamicNav(popActiveId);
+                checkInitialLoad(); // Re-load data for the new state
             });
 
             // Search Listeners
@@ -745,7 +804,11 @@
                     <!-- Desktop Nav Links (Secondary Navigation) -->
                     <div class="hidden md:block">
                         <div id="desktop-nav-links" class="ml-6 flex items-baseline space-x-4">
-                            <!-- Links generated by JS -->
+                            <!-- Links are now hardcoded in HTML for instant display -->
+                            <a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                            <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                            <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
+                            <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
                         </div>
                     </div>
                 </div>
@@ -795,7 +858,11 @@
         <!-- Mobile Menu -->
         <div id="mobile-menu" class="md:hidden hidden">
             <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                <!-- Links generated by JS -->
+                <!-- Links are now hardcoded in HTML for instant display -->
+                <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
+                <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
                 <!-- ลิงก์ Admin สำหรับ Mobile -->
                 <a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
                     <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
