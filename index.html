@@ -564,27 +564,28 @@
                 
             const top10Shows = sortedShows.slice(0, 10); // 1-10
 
-            // (NEW) สร้าง Grid Container สำหรับ Top 10 และ History
+            // (NEW) สร้าง Grid Container สำหรับ Top 10 และ History (บน Desktop)
             const dualGridContainer = document.createElement('div');
             // (MODIFIED) ใช้ flex-wrap บน Mobile/Tablet และ lg:flex-nowrap บน Desktop
             dualGridContainer.className = 'flex flex-wrap lg:flex-nowrap gap-6 mb-8'; 
             
-            // --- A. Top 10 Section (ซ้ายบน Desktop) ---
+            // --- A. Top 10 Section (ลำดับ 1 บนมือถือและ Desktop) ---
             if (top10Shows.length > 0) {
-                // (MODIFIED) ใช้ w-full บน Mobile/Tablet และ lg:w-2/3 บน Desktop
+                // (MODIFIED FIX) Top 10 เป็น order-1 เสมอ
                 const top10Section = document.createElement('section');
-                top10Section.className = 'w-full lg:w-2/3'; 
+                top10Section.className = 'w-full lg:w-2/3 order-1 lg:order-1'; 
                 top10Section.appendChild(createCarouselSection("10 อันดับอนิเมะยอดนิยม", top10Shows, { showRank: true, swiperClass: 'swiper-default-up' }));
                 dualGridContainer.appendChild(top10Section);
             }
             
-            // --- B. History Section (ขวาบน Desktop) ---
-            // (NEW) สร้าง History Section
-            const historySection = document.createElement('section');
-            // (MODIFIED) เปลี่ยน bg-black เป็น bg-gray-900 (เทาดำ)
-            historySection.className = 'w-full lg:w-1/3 flex-shrink-0 bg-gray-900 p-4 rounded-lg'; 
-            historySection.innerHTML = createHistorySection(); 
-            dualGridContainer.appendChild(historySection);
+            // --- B. History Section (สำหรับแสดงคู่กับ Top 10 บน Desktop เท่านั้น) ---
+            // (NEW) สร้าง History Section สำหรับ Desktop
+            const historyDesktopSection = document.createElement('section');
+            // (MODIFIED FIX) ซ่อนบนมือถือ (hidden) และแสดงบน Desktop (lg:block)
+            historyDesktopSection.className = 'hidden lg:block w-full lg:w-1/3 flex-shrink-0 bg-gray-900 p-4 rounded-lg order-2 lg:order-2'; 
+            historyDesktopSection.innerHTML = createHistorySection(); 
+            dualGridContainer.appendChild(historyDesktopSection);
+            
             
             // เพิ่ม Dual Grid เข้าไปใน Container หลัก
             sectionsContainer.appendChild(dualGridContainer);
@@ -606,7 +607,7 @@
                 sectionsContainer.appendChild(createCarouselSection("อนิเมะพากย์ไทย", thaiDubShows, { swiperClass: 'swiper-7-up' }));
             }
 
-            // 5. "อนิเมะอัปเดตใหม่" (จัดเรียงตามวันที่สร้างใหม่ล่าสุด 20 เรื่อง)
+            // 4. "อนิเมะอัปเดตใหม่" (จัดเรียงตามวันที่สร้างใหม่ล่าสุด 20 เรื่อง)
             const latestShows = [...allShows]
                 .sort((a, b) => {
                     // (MODIFIED) เปลี่ยนจาก b.updatedAt เป็น b.createdAt เพื่อเรียงตามเรื่องที่เพิ่มเข้ามาใหม่เท่านั้น
@@ -618,9 +619,21 @@
 
             if (latestShows.length > 0) {
                  sectionsContainer.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up' }));
-            } else if(top10Shows.length === 0) { // หากไม่มีข้อมูลเลย
+            }
+            
+            // 5. (NEW FIX) History Section (สำหรับแสดงบน Mobile เท่านั้น - อยู่ล่างสุด)
+            const historyMobileSection = document.createElement('section');
+            // (MODIFIED FIX) แสดงบนมือถือ (block) และซ่อนบน Desktop (lg:hidden)
+            historyMobileSection.className = 'block lg:hidden w-full mb-8';
+            historyMobileSection.innerHTML = createHistorySection(); 
+            sectionsContainer.appendChild(historyMobileSection);
+
+
+            if(top10Shows.length === 0 && recommendedShows.length === 0 && thaiDubShows.length === 0 && latestShows.length === 0) { 
+                // หากไม่มีข้อมูลอนิเมะเลย
                 sectionsContainer.innerHTML = `<p class="text-center text-gray-400">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
             }
+
 
             // อัปเดต Swiper ที่มีอยู่สำหรับ Carousels
             
