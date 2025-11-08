@@ -146,14 +146,14 @@
     .pagination-btn.nav:hover {
         background-color: #374151; /* gray-700 */
     }
-    .pagination-btn.nav:disabled {
-        color: #4b5563; /* gray-600 */
-        cursor: not-allowed;
-    }
-    .pagination-btn.nav:disabled:hover {
-        background-color: transparent;
-    }
+        .pagination-btn.nav:disabled:hover {
+            background-color: transparent;
+        }
 
+        /* (NEW FIX) Add scroll margin to the title to account for the sticky header */
+        #grid-view-title {
+            scroll-margin-top: 80px; /* (Header height h-16 is 4rem/64px + padding) */
+        }
 
  </style>
  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
@@ -212,6 +212,9 @@
         
         let initialQueryFromUrl = null;
         let currentSearchQuery = null; 
+
+        // (NEW FLAG) For History API stability
+        let isUrlSet = false;
 
         // Thai Normalization (KEEP)
         function normalizeThai(text) {
@@ -460,8 +463,10 @@
                  gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบผลลัพธ์สำหรับ "${currentSearchQuery}"</p>`;
             }
             
-            if (gridViewContainer) {
-                 gridViewContainer.scrollIntoView({ behavior: 'smooth' });
+            // (FIX) Scroll to the title (h2) instead of the whole container
+            // to prevent the title from being hidden under the sticky header.
+            if (gridViewTitle) {
+                 gridViewTitle.scrollIntoView({ behavior: 'smooth' });
             }
             
             // (NEW) Update URL using pushState
@@ -747,10 +752,43 @@
                       searchDropdown.classList.add('hidden');
                       mobileSearchDropdown.classList.add('hidden');
                  }
+                
+                // (FIX) Re-add logic to handle soft navigation within grid.html
                 const navLink = e.target.closest('.nav-link');
                 if (navLink) {
-                    if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
-                        mobileMenu.classList.add('hidden');
+                    
+                    const pageId = navLink.dataset.page;
+                    if (pageId) {
+                        // Prevent the full page reload
+                        e.preventDefault(); 
+                        
+                        // Close mobile menu if open
+                        if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                            mobileMenu.classList.add('hidden');
+                        }
+
+                        // Check if it's a link to the homepage
+                        if (pageId === 'home') {
+                            window.location.href = 'index.html'; // Go to index.html
+                            return;
+                        }
+                        
+                        // Check if we are already on this tag
+                        if (pageId === currentGridTag) {
+                            return; // Do nothing if clicking the active tag
+                        }
+
+                        // Handle internal navigation (e.g., อนิเมะ -> อนิเมะจีน)
+                        currentGridTag = pageId;
+                        currentSearchQuery = null; // Clear search
+                        
+                        // 1. Re-initialize the grid content for the new tag
+                        initializeGridPaging(currentGridTag, 1);
+                        
+                        // 2. Update the active link state
+                        renderDynamicNav(currentGridTag);
+                        
+                        // 3. URL is updated by initializeGridPaging -> renderPage -> updatePageUrl
                     }
                 }
             });
