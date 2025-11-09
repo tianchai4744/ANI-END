@@ -70,6 +70,7 @@
         // UI Elements
         let historyListContainer;
         let loadMoreBtn;
+        let historyLoadingIndicator; // (NEW) Element สำหรับข้อความ Loading
 
         async function initializeFirebase() {
             try {
@@ -93,7 +94,10 @@
 
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
-                document.getElementById('history-status').textContent = "Error: ไม่สามารถเชื่อมต่อ Firebase ได้";
+                // (FIX) ใช้ historyListContainer แสดง Error หากการเชื่อมต่อล้มเหลว
+                if (historyListContainer) {
+                     historyListContainer.innerHTML = createHistoryEmptyState("Error: ไม่สามารถเชื่อมต่อ Firebase ได้");
+                }
             }
         }
 
@@ -109,8 +113,16 @@
             if (isLoading || !hasMore || !userId) return;
 
             isLoading = true;
-            loadMoreBtn.disabled = true;
-            loadMoreBtn.textContent = 'กำลังโหลด...';
+            
+            // 1. (FIX) จัดการสถานะ Loading UI
+            if (loadMoreBtn) {
+                 loadMoreBtn.disabled = true;
+                 loadMoreBtn.textContent = 'กำลังโหลด...';
+            }
+            if (historyLoadingIndicator && lastWatchedAtTimestamp === null) {
+                 historyLoadingIndicator.classList.remove('hidden');
+            }
+
 
             try {
                 let historyQuery = query(
@@ -146,7 +158,8 @@
                 }
 
                 // 4. Render ข้อมูล
-                renderHistoryList(newItems, lastWatchedAtTimestamp === null); // ส่ง isFirstLoad ด้วย
+                const isFirstLoad = lastWatchedAtTimestamp === null && snapshot.docs.length === newItems.length;
+                renderHistoryList(newItems, isFirstLoad); // ส่ง isFirstLoad ด้วย
                 
             } catch (error) {
                 console.error("Error loading history:", error);
@@ -157,6 +170,12 @@
                 hasMore = false; // หยุดการพยายามโหลดต่อ
             } finally {
                 isLoading = false;
+                
+                // (FIX) ซ่อน Loading Indicator เมื่อโหลดเสร็จสิ้น
+                if (historyLoadingIndicator) {
+                     historyLoadingIndicator.classList.add('hidden');
+                }
+                
                 updateLoadMoreButtonState();
             }
         }
@@ -165,10 +184,12 @@
          * (NEW) Render History List
          */
         function renderHistoryList(historyItems, isFirstLoad) {
+            // (MODIFIED) ถ้าเป็นการโหลดครั้งแรก ให้ล้าง Container ก่อน
             if (isFirstLoad) {
                 historyListContainer.innerHTML = '';
             }
             
+            // ถ้าไม่พบรายการเลยในการโหลดครั้งแรก
             if (historyItems.length === 0 && isFirstLoad) {
                 historyListContainer.innerHTML = createHistoryEmptyState("ไม่พบประวัติการเข้าชม");
                 return;
@@ -185,18 +206,27 @@
         function updateLoadMoreButtonState() {
             if (!loadMoreBtn) return;
             
+            // (FIX) ใช้ historyListContainer.childElementCount เพื่อตรวจสอบว่ามีรายการแสดงอยู่หรือไม่
+            const hasExistingContent = historyListContainer.childElementCount > 0 && historyListContainer.querySelector('.history-card');
+            
             if (isLoading) {
                 loadMoreBtn.textContent = 'กำลังโหลด...';
                 loadMoreBtn.disabled = true;
                 loadMoreBtn.classList.remove('hidden');
-            } else if (hasMore) {
+            } else if (hasMore && hasExistingContent) { // (FIX) ถ้ามีเนื้อหาและมีอีก ให้แสดงปุ่ม
                 loadMoreBtn.textContent = `ดูเพิ่มเติม (${HISTORY_LIMIT} รายการถัดไป)`;
                 loadMoreBtn.disabled = false;
                 loadMoreBtn.classList.remove('hidden');
             } else {
-                loadMoreBtn.textContent = 'สิ้นสุดรายการประวัติทั้งหมด';
-                loadMoreBtn.disabled = true;
-                loadMoreBtn.classList.remove('hidden'); // แสดงเป็นข้อความสุดท้าย
+                // (FIX) ถ้าไม่มีรายการให้โหลดอีก แต่มีรายการแสดงอยู่แล้ว ให้แสดงข้อความสิ้นสุด
+                if (hasExistingContent) {
+                    loadMoreBtn.textContent = 'สิ้นสุดรายการประวัติทั้งหมด';
+                    loadMoreBtn.disabled = true;
+                    loadMoreBtn.classList.remove('hidden'); 
+                } else {
+                    // ถ้าไม่มีรายการเลย
+                     loadMoreBtn.classList.add('hidden');
+                }
             }
         }
 
@@ -263,9 +293,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             historyListContainer = document.getElementById('history-list-container');
             loadMoreBtn = document.getElementById('load-more-btn');
+            historyLoadingIndicator = document.getElementById('history-loading-indicator');
             
-            // Initial render of loading state
-            historyListContainer.innerHTML = createHistoryEmptyState("กำลังโหลดประวัติ...");
+            // Initial render: We leave the loading indicator visible in HTML, 
+            // and the JS will hide it once data is loaded (or if an error occurs).
+            // historyListContainer.innerHTML = createHistoryEmptyState("กำลังโหลดประวัติ..."); // (REMOVED) ไม่ต้องใส่ initial state ซ้ำ
 
             if (loadMoreBtn) {
                 loadMoreBtn.addEventListener('click', loadHistory);
@@ -300,6 +332,12 @@
         
         <!-- Desktop Header -->
         <h2 class="text-3xl font-bold text-white mb-6 hidden md:block">ประวัติการเข้าชมทั้งหมด</h2>
+
+        <!-- (NEW) Loading Indicator for Initial Load -->
+        <div id="history-loading-indicator" class="p-8 text-center text-gray-400 text-lg bg-gray-800 rounded-lg mb-6">
+             <i class="ri-loader-4-line text-4xl mb-3 block animate-spin"></i>
+             กำลังโหลดประวัติ...
+        </div>
 
         <!-- History List Container -->
         <div id="history-list-container" class="space-y-4">
