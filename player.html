@@ -790,6 +790,20 @@
                 }
             }
             
+            // (NEW) อัปเดต URL ในแถบที่อยู่ (Address Bar) เพื่อให้การรีเฟรชทำงานถูกต้อง
+            try {
+                const newUrl = new URL(window.location.href);
+                newUrl.searchParams.set('ep_id', episode.id); 
+                
+                // อัปเดต URL โดยไม่รีโหลดหน้า
+                // เราใช้ replaceState เพื่อให้ปุ่ม Back ยังคงทำงานเพื่อกลับไปหน้า index.html
+                window.history.replaceState({ episodeId: episode.id }, '', newUrl.href);
+                console.log(`URL updated to reflect ep_id: ${episode.id}`);
+
+            } catch (error) {
+                console.warn("Could not update browser URL:", error);
+            }
+            
             // (NEW) Scroll to top on episode change (for mobile usability)
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
