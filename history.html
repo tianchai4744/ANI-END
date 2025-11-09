@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANI-END - ประวัติการเข้าชมทั้งหมด</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        /* Style for History Card (Reused from index.html) */
+        .history-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px; /* เพิ่ม Padding ให้ใหญ่ขึ้นบนหน้ารายการหลัก */
+            border-radius: 8px;
+            background-color: #1f2937; /* gray-800 */
+            transition: background-color 0.15s;
+        }
+        .history-card:hover {
+            background-color: #374151; /* gray-700 on hover */
+        }
+        .history-thumb {
+            width: 80px; /* เพิ่มขนาดรูปปก */
+            height: 110px; 
+            aspect-ratio: 3/4;
+            object-fit: cover;
+            flex-shrink: 0;
+            border-radius: 4px;
+        }
+        /* (NEW) Skeleton Loading Effect */
+        .skeleton-loading {
+            background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        @keyframes loading {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+        /* (NEW) Style for Date Header */
+        .date-header {
+             color: #e5e7eb; /* gray-200 */
+             font-weight: 700; /* font-bold */
+             font-size: 1.5rem; /* text-2xl */
+             margin-top: 1.5rem; /* mt-6 */
+             margin-bottom: 0.75rem; /* mb-3 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+
+    <!-- Firebase SDK and Application Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, onSnapshot, collection, query, setLogLevel,
+            limit, orderBy, startAfter, getDocs, doc, queryEqual, writeBatch
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // (*** จำลอง Firebase Config ***)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVXZUnw5oiTLqCG00GYdtPTwzOubCSe1o",
+            authDomain: "ani-end-94710.firebaseapp.com",
+            projectId: "ani-end-94710",
+            storageBucket: "ani-end-94710.firebasestorage.app",
+            messagingSenderId: "374608108501",
+            appId: "1:374608108501:web:19a4767c41a020bfb03b5c",
+            measurementId: "G-VZM1XTPMYL"
+        };
+        
+        const appId = firebaseConfig.projectId;
+
+        // (NEW) Pagination Constants
+        const HISTORY_LIMIT = 25; 
+        
+        let db, auth, userId;
+        let lastWatchedAtTimestamp = null; // ใช้เก็บ Timestamp ของเอกสารสุดท้ายที่โหลดมา
+        let isLoading = false;
+        let hasMore = true;
+
+        // UI Elements
+        let historyListContainer;
+        let loadMoreBtn;
+        let historyLoadingIndicator; 
+        let initialLoadDone = false; 
+
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig); 
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); 
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("User Authenticated (Anonymous):", userId);
+                        
+                        // (FIX) เรียกโหลดประวัติเมื่อ Auth พร้อม
+                        await loadHistory();
+                    } else {
+                        console.log("No user signed in. Attempting sign in...");
+                        await signInAnonymously(auth);
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                // (FIX) ใช้ historyListContainer แสดง Error หากการเชื่อมต่อล้มเหลว
+                if (historyListContainer) {
+                     historyListContainer.innerHTML = createHistoryEmptyState("Error: ไม่สามารถเชื่อมต่อ Firebase ได้");
+                }
+            }
+        }
+
+        // ฟังก์ชันช่วยสำหรับอ้างอิง Collection Private Data
+        function getHistoryCollectionRef() {
+            return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
+        }
+        
+        // (NEW FUNCTION) จัดรูปแบบวันที่ให้เป็นหัวข้อตามที่กำหนด (วันนี้, เมื่อวาน, วันในสัปดาห์, วันที่)
+        function formatDateHeader(timestamp) {
+            if (!timestamp || !timestamp.toDate) return 'N/A';
+
+            const date = timestamp.toDate();
+            const now = new Date();
+            const diffTime = now.getTime() - date.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+            const weekdayFormat = new Intl.DateTimeFormat('th-TH', { weekday: 'long' });
+            const dateFormat = new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short' });
+
+            if (diffDays === 0) {
+                return 'วันนี้';
+            } else if (diffDays === 1) {
+                return 'เมื่อวาน';
+            } else if (diffDays < 7) {
+                return weekdayFormat.format(date); // เช่น "วันพุธ"
+            } else {
+                return dateFormat.format(date); // เช่น "1 พ.ย."
+            }
+        }
+
+        
+        /**
+         * ฟังก์ชันหลักในการโหลดประวัติการเข้าชม
+         */
+        async function loadHistory() {
+            if (isLoading || !hasMore || !userId) return;
+
+            isLoading = true;
+            
+            // 1. จัดการสถานะ Loading UI
+            if (loadMoreBtn) {
+                 loadMoreBtn.disabled = true;
+                 loadMoreBtn.textContent = 'กำลังโหลด...';
+            }
+            if (historyLoadingIndicator && lastWatchedAtTimestamp === null) {
+                 historyLoadingIndicator.classList.add('hidden'); 
+                 if (!initialLoadDone) {
+                      historyListContainer.innerHTML = createHistorySkeleton(4); 
+                 }
+            }
+
+
+            try {
+                let historyQuery = query(
+                    getHistoryCollectionRef(),
+                    orderBy("watchedAt", "desc"),
+                    limit(HISTORY_LIMIT)
+                );
+
+                // หากไม่ใช่การโหลดครั้งแรก ให้ใช้ startAfter
+                if (lastWatchedAtTimestamp) {
+                    // (FIX) ดึง Document Snapshot จาก Timestamp เพื่อใช้ใน startAfter
+                    const startAfterDoc = await getDocs(query(getHistoryCollectionRef(), orderBy("watchedAt", "desc"), where("watchedAt", "<=", lastWatchedAtTimestamp), limit(1)));
+                    
+                    if (!startAfterDoc.empty) {
+                        // (FIX) ต้องใช้ startAfter(snapshot.docs[0])
+                        historyQuery = query(historyQuery, startAfter(startAfterDoc.docs[0])); 
+                    } else {
+                         // หากไม่พบเอกสารสำหรับ startAfter (เช่น เพิ่งโหลดมาครั้งแรก หรือถึงรายการสุดท้ายแล้ว)
+                         if (initialLoadDone) hasMore = false; // ป้องกันการเรียกซ้ำ
+                    }
+                }
+
+                const snapshot = await getDocs(historyQuery);
+                
+                // 1. ตรวจสอบว่าโหลดมาได้กี่รายการ
+                const newItems = [];
+                snapshot.forEach((doc) => {
+                    newItems.push({ id: doc.id, ...doc.data() });
+                });
+
+                // 2. อัปเดตสถานะการแบ่งหน้า
+                if (snapshot.size < HISTORY_LIMIT) {
+                    hasMore = false;
+                }
+                
+                // 3. บันทึก Timestamp ของเอกสารสุดท้าย เพื่อใช้ในการโหลดครั้งถัดไป
+                if (snapshot.docs.length > 0) {
+                    // (FIX) ต้องใช้ตัวแปรตัวนี้ในการ Query ครั้งต่อไป
+                    lastWatchedAtTimestamp = snapshot.docs[snapshot.docs.length - 1].data().watchedAt;
+                } else {
+                    lastWatchedAtTimestamp = null;
+                }
+
+                // 4. Render ข้อมูล
+                const isFirstLoad = !initialLoadDone; 
+                renderHistoryList(newItems, isFirstLoad); 
+                initialLoadDone = true;
+                
+            } catch (error) {
+                console.error("Error loading history:", error);
+                if (!initialLoadDone) {
+                    historyListContainer.innerHTML = createHistoryEmptyState("ไม่สามารถโหลดประวัติได้. กรุณาลองใหม่.");
+                }
+                hasMore = false; 
+            } finally {
+                isLoading = false;
+                if (historyLoadingIndicator) {
+                     historyLoadingIndicator.classList.add('hidden');
+                }
+                updateLoadMoreButtonState();
+            }
+        }
+        
+        /**
+         * (MODIFIED) Render History List พร้อมการจัดกลุ่มตามวันที่
+         */
+        function renderHistoryList(historyItems, isFirstLoad) {
+            let html = isFirstLoad ? '' : historyListContainer.innerHTML;
+            let lastHeader = null; 
+
+            // (NEW LOGIC) ล้าง Container หากเป็นการโหลดครั้งแรก
+            if (isFirstLoad) {
+                 historyListContainer.innerHTML = '';
+            }
+
+            // (NEW LOGIC) ถ้า Container ไม่ว่าง (จากการโหลดครั้งที่ 2 เป็นต้นไป)
+            // ให้ตรวจสอบว่าหัวข้อสุดท้ายที่เรนเดอร์ไปแล้วคืออะไร เพื่อไม่ให้ซ้ำ
+            if (!isFirstLoad) {
+                 const lastChild = historyListContainer.lastElementChild;
+                 if (lastChild && lastChild.classList.contains('history-card')) {
+                    // หา timestamp ของรายการสุดท้ายที่แสดงอยู่
+                    const lastWatchedAtSeconds = parseInt(lastChild.dataset.timestamp || 0, 10);
+                    if (lastWatchedAtSeconds > 0) {
+                        // กำหนด lastHeader จากรายการสุดท้ายที่โหลดไว้
+                        lastHeader = formatDateHeader({ toDate: () => new Date(lastWatchedAtSeconds * 1000) });
+                    }
+                 }
+            }
+
+
+            // 1. จัดกลุ่มและเรนเดอร์
+            historyItems.forEach(item => {
+                // (FIX) ใช้ toDate() เพื่อแปลง Firestore Timestamp เป็น Date object
+                const header = formatDateHeader(item.watchedAt);
+                
+                if (header !== lastHeader) {
+                    // ถ้าหัวข้อใหม่ต่างจากหัวข้อสุดท้ายที่แสดง ให้แทรก Header
+                    historyListContainer.innerHTML += `<h3 class="date-header">${header}</h3>`;
+                    lastHeader = header;
+                }
+                
+                // (FIX) ต้องส่ง item.watchedAt.seconds ไปใน dataset เพื่อใช้ในการหา lastHeader ในการโหลดครั้งถัดไป
+                historyListContainer.innerHTML += createHistoryCard(item);
+            });
+            
+            // 2. ถ้าไม่พบรายการเลยในการโหลดครั้งแรก
+            if (historyItems.length === 0 && isFirstLoad) {
+                historyListContainer.innerHTML = createHistoryEmptyState("ไม่พบประวัติการเข้าชม");
+            }
+        }
+        
+        /**
+         * (NEW) อัปเดตสถานะปุ่ม Load More
+         */
+        function updateLoadMoreButtonState() {
+            if (!loadMoreBtn) return;
+            
+            // (FIX) ตรวจสอบว่ามีรายการ History Card แสดงอยู่จริงหรือไม่
+            const hasExistingContent = historyListContainer.querySelector('.history-card');
+            
+            if (isLoading) {
+                loadMoreBtn.textContent = 'กำลังโหลด...';
+                loadMoreBtn.disabled = true;
+                loadMoreBtn.classList.remove('hidden');
+            } else if (hasMore && hasExistingContent) { 
+                loadMoreBtn.textContent = `ดูเพิ่มเติม (${HISTORY_LIMIT} รายการถัดไป)`;
+                loadMoreBtn.disabled = false;
+                loadMoreBtn.classList.remove('hidden');
+            } else {
+                if (hasExistingContent) {
+                    loadMoreBtn.textContent = 'สิ้นสุดรายการประวัติทั้งหมด';
+                    loadMoreBtn.disabled = true;
+                    loadMoreBtn.classList.remove('hidden'); 
+                } else {
+                     loadMoreBtn.classList.add('hidden');
+                }
+            }
+        }
+
+        /**
+         * (MODIFIED) สร้าง Card สำหรับประวัติการเข้าชม (เพิ่ม WatchedAt และ dataset)
+         */
+        function createHistoryCard(history) {
+            const showId = history.showId; 
+            const episodeId = history.lastWatchedEpisodeId; 
+            const title = history.showTitle;
+            const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.lastWatchedEpisodeNumber || 'N/A'}`;
+            const thumbnail = history.showThumbnail || 'https://placehold.co/80x110/333/fff?text=Img';
+            
+            let watchedDateString = 'N/A';
+            let watchedAtSeconds = 0;
+
+            if (history.watchedAt && history.watchedAt.seconds) {
+                 const watchedDate = new Date(history.watchedAt.seconds * 1000);
+                 watchedAtSeconds = history.watchedAt.seconds;
+                 
+                 // แสดงวันที่และเวลาเต็มรูปแบบ (เช่น 11:30 น.)
+                 watchedDateString = watchedDate.toLocaleTimeString('th-TH', { 
+                     hour: '2-digit',
+                     minute: '2-digit'
+                 });
+                 watchedDateString += ' น.';
+            }
+
+            return `
+                <a href="player.html?id=${showId}&ep_id=${episodeId}" 
+                   class="history-card shadow-lg" 
+                   data-timestamp="${watchedAtSeconds}">
+                    <img src="${thumbnail}" alt="${title}" class="history-thumb shadow-md">
+                    <div class="flex-grow min-w-0">
+                        <!-- ชื่อเรื่อง -->
+                        <h4 class="font-bold text-lg text-white line-clamp-1">${title}</h4>
+                        <!-- ชื่อตอนที่ดู/สถานะ -->
+                        <p class="text-sm text-gray-300 line-clamp-1 mt-1">${episodeTitle}</p>
+                        <!-- (NEW) เวลาเข้าชมล่าสุด (นาที) -->
+                        <p class="text-xs text-gray-400 mt-2">
+                             เวลาเข้าชม: ${watchedDateString}
+                        </p>
+                    </div>
+                    <!-- ปุ่ม Play -->
+                    <div class="text-white flex-shrink-0">
+                        <i class="ri-play-circle-fill text-4xl text-green-500 hover:text-green-400"></i>
+                    </div>
+                </a>
+            `;
+        }
+        
+        /**
+         * (NEW) สร้างสถานะว่างสำหรับ History List
+         */
+        function createHistoryEmptyState(message) {
+             return `<div id="history-status" class="p-8 text-center text-gray-400 text-lg bg-gray-800 rounded-lg">
+                         <i class="ri-time-line text-4xl mb-3 block"></i>
+                         ${message}
+                     </div>`;
+        }
+        
+        /**
+         * (NEW) สร้าง Skeleton Loading Cards
+         */
+        function createHistorySkeleton(count) {
+             let html = '';
+             for (let i = 0; i < count; i++) {
+                 html += `
+                    <div class="history-card bg-gray-800 shadow-lg animate-pulse" aria-hidden="true">
+                        <!-- Thumb -->
+                        <div class="history-thumb bg-gray-700 skeleton-loading"></div>
+                        
+                        <!-- Content -->
+                        <div class="flex-grow min-w-0 space-y-3">
+                            <!-- Title Line -->
+                            <div class="h-5 bg-gray-700 rounded w-3/4 skeleton-loading"></div>
+                            <!-- Episode Line -->
+                            <div class="h-4 bg-gray-700 rounded w-1/2 skeleton-loading"></div>
+                            <!-- Date Line -->
+                            <div class="h-3 bg-gray-700 rounded w-1/3 skeleton-loading mt-4"></div>
+                        </div>
+                        
+                        <!-- Play Button Placeholder -->
+                        <div class="w-10 h-10 rounded-full bg-gray-700 skeleton-loading flex-shrink-0"></div>
+                    </div>
+                 `;
+             }
+             return html;
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            historyListContainer = document.getElementById('history-list-container');
+            loadMoreBtn = document.getElementById('load-more-btn');
+            historyLoadingIndicator = document.getElementById('history-loading-indicator');
+            
+            // (NEW) ซ่อน Loading Indicator หลักไว้ก่อน และใช้ Skeleton แทน
+            if (historyLoadingIndicator) {
+                 historyLoadingIndicator.classList.add('hidden');
+            }
+
+            if (loadMoreBtn) {
+                loadMoreBtn.addEventListener('click', loadHistory);
+            }
+
+            // (NEW) แสดง Skeleton 4 ตัวทันทีเมื่อ DOMContentLoaded
+            historyListContainer.innerHTML = createHistorySkeleton(4);
+            
+            initializeFirebase(); 
+        });
+
+    </script>
+
+    <!-- Header (Same as index.html for consistency) -->
+    <header class="bg-gray-900/80 backdrop-blur-md sticky top-0 z-50">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <a href="index.html" class="flex-shrink-0 flex items-center text-white">
+                    <span class="font-bold text-2xl">ANI-END</span> 
+                </a>
+                <!-- Back Button / Title -->
+                <h1 class="text-xl font-bold text-white hidden md:block">ประวัติการเข้าชมทั้งหมด</h1>
+                <!-- Back Button for Mobile -->
+                <a href="index.html" class="flex items-center text-gray-300 hover:text-white p-2 md:hidden">
+                    <i class="ri-arrow-left-line text-2xl mr-2"></i>
+                    <span class="text-lg">กลับหน้าแรก</span>
+                </a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content Area: History List -->
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Desktop Header -->
+        <h2 class="text-3xl font-bold text-white mb-6 hidden md:block">ประวัติการเข้าชมทั้งหมด</h2>
+
+        <!-- (REMOVED: Old Global Loading Indicator, but kept ID for JS reference) -->
+        <div id="history-loading-indicator" class="hidden"></div>
+
+        <!-- History List Container -->
+        <!-- (MODIFIED) ลบ space-y-4 ออก เพื่อให้การจัดกลุ่มด้วย header ทำงานได้ (header จะเป็นตัวสร้าง margin เอง) -->
+        <div id="history-list-container">
+            <!-- Data injected by JS (or Skeleton initially) -->
+        </div>
+
+        <!-- Load More Button -->
+        <div class="text-center mt-8">
+             <button id="load-more-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200" disabled>
+                 กำลังโหลด...
+             </button>
+        </div>
+        
+    </main>
+    
+</body>
+</html>

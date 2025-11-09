@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANI-END - รายการอนิเมะและผลการค้นหา</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            cursor: default;
+        }
+        /* (MODIFIED) ปรับแต่งปุ่ม Swiper ให้เห็นชัดบนแบนเนอร์ */
+        .swiper-button-next, .swiper-button-prev { 
+            color: #ffffff; 
+            background-color: rgba(0,0,0,0.3);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .swiper-button-next:after, .swiper-button-prev:after {
+            font-size: 20px;
+            font-weight: 900;
+        }
+        
+        /* (NEW) กำหนด cursor pointer ให้กับลิงก์ทั้งหมดเพื่อให้ทำงานถูกต้อง */
+        a {
+            cursor: pointer; 
+        }
+
+        .nav-link.active { color: #00b87c; } 
+        /* (MODIFIED) ให้ Grid View แสดงเสมอ */
+        #home-view { display: none; } 
+        #grid-view-container { display: block; } 
+        #mobile-search-bar { display: none; }
+        
+        /* (MODIFIED) ชื่อเรื่องแสดงได้ 2 บรรทัด */
+        .card-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            line-height: 1.25; 
+        }
+        
+        .loading-placeholder {
+            min-height: 200px; 
+        }
+        .search-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            background-color: #1f2937;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .search-dropdown-item:hover {
+         background-color: #374151;
+     }
+     
+     /* (NEW) สไตล์สำหรับป้ายกำกับ "พากย์ไทย" */
+     .dub-badge {
+        position: absolute;
+        top: 8px; 
+        left: 8px; 
+        z-index: 10;
+        background-color: #DC2626; /* Red-600 */
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+     }
+
+     /* (NEW) ป้ายสถานะจบแล้ว (มุมล่างซ้าย) */
+     .status-badge-completed {
+        position: absolute;
+        bottom: 8px; 
+        left: 8px;
+        z-index: 10;
+        background-color: #059669; /* green-600 */
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+     }
+     
+     /* (NEW - FIX) เพิ่ม CSS สำหรับป้ายตอนล่าสุดที่หายไป */
+     .status-badge-episode {
+        position: absolute;
+        bottom: 8px; /* มุมล่างขวา */
+        right: 8px;
+        z-index: 10;
+        background-color: #4B5563; /* gray-600 */
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+     }
+     
+    /* (REMOVED) Pagination Button Styles removed */
+
+    /* (NEW FIX) Add scroll margin to the title to account for the sticky header */
+    #grid-view-title {
+        scroll-margin-top: 80px; /* (Header height h-16 is 4rem/64px + padding) */
+    }
+
+ </style>
+ <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+</head>
+<body class="bg-black text-gray-100">
+
+    <!-- Firebase SDK and Application Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, onSnapshot, collection, query, setLogLevel,
+            limit, orderBy, where, startAfter, getDocs 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // (*** จำลอง Firebase Config ***)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVXZUnw5oiTLqCG00GYdtPTwzOubCSe1o",
+            authDomain: "ani-end-94710.firebaseapp.com",
+            projectId: "ani-end-94710",
+            storageBucket: "ani-end-94710.firebasestorage.app",
+            messagingSenderId: "374608108501",
+            appId: "1:374608108501:web:19a4767c41a020bfb03b5c",
+            measurementId: "G-VZM1XTPMYL"
+        };
+        
+        const appId = firebaseConfig.projectId;
+
+        // Constants for Pagination
+        const ITEMS_PER_PAGE = 28; // 7 columns * 4 rows
+        
+        let db, auth, userId;
+        let allShows = []; 
+        let allTags = new Set(); 
+        let historyItems = []; 
+        
+        // (MODIFIED) Data loading flags
+        let isShowsLoaded = false;
+        let isHistoryLoaded = false;
+        let initialLoadDone = false; // Flag to track if initial load logic completed
+        
+        // State for Grid View Pagination
+        let currentGridTag = null; 
+        let gridFilteredShows = []; 
+        let currentGridPage = 1; 
+        // (REMOVED) totalGridPages removed
+
+        // UI Elements
+        let gridViewContainer;
+        let gridViewTitle;
+        let gridViewContent;
+        let loadMoreContainer; // (NEW)
+        let loadMoreBtn; // (NEW)
+        let searchInput;
+        let searchDropdown;
+        let mobileSearchInput;
+        let mobileSearchDropdown;
+        let desktopNavLinks;
+        let mobileNavLinks;
+        
+        let initialQueryFromUrl = null;
+        let currentSearchQuery = null; 
+
+        // Thai Normalization (KEEP)
+        function normalizeThai(text) {
+            if (typeof text !== 'string') return text;
+            let normalized = text.normalize('NFC'); 
+            normalized = normalized.replace(/\u0E4D\u0E32/g, '\u0E33');
+            return normalized; 
+        }
+        
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig); 
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); 
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("User Authenticated (Anonymous):", userId);
+                        await setupListeners();
+                        setupHistoryListener();
+                    } else {
+                        console.log("No user signed in. Attempting sign in...");
+                        await signInAnonymously(auth);
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-red-500">ไม่สามารถเชื่อมต่อ Firebase ได้</p>`;
+            }
+        }
+
+        function getCollectionRef(collectionName) {
+            return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+        }
+        
+        function getHistoryCollectionRef() {
+             return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
+        }
+
+        async function setupListeners() {
+            // 1. Listener for Shows
+            const showsQuery = query(getCollectionRef("shows"));
+            onSnapshot(showsQuery, (snapshot) => {
+                allShows = [];
+                allTags.clear();
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    allShows.push({ id: doc.id, ...data });
+                    (data.tags || []).forEach(tag => allTags.add(tag));
+                });
+                
+                console.log("Shows loaded:", allShows.length);
+                isShowsLoaded = true; // (NEW) Set flag
+                attemptInitialLoad(); // (NEW) Call gatekeeper
+                
+            }, (error) => {
+                console.error("Error listening to shows:", error);
+                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-red-500">ไม่สามารถโหลดข้อมูลอนิเมะได้</p>`;
+            });
+            
+            // 3. Listener for View History (Needed for correct card linking)
+            setupHistoryListener();
+        }
+        
+        function setupHistoryListener() {
+            if (!userId) return;
+            // (MODIFIED) Load 50 items to ensure all cards can check for history
+            const historyQuery = query(getHistoryCollectionRef(), orderBy("watchedAt", "desc"), limit(50));
+            onSnapshot(historyQuery, (snapshot) => {
+                historyItems = [];
+                snapshot.forEach((doc) => {
+                    historyItems.push({ id: doc.id, ...doc.data() });
+                });
+                console.log("History loaded:", historyItems.length);
+                
+                if (!isHistoryLoaded) {
+                    isHistoryLoaded = true; // (NEW) Set flag
+                    attemptInitialLoad(); // (NEW) Call gatekeeper
+                } else {
+                    // (FIXED) This is a History UPDATE. Re-render the current view.
+                    console.log("History updated. Re-rendering current grid view.");
+                    
+                    if (currentSearchQuery) {
+                        // Re-run the search, which will clear and call loadMoreCards
+                        performSearch(currentSearchQuery); 
+                    } else if (currentGridTag) {
+                        // Re-run the tag initialization, which will clear and call loadMoreCards
+                        initializeGridPaging(currentGridTag); 
+                    }
+                }
+                
+            }, (error) => {
+                console.error("Error listening to view history:", error);
+                // If history fails, still try to load.
+                if (!isHistoryLoaded) {
+                    isHistoryLoaded = true; 
+                    attemptInitialLoad();
+                }
+            });
+        }
+        
+        // (NEW) Gatekeeper function to ensure both data sets are ready
+        function attemptInitialLoad() {
+            // Run only if both data sets are loaded AND the initial load hasn't run yet
+            if (isShowsLoaded && isHistoryLoaded && !initialLoadDone) {
+                console.log("Data Gatekeeper: Shows and History are loaded. Proceeding with initial render.");
+                initialLoadDone = true; // Mark as run
+                checkInitialLoad(); // Run the original initial load logic
+            }
+        }
+
+        
+        // (MODIFIED) Check URL parameters on initial load
+        function checkInitialLoad() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tagFromUrl = urlParams.get('tag');
+            const searchFromUrl = urlParams.get('search'); 
+            
+            if (searchFromUrl) {
+                const query = decodeURIComponent(searchFromUrl);
+                currentSearchQuery = query;
+                performSearch(query);
+                renderDynamicNav('search-results'); 
+            } else if (tagFromUrl) {
+                currentGridTag = decodeURIComponent(tagFromUrl);
+                initializeGridPaging(currentGridTag); 
+                renderDynamicNav(currentGridTag); 
+            } else {
+                 // No tag or search specified, default to 'อนิเมะ' 
+                 currentGridTag = 'อนิเมะ';
+                 initializeGridPaging(currentGridTag); 
+                 renderDynamicNav(currentGridTag); 
+            }
+        }
+
+        // --- Navigation Rendering (Adjusted for grid.html) ---
+        function renderDynamicNav(activePageId) {
+            if (!desktopNavLinks || !mobileNavLinks) return;
+            
+            // 1. Reset all links to inactive state first (if they exist)
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active', 'text-green-500');
+                link.classList.add('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            });
+
+            // 2. Determine which link to set as active (based on currentGridTag or 'home')
+            let targetPageId = activePageId;
+            if (activePageId === 'search-results') {
+                // If it's a search result, don't activate any tag link, default to 'home' visually
+                targetPageId = 'home';
+            }
+            
+            // 3. Set the active link(s)
+            document.querySelectorAll(`.nav-link[data-page="${targetPageId}"]`).forEach(link => {
+                link.classList.add('active', 'text-green-500');
+                link.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            });
+        }
+        
+        // (KEEP) Card Rendering Logic
+        function createContentCard(show, rankNumber = null, history = null) {
+            const watchedEpisodeId = history ? history.lastWatchedEpisodeId : null;
+            let targetUrl = `player.html?id=${show.id}`;
+            
+            if (watchedEpisodeId) {
+                targetUrl = `player.html?id=${show.id}&ep_id=${watchedEpisodeId}`;
+            }
+
+            const isThaiDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
+            const dubBadge = isThaiDub ? `
+                <div class="dub-badge">
+                    <i class="ri-volume-up-line"></i> พากย์ไทย
+                </div>` : '';
+                
+            const isCompleted = show.isCompleted === true;
+            const completedBadge = isCompleted ? `
+                <div class="status-badge-completed">จบแล้ว</div>
+            ` : '';
+            
+            let episodeBadge = '';
+            const latestEpisode = show.latestEpisodeNumber || 0;
+            
+            if (latestEpisode > 0) {
+                episodeBadge = `
+                    <div class="status-badge-episode">ตอนที่ ${latestEpisode}</div>
+                `;
+            }
+
+            return `
+                <a href="${targetUrl}" class="block group bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <div class="aspect-[2/3] overflow-hidden relative">
+                            ${dubBadge}
+                            ${episodeBadge} 
+                            <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
+                                 alt="${show.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                            ${completedBadge} 
+                        </div>
+                        <div class="text-white p-3 pt-2 h-14"> 
+                            <h4 class="font-bold card-title text-base">${show.title}</h4> 
+                        </div>
+                    </a>
+                `;
+            }
+
+        // (MODIFIED) Pagination Logic - Replaced with "Load More" logic
+        function initializeGridPaging(tag) {
+            currentGridTag = tag;
+            gridViewTitle.textContent = tag;
+            currentSearchQuery = null;
+            
+            gridFilteredShows = allShows
+                .filter(s => (s.tags || []).includes(tag))
+                .sort((a, b) => {
+                    const timeA = a.updatedAt ? a.updatedAt.toMillis() : 0;
+                    const timeB = b.updatedAt ? b.updatedAt.toMillis() : 0;
+                    return timeB - timeA; 
+                });
+
+            // (NEW) Reset page counter and clear content
+            currentGridPage = 1;
+            gridViewContent.innerHTML = '';
+            
+            // (NEW) Scroll to title when changing category
+            if (gridViewTitle) {
+                 gridViewTitle.scrollIntoView({ behavior: 'smooth' });
+            }
+
+            if (gridFilteredShows.length === 0) {
+                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
+                 loadMoreBtn.classList.add('hidden'); // Hide button if no results
+                 return;
+            }
+
+            // (NEW) Load the first batch
+            loadMoreCards();
+
+            gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
+        }
+
+        // (REMOVED) renderPage function
+        
+        // (NEW) Load More Cards function
+        function loadMoreCards() {
+            if (!loadMoreBtn) return;
+            
+            loadMoreBtn.disabled = true;
+            loadMoreBtn.textContent = 'กำลังโหลด...';
+
+            const startIndex = (currentGridPage - 1) * ITEMS_PER_PAGE;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, gridFilteredShows.length);
+            const showsToRender = gridFilteredShows.slice(startIndex, endIndex);
+
+            if (showsToRender.length === 0 && currentGridPage === 1) {
+                // This case is handled by initializeGridPaging/performSearch
+                loadMoreBtn.classList.add('hidden');
+                return;
+            }
+
+            // Append new cards
+            showsToRender.forEach((show) => {
+                const historyItem = historyItems.find(h => h.showId === show.id);
+                gridViewContent.innerHTML += createContentCard(show, null, historyItem); 
+            });
+
+            // Increment page for the *next* click
+            currentGridPage++;
+
+            // Check if there are more cards to load
+            const remaining = gridFilteredShows.length - endIndex;
+            if (remaining > 0) {
+                loadMoreBtn.textContent = `โหลดเพิ่มเติม... (${Math.min(remaining, ITEMS_PER_PAGE)})`;
+                loadMoreBtn.classList.remove('hidden');
+                loadMoreBtn.disabled = false;
+            } else {
+                // No more cards
+                loadMoreBtn.classList.add('hidden');
+                loadMoreBtn.disabled = true;
+            }
+        }
+        
+        // (REMOVED) updatePageUrl function (Solves SecurityError)
+        // (REMOVED) renderPaginationControls function
+        // (REMOVED) createPageButton function
+
+        // --- Search Logic (Adjusted for Load More) ---
+        function updateSearchDropdown(query, dropdownEl) {
+            const normalizedQuery = normalizeThai(query).toLowerCase().trim();
+            dropdownEl.innerHTML = '';
+            
+            if (normalizedQuery.length < 2) {
+                dropdownEl.classList.add('hidden');
+                return;
+            }
+            const results = allShows
+                .filter(s => normalizeThai(s.title).toLowerCase().includes(normalizedQuery))
+                .slice(0, 10); 
+            if (results.length === 0) {
+                dropdownEl.innerHTML = '<a class="block p-3 text-sm text-gray-400">ไม่พบผลลัพธ์</a>';
+                dropdownEl.classList.remove('hidden');
+                return;
+            }
+            results.forEach(show => {
+                const item = document.createElement('a');
+                const historyItem = historyItems.find(h => h.showId === show.id);
+                const targetUrl = historyItem ? `player.html?id=${show.id}&ep_id=${historyItem.lastWatchedEpisodeId}` : `player.html?id=${show.id}`;
+                item.href = targetUrl;
+                
+                item.className = 'search-dropdown-item block p-3 text-sm font-medium text-gray-200';
+                
+                const highlightedTitle = show.title.replace(new RegExp(`(${query})`, 'gi'), '<span class="text-green-500 font-bold">$1</span>');
+                item.innerHTML = highlightedTitle;
+                dropdownEl.appendChild(item);
+            });
+            dropdownEl.classList.remove('hidden');
+        }
+        function handleSearchInput(event) {
+            const query = event.target.value;
+            const isDesktop = event.target.id === 'search-input';
+            const dropdownEl = isDesktop ? searchDropdown : mobileSearchDropdown;
+            updateSearchDropdown(query, dropdownEl);
+        }
+        function handleSearchSubmit(query) {
+             searchDropdown.classList.add('hidden');
+             mobileSearchDropdown.classList.add('hidden');
+             
+             // (MODIFIED) DO NOT update URL history. Just run the search.
+             
+             currentGridTag = null; 
+             currentSearchQuery = query;
+             
+             // Run search logic immediately
+             performSearch(query);
+             renderDynamicNav('search-results'); // (FIX) Update nav state on search
+             
+             const mobileSearchBarEl = document.getElementById('mobile-search-bar');
+             if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
+        }
+
+        function performSearch(query) {
+            if (!query) return;
+            
+            gridViewTitle.textContent = `ผลการค้นหาสำหรับ "${query}"`;
+            currentSearchQuery = query;
+            
+            if (allShows.length === 0) {
+                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">ข้อมูลอนิเมะยังไม่ถูกโหลด. โปรดรอสักครู่...</p>`;
+                 return;
+            }
+            
+            const normalizedQuery = normalizeThai(query).toLowerCase();
+            
+            gridFilteredShows = allShows.filter(s => {
+                const normalizedTitle = normalizeThai(s.title).toLowerCase();
+                const normalizedDesc = normalizeThai(s.description || '').toLowerCase();
+                
+                return normalizedTitle.includes(normalizedQuery) || normalizedDesc.includes(normalizedQuery);
+            });
+            
+            // (MODIFIED) Reset page counter and clear content
+            currentGridPage = 1;
+            gridViewContent.innerHTML = '';
+
+            // (NEW) Scroll to title when searching
+            if (gridViewTitle) {
+                 gridViewTitle.scrollIntoView({ behavior: 'smooth' });
+            }
+
+            if (gridFilteredShows.length === 0) {
+                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบผลลัพธ์สำหรับ "${query}"</p>`;
+                 loadMoreBtn.classList.add('hidden');
+                 return;
+            }
+            
+            // (NEW) Load the first batch
+            loadMoreCards();
+            
+            gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
+            
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            gridViewContainer = document.getElementById('grid-view-container');
+            gridViewTitle = document.getElementById('grid-view-title');
+            gridViewContent = document.getElementById('grid-view-content');
+            loadMoreContainer = document.getElementById('load-more-container'); // (NEW)
+            loadMoreBtn = document.getElementById('load-more-btn'); // (NEW)
+            // (REMOVED) paginationContainer removed
+
+            searchInput = document.getElementById('search-input');
+            searchDropdown = document.getElementById('search-dropdown');
+            mobileSearchInput = document.getElementById('mobile-search-input');
+            mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
+            
+            // (FIX) Re-select elements that were incorrectly referenced globally
+            desktopNavLinks = document.getElementById('desktop-nav-links');
+            mobileNavLinks = document.getElementById('mobile-nav-links');
+
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const mobileMenu = document.getElementById('mobile-menu');
+            const mobileSearchBtn = document.getElementById('mobile-search-button');
+            const mobileSearchBar = document.getElementById('mobile-search-bar');
+            const mobileCloseSearchBtn = document.getElementById('mobile-close-search');
+            
+            initializeFirebase(); 
+            
+            // (NEW FIX) Set the active nav state IMMEDIATELY based on the URL.
+            // This stops the "flicker" of the active (green) link.
+            const urlParams = new URLSearchParams(window.location.search);
+            const tagFromUrl = urlParams.get('tag');
+            const searchFromUrl = urlParams.get('search'); 
+
+            let activePageId = 'home'; // Default
+            if (searchFromUrl) {
+                activePageId = 'search-results'; // This will visually default to 'home'
+            } else if (tagFromUrl) {
+                activePageId = tagFromUrl;
+            } else {
+                activePageId = 'อนิเมะ'; // Default grid page
+            }
+            renderDynamicNav(activePageId);
+            
+            if (mobileMenuBtn && mobileMenu) {
+                mobileMenuBtn.addEventListener('click', () => {
+                    mobileMenu.classList.toggle('hidden');
+                    const mobileSearchBarEl = document.getElementById('mobile-search-bar');
+                    if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
+                    searchDropdown.classList.add('hidden');
+                });
+            }
+            
+            if (mobileSearchBtn && mobileSearchBar && mobileMenu) {
+                mobileSearchBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    mobileSearchBar.style.display = 'flex';
+                    mobileMenu.classList.add('hidden'); 
+                    searchDropdown.classList.add('hidden');
+                });
+            }
+
+            if (mobileCloseSearchBtn && mobileSearchBar) {
+                mobileCloseSearchBtn.addEventListener('click', () => {
+                    mobileSearchBar.style.display = 'none';
+                    mobileSearchDropdown.classList.add('hidden');
+                });
+            }
+            
+            document.body.addEventListener('click', (e) => {
+                 if (searchDropdown && mobileSearchDropdown && !e.target.closest('.relative.search-container')) {
+                      searchDropdown.classList.add('hidden');
+                      mobileSearchDropdown.classList.add('hidden');
+                 }
+                
+                // (FIX) Re-add logic to handle soft navigation within grid.html
+                const navLink = e.target.closest('.nav-link');
+                if (navLink) {
+                    
+                    const pageId = navLink.dataset.page;
+                    if (pageId) {
+                        // Prevent the full page reload
+                        e.preventDefault(); 
+                        
+                        // Close mobile menu if open
+                        if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                            mobileMenu.classList.add('hidden');
+                        }
+
+                        // Check if it's a link to the homepage
+                        if (pageId === 'home') {
+                            window.location.href = 'index.html'; // Go to index.html
+                            return;
+                        }
+                        
+                        // Check if we are already on this tag
+                        if (pageId === currentGridTag) {
+                            return; // Do nothing if clicking the active tag
+                        }
+
+                        // Handle internal navigation (e.g., อนิเมะ -> อนิเมะจีน)
+                        currentGridTag = pageId;
+                        currentSearchQuery = null; // Clear search
+                        
+                        // 1. Re-initialize the grid content for the new tag
+                        initializeGridPaging(currentGridTag); // (MODIFIED) Removed page number
+                        
+                        // 2. Update the active link state
+                        renderDynamicNav(currentGridTag);
+                        
+                        // 3. URL is NOT updated (as per user request)
+                    }
+                }
+            });
+
+            // (REMOVED) popstate listener
+
+            // (NEW) Add Load More button listener
+            if (loadMoreBtn) {
+                loadMoreBtn.addEventListener('click', loadMoreCards);
+            }
+
+            // Search Listeners
+            const searchButton = document.getElementById('search-button');
+            if (searchInput) searchInput.addEventListener('input', handleSearchInput);
+            if (mobileSearchInput) mobileSearchInput.addEventListener('input', handleSearchInput);
+            if (searchButton && searchInput) searchButton.addEventListener('click', () => handleSearchSubmit(searchInput.value));
+            if (searchInput) searchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(searchInput.value));
+            if (mobileSearchInput) mobileSearchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(mobileSearchInput.value));
+
+            // Initial URL check is now done inside initializeFirebase -> setupListeners -> checkInitialLoad
+        });
+    </script>
+    
+    <!-- Header -->
+    <header class="bg-gray-900 sticky top-0 z-50"> <!-- (MODIFIED) Removed /80 and backdrop-blur-md -->
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- 1. LEFT GROUP: Logo + Nav Links (รวมกันเพื่อจัดตำแหน่ง) -->
+                <div class="flex items-center">
+                    <!-- Logo -->
+                    <a href="index.html" class="flex-shrink-0 flex items-center text-white">
+                        <span class="font-bold text-2xl">ANI-END</span> 
+                    </a>
+                    
+                    <!-- Desktop Nav Links (Secondary Navigation) -->
+                    <div class="hidden md:block">
+                        <div id="desktop-nav-links" class="ml-6 flex items-baseline space-x-4">
+                            <!-- Links are now hardcoded in HTML for instant display -->
+                            <a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                            <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                            <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
+                            <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 2. RIGHT GROUP: Search & Actions -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <div class="relative search-container">
+                        <input id="search-input" type="text" placeholder="ค้นหา..." class="bg-gray-800 text-white rounded-full py-2 px-4 pl-10 focus:outline-none focus:ring-2 focus:ring-green-500 w-64">
+                        <button id="search-button" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                            <i class="ri-search-line"></i>
+                        </button>
+                        <div id="search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
+                            <!-- Search results injected here -->
+                        </div>
+                    </div>
+                    <!-- ปุ่ม Admin สำหรับ Desktop -->
+                    <a href="admin.html" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium bg-gray-800 hover:bg-gray-700 transition-colors duration-150">
+                        <i class="ri-settings-4-line mr-1"></i> ระบบจัดการ
+                    </a>
+                </div>
+                
+                <!-- 3. Mobile Menu Button & Search -->
+                <div class="flex md:hidden items-center space-x-2">
+                    <a href="#" id="mobile-search-button" class="text-gray-300 hover:text-white p-2">
+                        <i class="ri-search-line text-xl"></i>
+                    </a>
+                    <button id="mobile-menu-btn" class="text-gray-300 hover:text-white p-2">
+                        <i class="ri-menu-line text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Mobile Search Bar -->
+            <div id="mobile-search-bar" class="md:hidden hidden p-2 absolute top-16 left-0 right-0 bg-gray-800 shadow-lg z-40">
+                <div class="flex relative search-container">
+                    <input id="mobile-search-input" type="text" placeholder="ค้นหา..." class="flex-1 bg-gray-700 text-white rounded-l-full py-2 px-4 focus:outline-none">
+                    <button id="mobile-close-search" class="bg-gray-700 text-gray-400 rounded-r-full px-3">
+                        <i class="ri-close-line"></i>
+                    </button>
+                      <div id="mobile-search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
+                           <!-- Search results injected here -->
+                      </div>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="md:hidden hidden">
+            <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <!-- Links are now hardcoded in HTML for instant display -->
+                <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
+                <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
+                <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
+                <!-- ลิงก์ Admin สำหรับ Mobile -->
+                <a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                    <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Grid View (Filtered Results / Search Results) -->
+        <div id="grid-view-container">
+            <h2 id="grid-view-title" class="text-3xl font-bold mb-6">กำลังโหลดรายการ...</h2>
+            <div id="grid-view-content" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4">
+                <!-- Cards generated by JS -->
+                <p class="text-center w-full col-span-full text-gray-400">กำลังโหลดข้อมูลอนิเมะ...</p>
+            </div>
+            
+            <!-- (MODIFIED) Pagination Container replaced with Load More Button -->
+            <div id="load-more-container" class="text-center mt-8">
+                <button id="load-more-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200 hidden">
+                    โหลดเพิ่มเติม...
+                </button>
+            </div>
+        </div>
+        
+    </main>
+    
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+</body>
+</html>
