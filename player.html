@@ -669,15 +669,17 @@
             episodeListContent.style.maxHeight = `${Math.max(100, listMaxHeight)}px`; // ต่ำสุด 100px
         }
 
-        // (FIXED: MOVED UP) แสดงรายละเอียดอนิเมะ (v8)
+        /**
+         * (MODIFIED) แสดงรายละเอียดอนิเมะ (v8)
+         * ฟังก์ชันนี้รับผิดชอบเฉพาะ Description เท่านั้น
+         */
         function renderShowDetails(show) {
-            // 1. ตั้งค่า Title และ Description
-            showTitleEl.textContent = show.title;
+            // 1. ตั้งค่า Description เท่านั้น (Title ถูกตั้งค่าโดย playEpisode() แล้ว)
+            // showTitleEl.textContent = show.title; // <--- ลบบรรทัดนี้ตามคำขอ
             const descriptionText = show.description || "ไม่มีคำอธิบาย";
             showDescEl.textContent = descriptionText;
 
             // 2. รีเซ็ตสถานะ (บังคับบีบไว้ก่อน)
-            // (REVISED) บังคับให้มี line-clamp-2 เสมอเมื่อเริ่ม
             showDescEl.classList.add('line-clamp-2'); 
             expandDescBtn.classList.add('hidden'); 
             expandDescBtn.dataset.expanded = 'false';
@@ -746,7 +748,10 @@
             }
         }
         
-        // (MODIFIED) ฟังก์ชันเล่นวิดีโอ (Must be async to check reports)
+        /**
+         * (MODIFIED) ฟังก์ชันเล่นวิดีโอ 
+         * ฟังก์ชันนี้เป็นผู้รับผิดชอบหลักในการอัปเดต H1 Title
+         */
         async function playEpisode(episode) {
             console.log(`Playing: ${episode.title}`, episode.embedCode);
             
@@ -755,8 +760,7 @@
             // ใช้ฟังก์ชัน embedVideo ที่สร้างไว้
             embedVideo(episode.embedCode);
             
-            // อัปเดตชื่อเรื่องหลัก (เฉพาะตอนที่คลิกเล่น ไม่ใช่ตอนโหลดรายละเอียด)
-            // (MODIFIED) ตรวจสอบว่า currentShow มีค่าก่อน
+            // อัปเดตชื่อเรื่องหลัก (นี่คือฟังก์ชันเดียวที่ทำหน้าที่นี้)
             if (currentShow) {
                 showTitleEl.textContent = `${currentShow.title} - ${episode.title}`;
             }
@@ -1150,6 +1154,7 @@
 
                 if (!showSnap.exists()) {
                     playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบข้อมูลอนิเมะ</p>`;
+                    // (MODIFIED) เรียก renderShowDetails เพื่อตั้งค่า Description เท่านั้น
                     renderShowDetails({ title: "ไม่พบข้อมูลอนิเมะ", description: "อนิเมะนี้อาจถูกลบไปแล้ว" });
                     
                     playerContentWrapper.classList.remove('hidden');
