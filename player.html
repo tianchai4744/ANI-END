@@ -820,7 +820,8 @@
                     reportBrokenBtn.classList.remove('hover:bg-red-600');
 
                     brokenAlertDiv.classList.remove('hidden');
-                    brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอสำหรับตอนนี้มีปัญหา (เสีย) กำลังรอการแก้ไขโดยผู้ดูแลระบบ.`;
+                    // (MODIFIED) เปลี่ยนข้อความ Alert ให้ชัดเจนว่าเป็นปัญหาที่ตรวจพบโดยระบบ (สคริปต์)
+                    brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกระบุว่ามีปัญหาโดยระบบ กำลังรอการแก้ไขโดยผู้ดูแลระบบ.`;
                 }
                 
                 // 2. ตรวจสอบสถานะ 'user_reported' (แจ้งโดยผู้ใช้)
@@ -1533,6 +1534,7 @@ function setupReportButtonListener() {
     <div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
         
         <div id="broken-alert" class="hidden bg-red-800/80 border border-red-700 text-white p-3 rounded-lg mb-4 text-sm font-medium items-center">
+            <!-- (MODIFIED) ข้อความเริ่มต้นถูกเปลี่ยน -->
             <i class="ri-error-warning-line mr-2"></i> วิดีโอสำหรับตอนนี้มีปัญหา (เสีย) กำลังรอการแก้ไขโดยผู้ดูแลระบบ.
         </div>
 
