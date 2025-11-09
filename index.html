@@ -217,6 +217,18 @@
             normalized = normalized.replace(/\u0E4D\u0E32/g, '\u0E33');
             return normalized; 
         }
+
+        // (NEW FUNCTION) จัดรูปแบบ Timestamp ให้แสดงเป็น HH:MM น.
+        function formatDateTime(timestamp) {
+            if (!timestamp || !timestamp.toDate) return 'N/A';
+            const date = timestamp.toDate();
+            
+            // แสดงเวลาแบบ HH:MM น. 
+            return date.toLocaleTimeString('th-TH', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            }) + ' น.';
+        }
         
         async function initializeFirebase() {
             try {
@@ -609,15 +621,18 @@
             const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.lastWatchedEpisodeNumber || 'N/A'}`;
             const thumbnail = history.showThumbnail || 'https://placehold.co/48x64/333/fff?text=Img'; 
             
+            // (NEW LOGIC) ใช้ formatDateTime ที่เพิ่มเข้ามา
+            const watchedTimeString = formatDateTime(history.watchedAt);
+
             return `
                 <a href="player.html?id=${showId}&ep_id=${episodeId}" class="history-card shadow-md">
                     <img src="${thumbnail}" alt="${title}" class="history-thumb shadow-sm">
                     
                     <div class="flex-grow min-w-0">
                         <h4 class="font-bold text-sm text-white line-clamp-1">${title}</h4>
-                        // ใน createHistoryCard:
                         <p class="text-xs text-gray-300 line-clamp-1">${episodeTitle}</p>
-                        <p class="text-xs text-gray-400 mt-1">${formatDateTime(history.watchedAt)}</p>
+                        <!-- (NEW) แสดงเวลาเข้าชมล่าสุด -->
+                        <p class="text-xs text-gray-400 mt-1">เข้าชมล่าสุด: ${watchedTimeString}</p>
                     </div>
                     
                     <div class="flex-shrink-0 text-white ml-2"> 
