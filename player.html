@@ -1531,7 +1531,6 @@ function setupReportButtonListener() {
     <div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
         
         <div id="broken-alert" class="hidden bg-red-800/80 border border-red-700 text-white p-3 rounded-lg mb-4 text-sm font-medium items-center">
-            <!-- (MODIFIED) ข้อความเริ่มต้นถูกเปลี่ยน -->
             <i class="ri-error-warning-line mr-2"></i> วิดีโอสำหรับตอนนี้มีปัญหา (เสีย) กำลังรอการแก้ไขโดยผู้ดูแลระบบ.
         </div>
 
@@ -1603,3 +1602,12 @@ function setupReportButtonListener() {
     
 </body>
 </html>
+```eof
+
+### ขั้นตอนถัดไปเพื่อแก้ไขปัญหานี้:
+
+1.  **ใช้ไฟล์ `player.html` ที่อัปเดตนี้**
+2.  **รันสคริปต์ `check-videos.js` อีกครั้ง** (เวอร์ชันล่าสุดที่ใช้ `FieldValue.delete()` ในคำตอบที่แล้ว) เพื่อให้สถานะของตอนที่ถูกแก้ไขแล้วกลับเป็นปกติ
+3.  หากปุ่มยังคงถูกล็อคอยู่ ให้ใช้ **Admin Panel** เพื่อล้างสถานะของ **ตอนที่ 10** ด้วยตนเองก่อน เพื่อปลดล็อคตอนนี้และให้ตอนนี้กลับมาใช้งานได้ทันที (เป็นการแก้ไขปัญหาเฉพาะหน้า)
+
+หากคุณแก้ไขลิงก์วิดีโอแล้วและต้องการให้ผมช่วยตรวจสอบว่าลิงก์นั้นส่งสัญญาณอะไรกลับมาหรือไม่เพื่อหาสาเหตุที่สคริปต์ยังคงตรวจพบว่าเสียอยู่ โปรดแจ้งให้ผมทราบได้เลยครับ
