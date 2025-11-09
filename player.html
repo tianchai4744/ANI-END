@@ -850,7 +850,8 @@
             // (MODIFIED) Responsive classes:
             // Mobile: flex-nowrap (horizontal scroll) with padding-bottom
             // Desktop (lg): flex-wrap (vertical scroll) with padding-right
-            episodeListContainer.className = 'flex gap-2 pb-3 lg:pb-0 flex-nowrap overflow-x-auto overflow-y-hidden lg:flex-wrap lg:overflow-y-auto lg:overflow-x-hidden lg:pr-2'; 
+            // (NEW FIX) เพิ่ม 'relative' เพื่อให้เป็น offsetParent สำหรับการคำนวณ scroll
+            episodeListContainer.className = 'relative flex gap-2 pb-3 lg:pb-0 flex-nowrap overflow-x-auto overflow-y-hidden lg:flex-wrap lg:overflow-y-auto lg:overflow-x-hidden lg:pr-2'; 
             
             episodes.forEach((ep, index) => {
                 const button = document.createElement('button');
