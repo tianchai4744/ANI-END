@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ANI-END - รับชม</title>
-    <!-- Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
-    <!-- Remixicon Icons --><link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
     <style>
         body {
             background-color: #111; /* (MODIFIED) เปลี่ยนเป็น bg-black (#111) เหมือน index.html */
@@ -201,16 +201,14 @@
 
     </style>
 </head>
-<body class="bg-black text-gray-100"> <!-- (MODIFIED) เปลี่ยนเป็น bg-black (#111) เหมือน index.html -->
-    <!-- Firebase SDK and Application Logic -->
-    <script type="module">
+<body class="bg-black text-gray-100"> <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, doc, getDoc, onSnapshot, collection, query, where, getDocs,
             setLogLevel,
             updateDoc, increment, orderBy, limit, serverTimestamp, 
-            setDoc, addDoc // (MODIFIED) Import addDoc
+            setDoc, addDoc 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config ...
@@ -236,7 +234,8 @@
         let historyItems = []; 
 
         // (NEW) Global State for search function
-        let allShows = []; // Required for Search Functionality
+        let allShows = []; 
+        let allTags = []; // (NEW) State for dynamic tags
 
         // (FIX) UI Elements - Declare with 'let'
         let playerEmbedDiv;
@@ -252,7 +251,7 @@
         // (NEW) UI Elements for Nav Buttons
         let prevEpisodeBtn;
         let nextEpisodeBtn;
-        let reportBrokenBtn; // (NEW)
+        let reportBrokenBtn; 
         
         // (NEW) UI Element for Broken Video Alert
         let brokenAlertDiv;
@@ -263,9 +262,13 @@
         // (NEW) Search UI Elements
         let searchInput;
         let mobileSearchInput;
-        let searchDropdown; // (NEW) Desktop Dropdown
+        let searchDropdown; 
         let mobileSearchDropdown;
         
+        // (NEW) Nav Link Containers
+        let desktopNavLinks; // (NEW)
+        let mobileNavLinks; // (NEW)
+
         // (NEW FUNCTION) Thai Normalization
         function normalizeThai(text) {
             if (typeof text !== 'string') return text;
@@ -425,11 +428,10 @@
         }
         
         // (MODIFIED) Search Logic: Always redirect to grid.html with the query
-        function handleSearchSubmit(query) { // (FIX) Removed isDesktop param as it's not used
+        function handleSearchSubmit(query) { 
              const lowerQuery = query.toLowerCase().trim();
              if (!lowerQuery) return;
              
-             // This ensures that even if live search finds no result, the full search is performed on grid.html.
              // FIX: If the query is submitted, redirect to grid.html.
              window.location.href = `grid.html?search=${encodeURIComponent(query)}`;
         }
@@ -887,7 +889,7 @@
             // (NEW) Call sync height after rendering buttons
             syncEpisodeListHeight(); 
         }
-
+        
         /**
          * (MODIFIED) สร้าง Card สำหรับ Related Shows ในรูปแบบ Grid (คล้าย index.html)
          * (MODIFIED) เพิ่มพารามิเตอร์ history เพื่อใช้ประวัติการดูค้างไว้
@@ -928,19 +930,12 @@
             
             // ** ใช้โครงสร้าง Card Grid แบบเดียวกับใน index.html แต่เพิ่มพื้นหลังเทาเข้ม **
             return `
-                <!-- (MODIFIED) ใช้ targetUrl ที่ถูกปรับแล้ว -->
                 <a href="${targetUrl}" class="block group bg-gray-700/80 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-                    <!-- 1. ส่วนภาพ (Image Aspect Ratio Container) -->
-                    <!-- *** REMOVED rounded-lg from inner div. Rounded is now on parent link. *** -->
                     <div class="aspect-[2/3] overflow-hidden relative">
                         ${dubBadge}
-                        ${episodeBadge} <!-- ป้ายตอนสูงสุด (มุมล่างขวา) -->
-                        <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
+                        ${episodeBadge} <img src="${show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img'}" 
                              alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                        ${completedBadge} <!-- ป้ายจบแล้ว (มุมล่างซ้าย) -->
-                    </div>
-                    <!-- 2. ส่วนชื่อเรื่อง (Title - อยู่ใต้ภาพ) -->
-                    <!-- *** MODIFIED: เปลี่ยน min-h-[3.5rem] เป็น h-14 เพื่อบังคับความสูง 2 บรรทัดเหมือน index.html *** -->
+                        ${completedBadge} </div>
                     <div class="text-white h-14 p-3 pt-2">
                         <h4 class="font-bold related-card-title text-base">${title}</h4> 
                     </div>
@@ -1094,18 +1089,16 @@
             
             // ** ปรับโครงสร้าง HTML เพื่อใส่ป้ายอันดับและลบส่วน Rating ออกไป **
             return `
-                <!-- (MODIFIED FIX) ใช้ targetUrl ที่มี ep_id -->
                 <a href="${targetUrl}" class="top10-item hover:shadow-lg bg-gray-700"> 
-                    <!-- 1. ป้ายอันดับตัวเลขใหญ่ --><span class="rank-badge-lg ${rankClass}">${rank}</span>
+                    <span class="rank-badge-lg ${rankClass}">${rank}</span>
                     
-                    <!-- 2. Thumbnail/Cover Image --><img src="${show.thumbnailUrl || 'https://placehold.co/60x80/333/fff?text=Img'}" 
+                    <img src="${show.thumbnailUrl || 'https://placehold.co/60x80/333/fff?text=Img'}" 
                          alt="${title}" class="rounded-md top10-thumbnail shadow-md">
                     
-                    <!-- 3. Content (Title) --><div class="top10-content flex-grow">
-                        <!-- Title (Line Clamp 2) + Dub Badge + Completed Tag --><h4 class="font-bold text-white line-clamp-2 text-base leading-snug">${displayTitle}${dubBadge}${completedTag}</h4>
+                    <div class="top10-content flex-grow">
+                        <h4 class="font-bold text-white line-clamp-2 text-base leading-snug">${displayTitle}${dubBadge}${completedTag}</h4>
                         
-                        <!-- (REMOVED) ลบส่วน Rating ออกไป -->
-                    </div>
+                        </div>
                 </a>
             `;
         }
@@ -1118,6 +1111,48 @@
             
             syncEpisodeListHeight(); 
         }
+
+        // (NEW FUNCTION) Render Navigation Bar Dynamically
+        function renderDynamicNav(activePageId = 'home') {
+            if (!desktopNavLinks || !mobileNavLinks) return;
+            
+            // 1. Reset/Clear existing links (except "Home" and "Admin")
+            desktopNavLinks.innerHTML = '';
+            mobileNavLinks.innerHTML = '';
+            
+            // 2. Add "Home" link manually
+            const homeLinkHtml = `<a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>`;
+            desktopNavLinks.innerHTML += homeLinkHtml;
+            mobileNavLinks.innerHTML += `<a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>`;
+            
+            // 3. Add Dynamic Tag Links
+            const sortedTags = [...allTags].sort((a, b) => a.localeCompare(b, 'th')); // Sort locally
+
+            sortedTags.forEach(tag => {
+                const tagLinkHtml = `
+                    <a href="grid.html?tag=${encodeURIComponent(tag)}" data-page="${tag}" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                        ${tag}
+                    </a>
+                `;
+                const tagLinkMobileHtml = `
+                    <a href="grid.html?tag=${encodeURIComponent(tag)}" data-page="${tag}" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                        ${tag}
+                    </a>
+                `;
+                desktopNavLinks.innerHTML += tagLinkHtml;
+                mobileNavLinks.innerHTML += tagLinkMobileHtml;
+            });
+            
+            // 4. Add Admin Link (Mobile only)
+             mobileNavLinks.innerHTML += `<a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"><i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน</a>`;
+            
+            // 5. Set the active link(s) (Home is always active on this page since it's player.html)
+            document.querySelectorAll(`.nav-link[data-page="${activePageId}"]`).forEach(link => {
+                link.classList.add('active', 'text-green-500');
+                link.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            });
+        }
+
 
         // โหลดเนื้อหา (อนิเมะและตอน)
         async function loadContent() {
@@ -1277,6 +1312,10 @@ function setupReportButtonListener() {
                         
                         await loadContent(); 
                         await loadGlobalContent();
+                        
+                        // (NEW) Render Nav dynamically (after tags are loaded via setupListeners)
+                        renderDynamicNav('home'); 
+                        
                     } else {
                         await signIn(); // ถ้ายังไม่ล็อกอิน ให้ล็อกอินก่อน
                     }
@@ -1335,6 +1374,10 @@ function setupReportButtonListener() {
             mobileSearchInput = document.getElementById('mobile-search-input');
             searchDropdown = document.getElementById('search-dropdown');
             mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
+            
+            // (NEW) Assign Nav Link containers
+            desktopNavLinks = document.getElementById('desktop-nav-links');
+            mobileNavLinks = document.getElementById('mobile-nav-links');
             
             // (NEW FIX 1) Assign Broken Alert Div
             brokenAlertDiv = document.getElementById('broken-alert');
@@ -1462,47 +1505,32 @@ function setupReportButtonListener() {
 
     </script>
 
-    <!-- (MODIFIED HEADER) -->
-    <!-- Header (Copied from index.html and modified) -->
     <header class="bg-gray-900 sticky top-0 z-50">
         <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
-                <!-- 1. LEFT GROUP: Logo + Nav Links (รวมกันเพื่อจัดตำแหน่ง) -->
                 <div class="flex items-center">
-                    <!-- Logo -->
                     <a href="index.html" class="flex-shrink-0 flex items-center text-white">
                         <span class="font-bold text-2xl">ANI-END</span> 
                     </a>
                     
-                    <!-- Desktop Nav Links (Secondary Navigation) -->
                     <div class="hidden md:block">
                         <div id="desktop-nav-links" class="ml-6 flex items-baseline space-x-4">
-                            <!-- Links are now hardcoded in HTML for instant display -->
                             <a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
-                            <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                            <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                            <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
                         </div>
                     </div>
                 </div>
                 
-                <!-- 2. RIGHT GROUP: Search & Actions -->
                 <div class="hidden md:flex items-center space-x-4">
                     <div class="relative search-container">
-                        <!-- (MODIFIED) Changed ID for player.html script -->
                         <input id="search-input-desktop" type="text" placeholder="ค้นหา..." class="bg-gray-800 text-white rounded-full py-2 px-4 pl-10 focus:outline-none focus:ring-2 focus:ring-green-500 w-64">
-                        <!-- (MODIFIED) Changed ID for player.html script -->
                         <button id="search-button-desktop" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
                             <i class="ri-search-line"></i>
                         </button>
                         <div id="search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
-                            <!-- Search results injected here -->
-                        </div>
+                            </div>
                     </div>
-                    <!-- (REMOVED) Admin Button -->
-                </div>
+                    </div>
                 
-                <!-- 3. Mobile Menu Button & Search -->
                 <div class="flex md:hidden items-center space-x-2">
                     <a href="#" id="mobile-search-button" class="text-gray-300 hover:text-white p-2">
                         <i class="ri-search-line text-xl"></i>
@@ -1513,7 +1541,6 @@ function setupReportButtonListener() {
                 </div>
             </div>
             
-            <!-- Mobile Search Bar -->
             <div id="mobile-search-bar" class="md:hidden hidden p-2 absolute top-16 left-0 right-0 bg-gray-800 shadow-lg z-40">
                 <div class="flex relative search-container">
                     <input id="mobile-search-input" type="text" placeholder="ค้นหา..." class="flex-1 bg-gray-700 text-white rounded-l-full py-2 px-4 focus:outline-none">
@@ -1521,64 +1548,42 @@ function setupReportButtonListener() {
                         <i class="ri-close-line"></i>
                     </button>
                       <div id="mobile-search-dropdown" class="search-dropdown hidden w-full rounded-b-lg">
-                           <!-- Search results injected here -->
-                      </div>
+                           </div>
                 </div>
             </div>
         </nav>
         
-        <!-- Mobile Menu -->
         <div id="mobile-menu" class="md:hidden hidden">
             <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                <!-- Links are now hardcoded in HTML for instant display -->
-                <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
-                <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
-                <!-- (REMOVED) Mobile Admin Link -->
+                 <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
             </div>
         </div>
     </header>
-    <!-- (END MODIFIED HEADER) -->
-
-    <!-- Main Player Content -->
-    <!-- Loading State -->
     <div id="loading-player" class="flex items-center justify-center" style="min-height: 80vh;">
         <p class="text-2xl text-gray-400">กำลังโหลดเนื้อหา...</p>
     </div>
     
-    <!-- Content (Hidden by default) -->
     <div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
         
-        <!-- (NEW FIX 1) Broken Video Alert (Show/Hide in JS) -->
         <div id="broken-alert" class="hidden bg-red-800/80 border border-red-700 text-white p-3 rounded-lg mb-4 text-sm font-medium items-center">
             <i class="ri-error-warning-line mr-2"></i> วิดีโอสำหรับตอนนี้มีปัญหา (เสีย) กำลังรอการแก้ไขโดยผู้ดูแลระบบ.
         </div>
 
-        <!-- FLEX CONTAINER หลัก: เปลี่ยนจาก lg:flex-row เป็น flex-wrap เพื่อควบคุม order ได้ง่ายขึ้นบน Desktop -->
-        <!-- เราจะจัดเรียง 4 องค์ประกอบหลักใน container นี้ -->
         <div class="flex flex-wrap gap-6">
             
-            <!-- 1. Player & Info (วิดีโอและรายละเอียด) -->
             <div class="w-full lg:w-[calc(66.666%-12px)] order-1 lg:order-1">
-                <!-- Responsive Video Player Wrapper -->
-                <div class="video-aspect-wrapper rounded-lg overflow-hidden"> <!-- (MODIFIED) Removed mb-4 -->
-                    <div id="video-player-embed">
-                        <!-- Initial Loading state for player -->
+                <div class="video-aspect-wrapper rounded-lg overflow-hidden"> <div id="video-player-embed">
                         <div class="w-full h-full flex items-center justify-center bg-black">
                             <p class="text-gray-400">กำลังโหลดวิดีโอ...</p>
                         </div>
                     </div>
                 </div>
                 
-                <!-- (NEW) Next/Previous Buttons -->
-                <div id="video-nav-buttons" class="flex justify-between items-center mt-1"> <!-- (MODIFIED) Changed mt-2 to mt-1 and added items-center -->
-                    <button id="prev-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                <div id="video-nav-buttons" class="flex justify-between items-center mt-1"> <button id="prev-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="ri-arrow-left-s-line mr-1"></i>
                         ตอนก่อนหน้า
                     </button>
                     
-                    <!-- (NEW) Report Broken Video Button -->
                     <button id="report-broken-btn" class="flex items-center bg-gray-700 hover:bg-red-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="ri-error-warning-line mr-1"></i>
                         แจ้ง (เสีย)
@@ -1590,16 +1595,11 @@ function setupReportButtonListener() {
                     </button>
                 </div>
                 
-                <!-- Show Info -->
-                <div class="text-white mb-6 mt-4"> <!-- (MODIFIED) Added mt-4 for spacing -->
-                    <h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
+                <div class="text-white mb-6 mt-4"> <h1 id="show-title" class="text-3xl font-bold mb-2">...</h1>
                     
-                    <!-- (MODIFIED) Description Container -->
                     <div id="description-container">
-                        <!-- (REVISED) เพิ่ม line-clamp-2 กลับไปเป็นค่าเริ่มต้น -->
                         <p id="show-description" class="text-gray-300 transition-all duration-200 line-clamp-2">...</p>
                         
-                        <!-- (NEW) Expand/Collapse Button -->
                         <button id="expand-desc-btn" class="text-green-400 hover:text-green-300 font-medium text-sm mt-1 hidden flex items-center">
                             เพิ่มเติม <i class="ri-arrow-down-s-line align-middle"></i>
                         </button>
@@ -1607,36 +1607,26 @@ function setupReportButtonListener() {
                 </div>
             </div>
             
-            <!-- 2. รายการตอน (Episodes List) - ลำดับ 2 บนมือถือ -->
             <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-2 lg:order-2">
-                <section class="bg-gray-900/80 rounded-lg p-4"> <!-- (MODIFIED) เปลี่ยนเป็น bg-gray-900/80 -->
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
+                <section class="bg-gray-900/80 rounded-lg p-4"> <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">รายการตอน</h3>
                     <div id="episode-list-container" class="flex flex-wrap gap-2">
-                        <!-- Episode buttons injected by JS -->
                         <p class="text-gray-400">กำลังโหลดตอน...</p>
                     </div>
                 </section>
             </div>
             
-            <!-- 3. อนิเมะที่คุณอาจจะชอบ (Related Shows) - ลำดับ 3 บนมือถือ -->
             <div class="w-full lg:w-[calc(66.666%-12px)] order-3 lg:order-3">
-                <section class="bg-gray-900/80 rounded-lg p-4 mb-6"> <!-- (MODIFIED) เปลี่ยนเป็น bg-gray-900/80 -->
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">อนิเมะที่คุณอาจจะชอบ</h3>
+                <section class="bg-gray-900/80 rounded-lg p-4 mb-6"> <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">อนิเมะที่คุณอาจจะชอบ</h3>
                     <div id="related-list-container">
-                        <!-- Related videos injected by JS -->
                         <p class="text-gray-400">กำลังโหลดเรื่องแนะนำ...</p>
                     </div>
                 </section>
                 
-                <!-- (REMOVED) SECTION: ระบบคอมเมนต์ -->
-            </div>
+                </div>
             
-            <!-- 4. 10 อันดับอนิเมะยอดนิยม (Top 10 List) - ลำดับ 4 บนมือถือ -->
             <div class="w-full lg:w-[calc(33.333%-12px)] lg:max-w-md flex-shrink-0 order-4 lg:order-4">
-                <section class="bg-gray-900/80 rounded-lg p-4"> <!-- (MODIFIED) เปลี่ยนเป็น bg-gray-900/80 -->
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">10 อันดับอนิเมะยอดนิยม</h3>
+                <section class="bg-gray-900/80 rounded-lg p-4"> <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">10 อันดับอนิเมะยอดนิยม</h3>
                     <div id="top10-list-container" class="flex flex-col space-y-1">
-                        <!-- Top 10 cards injected by JS -->
                         <p class="text-gray-400">กำลังโหลด 10 อันดับ...</p>
                     </div>
                 </section>
