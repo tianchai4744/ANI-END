@@ -731,16 +731,47 @@
             }
             
             // อัปเดตปุ่มที่ active
+            let activeButton = null; // (NEW) Store the active button
             document.querySelectorAll('.ep-button').forEach(btn => {
                 if (btn.dataset.episodeId === episode.id) {
                     btn.classList.add('active');
+                    activeButton = btn; // (NEW) Assign it
                 } else {
                     btn.classList.remove('active');
                 }
             });
             
+            // (NEW) Auto-scroll episode list to active button
+            if (activeButton && episodeListContainer) {
+                // เราต้อง Scroll container ไม่ใช่ window
+                
+                // On mobile, the container scrolls horizontally
+                if (window.innerWidth < 1024) { // Mobile/Tablet (lg breakpoint)
+                    // คำนวณตำแหน่งกึ่งกลางสำหรับ scroll แนวนอน
+                    const containerWidth = episodeListContainer.clientWidth;
+                    const buttonLeft = activeButton.offsetLeft;
+                    const buttonWidth = activeButton.offsetWidth;
+                    
+                    episodeListContainer.scrollTo({
+                        left: buttonLeft - (containerWidth / 2) + (buttonWidth / 2),
+                        behavior: 'smooth'
+                    });
+
+                } else { // Desktop (lg:)
+                    // On desktop, the container scrolls vertically
+                    // คำนวณตำแหน่งกึ่งกลางสำหรับ scroll แนวตั้ง
+                    const containerHeight = episodeListContainer.clientHeight;
+                    const buttonTop = activeButton.offsetTop; // offsetTop จะสัมพันธ์กับ parent container
+                    const buttonHeight = activeButton.offsetHeight;
+                    
+                    episodeListContainer.scrollTo({
+                        top: buttonTop - (containerHeight / 2) + (buttonHeight / 2),
+                        behavior: 'smooth'
+                    });
+                }
+            }
+            
             // (NEW) เรียกใช้ฟังก์ชันบันทึกประวัติ
-            // เราจะเรียกใช้หลังจากทุกอย่างพร้อมแล้ว
             if (currentShow && userId) { // (FIX) ตรวจสอบ userId ก่อนเรียก
                  saveToHistory(episode);
             }
