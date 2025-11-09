@@ -715,6 +715,37 @@
             }
         }
         
+        // (NEW) Helper function to scroll the episode list to the active button
+        function scrollToActiveButton() {
+            const activeButton = episodeListContainer.querySelector('.ep-button.active');
+            
+            if (activeButton && episodeListContainer) {
+                // On mobile, the container scrolls horizontally
+                if (window.innerWidth < 1024) { // Mobile/Tablet (lg breakpoint)
+                    // We need to be in 'block' or 'inline-block' to measure offsetLeft
+                    const containerWidth = episodeListContainer.clientWidth;
+                    const buttonLeft = activeButton.offsetLeft;
+                    const buttonWidth = activeButton.offsetWidth;
+                    
+                    episodeListContainer.scrollTo({
+                        left: buttonLeft - (containerWidth / 2) + (buttonWidth / 2),
+                        behavior: 'smooth'
+                    });
+
+                } else { // Desktop (lg:)
+                    // On desktop, the container scrolls vertically
+                    const containerHeight = episodeListContainer.clientHeight;
+                    const buttonTop = activeButton.offsetTop; // offsetTop is relative to the container (since it's 'relative')
+                    const buttonHeight = activeButton.offsetHeight;
+                    
+                    episodeListContainer.scrollTo({
+                        top: buttonTop - (containerHeight / 2) + (buttonHeight / 2),
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        }
+        
         // (MODIFIED) ฟังก์ชันเล่นวิดีโอ (Must be async to check reports)
         async function playEpisode(episode) {
             console.log(`Playing: ${episode.title}`, episode.embedCode);
@@ -731,45 +762,20 @@
             }
             
             // อัปเดตปุ่มที่ active
-            let activeButton = null; // (NEW) Store the active button
+            // (REMOVED) let activeButton = null;
             document.querySelectorAll('.ep-button').forEach(btn => {
                 if (btn.dataset.episodeId === episode.id) {
                     btn.classList.add('active');
-                    activeButton = btn; // (NEW) Assign it
+                    // (REMOVED) activeButton = btn;
                 } else {
                     btn.classList.remove('active');
                 }
             });
             
-            // (NEW) Auto-scroll episode list to active button
-            if (activeButton && episodeListContainer) {
-                // เราต้อง Scroll container ไม่ใช่ window
-                
-                // On mobile, the container scrolls horizontally
-                if (window.innerWidth < 1024) { // Mobile/Tablet (lg breakpoint)
-                    // คำนวณตำแหน่งกึ่งกลางสำหรับ scroll แนวนอน
-                    const containerWidth = episodeListContainer.clientWidth;
-                    const buttonLeft = activeButton.offsetLeft;
-                    const buttonWidth = activeButton.offsetWidth;
-                    
-                    episodeListContainer.scrollTo({
-                        left: buttonLeft - (containerWidth / 2) + (buttonWidth / 2),
-                        behavior: 'smooth'
-                    });
-
-                } else { // Desktop (lg:)
-                    // On desktop, the container scrolls vertically
-                    // คำนวณตำแหน่งกึ่งกลางสำหรับ scroll แนวตั้ง
-                    const containerHeight = episodeListContainer.clientHeight;
-                    const buttonTop = activeButton.offsetTop; // offsetTop จะสัมพันธ์กับ parent container
-                    const buttonHeight = activeButton.offsetHeight;
-                    
-                    episodeListContainer.scrollTo({
-                        top: buttonTop - (containerHeight / 2) + (buttonHeight / 2),
-                        behavior: 'smooth'
-                    });
-                }
-            }
+            // (MODIFIED) Auto-scroll logic moved to its own function
+            // We call it with a timeout(0) to allow the DOM to render first,
+            // which ensures offsetTop and clientHeight are correct, especially on page load.
+            setTimeout(scrollToActiveButton, 0);
             
             // (NEW) เรียกใช้ฟังก์ชันบันทึกประวัติ
             if (currentShow && userId) { // (FIX) ตรวจสอบ userId ก่อนเรียก
