@@ -862,8 +862,8 @@
             
             episodes.forEach((ep, index) => {
                 const button = document.createElement('button');
-                // (MODIFIED) เพิ่ม lg:w-full เพื่อให้ปุ่มขยายเต็มช่อง grid
-                button.className = "ep-button w-12 h-12 flex-shrink-0 lg:w-full bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200";
+                // (MODIFIED) เพิ่ม lg:h-auto และ lg:aspect-square เพื่อให้ปุ่มเป็นสี่เหลี่ยมจัตุรัสที่ responsive
+                button.className = "ep-button w-12 h-12 flex-shrink-0 lg:w-full lg:h-auto lg:aspect-square bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200";
                 button.textContent = ep.episodeNumber || (index + 1);
                 button.dataset.episodeId = ep.id;
                 
