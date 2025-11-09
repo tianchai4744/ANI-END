@@ -176,7 +176,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, setLogLevel,
-            limit, orderBy, where, startAfter, getDocs 
+            limit, orderBy, where, getDocs 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config ***)
@@ -196,6 +196,7 @@
         let allShows = []; 
         let historyItems = []; 
         let allBanners = []; 
+        let allTags = []; // (MODIFIED) State for dynamic tags
         let heroSwiperInstance = null; 
         let isDataLoaded = false; 
         
@@ -283,14 +284,14 @@
                     checkInitialSearch();
                 }
                 
-                // (REMOVED) renderDynamicNav('home') call moved to DOMContentLoaded
+                renderDynamicNav('home'); // (FIX) Re-call to update links if data loaded after DOMContentLoaded
                 renderSections(); 
                 
             }, (error) => {
                 console.error("Error listening to shows:", error);
                 sectionsContainer.innerHTML = `<p class="text-center text-red-500">ไม่สามารถโหลดข้อมูลได้</p>`;
             });
-
+            
             // 2. Listener for Banners
             const bannerQuery = query(getCollectionRef("banners"), orderBy("updatedAt", "desc"));
             onSnapshot(bannerQuery, (snapshot) => {
@@ -306,6 +307,21 @@
                 if (loadingEl) {
                     loadingEl.innerHTML = '<p class="text-red-500">ไม่สามารถโหลดแบนเนอร์ได้</p>';
                 }
+            });
+            
+            // (NEW) 3. Listener for Tags
+            const tagQuery = query(getCollectionRef("tags"), orderBy("name"));
+            onSnapshot(tagQuery, (snapshot) => {
+                allTags = []; 
+                snapshot.forEach((doc) => {
+                    allTags.push(doc.data().name); // Store only the name for easy filtering/nav
+                });
+                console.log("Tags loaded:", allTags.length);
+                
+                // (NEW) Re-render navigation bar after tags are loaded
+                renderDynamicNav('home'); 
+            }, (error) => {
+                console.error("Error listening to tags:", error);
             });
         }
         
@@ -344,19 +360,41 @@
         function renderDynamicNav(activePageId = 'home') {
             if (!desktopNavLinks || !mobileNavLinks) return;
             
-            // 1. Reset all links to inactive state first (since they are hardcoded now)
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active', 'text-green-500');
-                link.classList.add('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            // 1. Reset/Clear existing links (except "Home" and "Admin")
+            desktopNavLinks.innerHTML = '';
+            mobileNavLinks.innerHTML = '';
+            
+            // 2. Add "Home" link manually
+            const homeLinkHtml = `<a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>`;
+            desktopNavLinks.innerHTML += homeLinkHtml;
+            mobileNavLinks.innerHTML += `<a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>`;
+            
+            // 3. Add Dynamic Tag Links
+            const sortedTags = [...allTags].sort((a, b) => a.localeCompare(b, 'th')); // Sort locally
+
+            sortedTags.forEach(tag => {
+                const tagLinkHtml = `
+                    <a href="grid.html?tag=${encodeURIComponent(tag)}" data-page="${tag}" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                        ${tag}
+                    </a>
+                `;
+                const tagLinkMobileHtml = `
+                    <a href="grid.html?tag=${encodeURIComponent(tag)}" data-page="${tag}" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                        ${tag}
+                    </a>
+                `;
+                desktopNavLinks.innerHTML += tagLinkHtml;
+                mobileNavLinks.innerHTML += tagLinkMobileHtml;
             });
             
-            // 2. Set the active link(s)
+            // 4. Add Admin Link (Mobile only)
+             mobileNavLinks.innerHTML += `<a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"><i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน</a>`;
+            
+            // 5. Set the active link(s)
             document.querySelectorAll(`.nav-link[data-page="${activePageId}"]`).forEach(link => {
                 link.classList.add('active', 'text-green-500');
                 link.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
             });
-
-            // The rest of the logic (creating links) is moved to HTML/CSS for faster rendering
         }
 
         // (KEEP) Swiper and Carousel Logic
@@ -454,6 +492,7 @@
             }
 
             // 3. "อนิเมะพากย์ไทย"
+            // (FIXED) Use dynamic tag name
             const thaiDubShows = allShows
                 .filter(s => (s.tags || []).includes('อนิเมะพากย์ไทย'))
                 .sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)) 
@@ -709,7 +748,6 @@
             initializeFirebase(); 
             
             // (NEW FIX) Set the active nav state IMMEDIATELY on load.
-            // This stops the "flicker" of the active (green) link.
             renderDynamicNav('home');
             
             if (mobileMenuBtn && mobileMenu) {
@@ -765,8 +803,6 @@
             if (searchFromUrl) {
                 initialQueryFromUrl = decodeURIComponent(searchFromUrl);
             } 
-            
-            // (REMOVED) renderDynamicNav('home') call (moved up)
         });
     </script>
     
@@ -783,12 +819,10 @@
                     
                     <!-- Desktop Nav Links (Secondary Navigation) -->
                     <div class="hidden md:block">
+                        <!-- (MODIFIED) Nav Links are now generated by JS -->
                         <div id="desktop-nav-links" class="ml-6 flex items-baseline space-x-4">
-                            <!-- Links are now hardcoded in HTML for instant display -->
                             <a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
-                            <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                            <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                            <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
+                            <!-- Dynamic Tags will be injected here -->
                         </div>
                     </div>
                 </div>
@@ -838,15 +872,8 @@
         <!-- Mobile Menu -->
         <div id="mobile-menu" class="md:hidden hidden">
             <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                <!-- Links are now hardcoded in HTML for instant display -->
-                <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
-                <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
-                <!-- ลิงก์ Admin สำหรับ Mobile -->
-                <a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
-                    <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
-                </a>
+                 <!-- Links are now DYNAMICALLY injected by JS -->
+                 <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
             </div>
         </div>
     </header>
