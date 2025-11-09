@@ -123,7 +123,7 @@
     }
 
  </style>
- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+ <!-- (FIXED) Removed incorrect CSS link for swiper bundle -->
 </head>
 <body class="bg-black text-gray-100">
 
@@ -179,8 +179,10 @@
         let searchDropdown;
         let mobileSearchInput;
         let mobileSearchDropdown;
-        let desktopNavLinks;
+        let desktopNavLinks; // Container for main nav (including home/admin button)
         let mobileNavLinks;
+        let desktopTagLinks; // (NEW) Container for dynamic tags
+        let mobileTagLinks; // (NEW) Container for dynamic tags
         
         let initialQueryFromUrl = null;
         let currentSearchQuery = null; 
@@ -325,37 +327,38 @@
             // (NEW LOGIC) Get the first dynamic tag if no specific tag is requested
             const defaultTag = allTags.length > 0 ? allTags[0] : 'อนิเมะ'; // Fallback to 'อนิเมะ' if no dynamic tags
             
+            // Render the full Nav bar now that allTags is loaded
+            let activePageId = 'home';
+            
             if (searchFromUrl) {
                 const query = decodeURIComponent(searchFromUrl);
                 currentSearchQuery = query;
                 performSearch(query);
-                renderDynamicNav('search-results'); 
+                activePageId = 'search-results'; 
             } else if (tagFromUrl) {
                 currentGridTag = decodeURIComponent(tagFromUrl);
                 initializeGridPaging(currentGridTag); 
-                renderDynamicNav(currentGridTag); 
+                activePageId = currentGridTag;
             } else {
                  // No tag or search specified, default to first dynamic tag
                  currentGridTag = defaultTag;
                  initializeGridPaging(currentGridTag); 
-                 renderDynamicNav(currentGridTag); 
+                 activePageId = currentGridTag;
             }
+            
+            // (FIX) Render dynamic links and set active state
+            renderDynamicNav(activePageId);
         }
 
         // --- Navigation Rendering (Adjusted for grid.html) ---
         function renderDynamicNav(activePageId) {
-            if (!desktopNavLinks || !mobileNavLinks) return;
+            if (!desktopTagLinks || !mobileTagLinks) return;
             
-            // 1. Reset/Clear existing links (except "Home" and "Admin")
-            desktopNavLinks.innerHTML = '';
-            mobileNavLinks.innerHTML = '';
+            // 1. Reset/Clear *only* the dynamic tag containers
+            desktopTagLinks.innerHTML = '';
+            mobileTagLinks.innerHTML = '';
             
-            // 2. Add "Home" link manually
-            const homeLinkHtml = `<a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>`;
-            desktopNavLinks.innerHTML += homeLinkHtml;
-            mobileNavLinks.innerHTML += `<a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>`;
-            
-            // 3. Add Dynamic Tag Links
+            // 2. Add Dynamic Tag Links
             const sortedTags = [...allTags].sort((a, b) => a.localeCompare(b, 'th')); // Sort locally
 
             sortedTags.forEach(tag => {
@@ -369,17 +372,22 @@
                         ${tag}
                     </a>
                 `;
-                desktopNavLinks.innerHTML += tagLinkHtml;
-                mobileNavLinks.innerHTML += tagLinkMobileHtml;
+                desktopTagLinks.innerHTML += tagLinkHtml;
+                mobileTagLinks.innerHTML += tagLinkMobileHtml;
             });
             
-            // 4. Add Admin Link (Mobile only)
-             mobileNavLinks.innerHTML += `<a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"><i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน</a>`;
-
-            // 5. Set the active link(s)
+            // 3. Set the active link(s)
+            
+            // Clear existing active state from all links in both static and dynamic sections
+            document.querySelectorAll(`.nav-link`).forEach(link => {
+                link.classList.remove('active', 'text-green-500');
+                link.classList.add('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            });
+            
+            // Apply active state
             let targetPageId = activePageId;
             if (activePageId === 'search-results') {
-                targetPageId = 'home';
+                targetPageId = 'home'; // Visually keep home active for search results
             }
             
             document.querySelectorAll(`.nav-link[data-page="${targetPageId}"]`).forEach(link => {
@@ -619,9 +627,11 @@
             mobileSearchInput = document.getElementById('mobile-search-input');
             mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
             
-            // (FIX) Re-select elements that were incorrectly referenced globally
-            desktopNavLinks = document.getElementById('desktop-nav-links');
-            mobileNavLinks = document.getElementById('mobile-nav-links');
+            // (FIX) Assign Dynamic Tag Containers
+            desktopTagLinks = document.getElementById('desktop-tag-links');
+            mobileTagLinks = document.getElementById('mobile-tag-links');
+            desktopNavLinks = document.getElementById('desktop-nav-links'); // Still needed for overall check
+            mobileNavLinks = document.getElementById('mobile-nav-links'); // Still needed for overall check
 
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
             const mobileMenu = document.getElementById('mobile-menu');
@@ -631,21 +641,9 @@
             
             initializeFirebase(); 
             
-            // (NEW FIX) Set the active nav state IMMEDIATELY based on the URL.
-            const urlParams = new URLSearchParams(window.location.search);
-            const tagFromUrl = urlParams.get('tag');
-            const searchFromUrl = urlParams.get('search'); 
+            // (REMOVED FIX) Removed the problematic initial renderDynamicNav(activePageId) call 
+            // The initial render will be handled by the checkInitialLoad (which runs after tags are loaded)
 
-            let activePageId = 'home'; // Default
-            if (searchFromUrl) {
-                activePageId = 'search-results'; // This will visually default to 'home'
-            } else if (tagFromUrl) {
-                activePageId = tagFromUrl;
-            } else {
-                activePageId = 'home'; 
-            }
-            renderDynamicNav(activePageId);
-            
             if (mobileMenuBtn && mobileMenu) {
                 mobileMenuBtn.addEventListener('click', () => {
                     mobileMenu.classList.toggle('hidden');
@@ -747,9 +745,15 @@
                     
                     <!-- Desktop Nav Links (Secondary Navigation) -->
                     <div class="hidden md:block">
-                        <div id="desktop-nav-links" class="ml-6 flex items-baseline space-x-4">
-                            <!-- Links are now DYNAMICALLY injected by JS -->
+                        <div class="ml-6 flex items-baseline space-x-4">
+                            <!-- STATIC: Home Link -->
                             <a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                            <!-- DYNAMIC: Container for Tags -->
+                            <!-- (NEW FIX: Added placeholder content to prevent flicker while loading tags) -->
+                            <div id="desktop-tag-links" class="flex items-baseline space-x-4">
+                                <div class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 animate-pulse w-20"></div>
+                                <div class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 animate-pulse w-24"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -798,9 +802,17 @@
         
         <!-- Mobile Menu -->
         <div id="mobile-menu" class="md:hidden hidden">
-            <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                 <!-- Links are now DYNAMICALLY injected by JS -->
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                 <!-- STATIC: Home Link -->
                  <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
+                 <!-- DYNAMIC: Container for Tags -->
+                 <div id="mobile-tag-links" class="space-y-1">
+                     <!-- Dynamic Tags and Admin link will be injected here -->
+                 </div>
+                 <!-- STATIC: Admin Link (Moved outside mobile-tag-links to avoid being cleared by JS) -->
+                 <a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                    <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
+                 </a>
             </div>
         </div>
     </header>
