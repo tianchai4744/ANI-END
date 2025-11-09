@@ -44,7 +44,8 @@
             onSnapshot, collection, query, serverTimestamp,
             setLogLevel, 
             where, getDocs, 
-            writeBatch 
+            writeBatch,
+            orderBy // <--- FIX: Added missing import for orderBy
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         
@@ -65,14 +66,15 @@
 
 
         let db, auth, userId;
-        let shows = []; // เก็บข้อมูลอนิเมะทั้งหมด
-        let allEpisodes = []; // (NEW) เก็บข้อมูลตอนทั้งหมด
-        let allReports = []; // (NEW) เก็บข้อมูลรายงานทั้งหมด
-        let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
+        let shows = []; 
+        let allEpisodes = []; 
+        let allReports = []; 
+        let allTags = []; // (MODIFIED) NEW state for all tags
+        let currentEditingId = null; 
 
         // (NEW) State for Bulk Selection
         let selectedEpisodes = new Set();
-        let selectedShows = new Set(); // (NEW) For Shows
+        let selectedShows = new Set(); 
         
         let currentConfirmCallback = null;
 
@@ -80,7 +82,6 @@
         function normalizeThai(text) {
             if (typeof text !== 'string') return text;
             // 1. ใช้ String.prototype.normalize('NFC') เพื่อให้มั่นใจว่าอักขระที่รวมกันถูกรวมให้เป็นรูปแบบเดียว
-            // NFC = Normalization Form C (Canonical Composition)
             let normalized = text.normalize('NFC'); 
             
             // 2. เนื่องจาก NFC อาจไม่ครอบคลุมการพิมพ์ผิดบางอย่าง, ให้ตรวจสอบการแทนที่แบบง่ายสำหรับ 'ำ'
@@ -88,7 +89,6 @@
             
             return normalized; 
         }
-        // (END NEW FUNCTION)
         
         // (FIX) เพิ่มฟังก์ชัน getCollectionRef ที่หายไปกลับเข้ามา
         function getCollectionRef(collectionName) {
@@ -107,21 +107,25 @@
         const showListView = document.getElementById('show-list-view');
         const bannerListView = document.getElementById('banner-list-view'); 
         const reportListView = document.getElementById('report-list-view'); 
+        const tagListView = document.getElementById('tag-list-view'); // (NEW) Tag List View
         
         const episodeTableBody = document.getElementById('episode-table-body');
         const showTableBody = document.getElementById('show-table-body');
         const bannerTableBody = document.getElementById('banner-table-body'); 
         const reportTableBody = document.getElementById('report-table-body'); 
+        const tagTableBody = document.getElementById('tag-table-body'); // (NEW) Tag Table Body
         
         const showEpisodeListBtn = document.getElementById('show-episode-list-btn');
         const showShowListBtn = document.getElementById('show-show-list-btn');
         const showBannerListBtn = document.getElementById('show-banner-list-btn');
         const showReportListBtn = document.getElementById('show-report-list-btn'); 
+        const showTagListBtn = document.getElementById('show-tag-list-btn'); // (NEW) Tag List Button
         
         // (NEW) Search Inputs
         let showSearchInput;
         let episodeSearchInput;
-        let reportSearchInput; // (NEW FIX 2) Report Search Input
+        let reportSearchInput; 
+        let tagSearchInput; // (NEW) Tag Search Input
 
         // Modal: Episode
         const episodeModal = document.getElementById('episode-modal');
@@ -144,6 +148,7 @@
         const showThumbnailInput = document.getElementById('show-thumbnail');
         const showViewCountInput = document.getElementById('show-view-count'); 
         const showCompletedCheckbox = document.getElementById('show-completed-checkbox'); 
+        const showTagCheckboxesContainer = document.getElementById('show-tag-checkboxes'); // (NEW) Tag Checkbox Container
         const closeShowModalBtn = document.getElementById('close-show-modal');
         const addShowBtn = document.getElementById('add-show-btn');
         const deleteShowBtn = document.getElementById('delete-show-btn');
@@ -157,6 +162,15 @@
         const closeBannerModalBtn = document.getElementById('close-banner-modal');
         const addBannerBtn = document.getElementById('add-banner-btn');
         const deleteBannerBtn = document.getElementById('delete-banner-btn');
+        
+        // (NEW) Modal: Tag
+        const tagModal = document.getElementById('tag-modal');
+        const tagModalTitle = document.getElementById('tag-modal-title');
+        const tagForm = document.getElementById('tag-form');
+        const tagNameInput = document.getElementById('tag-name-input');
+        const closeTagModalBtn = document.getElementById('close-tag-modal');
+        const addTagBtn = document.getElementById('add-tag-btn');
+        const deleteTagBtn = document.getElementById('delete-tag-btn');
         
         // (NEW) Bulk Action UI Elements (Episodes)
         const bulkActionBarEpisodes = document.getElementById('bulk-action-bar-episodes');
@@ -198,7 +212,6 @@
                         console.log("Anonymous user signed out, showing admin login.");
                         showLoginView();
                     } else {
-                         // (REMOVED) Token check, as admin should only use Email/Pass
                          console.log("No admin user. Showing login form.");
                          showLoginView();
                     }
@@ -295,7 +308,6 @@
                 console.error("Error updating max episode:", error);
             }
         }
-        // (END NEW FUNCTION)
         
         // (FIX) Render Function for Shows Table (ฟังก์ชันนี้หายไป)
         function renderShowTable() {
@@ -555,14 +567,64 @@
             }
             console.log("Badge updated. Total To-Do Items:", totalTodoCount);
         }
-        // (END NEW FUNCTION)
+        
+        // (NEW FUNCTION) Render Tags Table
+        function renderTagTable() {
+            if (!tagTableBody) return;
+            
+            const searchQuery = tagSearchInput ? normalizeThai(tagSearchInput.value).toLowerCase() : '';
+            
+            const filteredTags = allTags.filter(tag => 
+                normalizeThai(tag.name).toLowerCase().includes(searchQuery)
+            );
+
+            let tableHtml = '';
+            
+            if (filteredTags.length === 0) {
+                tableHtml = `
+                    <tr>
+                        <td colspan="2" class="py-6 px-4 text-center text-gray-400">
+                            ไม่พบ Tags
+                        </td>
+                    </tr>
+                `;
+            } else {
+                filteredTags.forEach((tag) => {
+                    tableHtml += `
+                        <tr class="border-b border-gray-700 hover:bg-gray-700">
+                            <td class="py-3 px-4">${tag.name}</td>
+                            <td class="py-3 px-4 w-24">
+                                <button class="text-green-400 hover:text-green-300 edit-tag-btn" data-id="${tag.id}">แก้ไข</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            tagTableBody.innerHTML = tableHtml;
+        }
 
 
         async function setupListeners() {
-            // 1. Listen to Shows (อนิเมะ)
+            // 1. Listen to Tags (Tags)
+            const tagQuery = query(getCollectionRef("tags"), orderBy("name"));
+            onSnapshot(tagQuery, (snapshot) => {
+                allTags = [];
+                snapshot.forEach((doc) => {
+                    allTags.push({ id: doc.id, ...doc.data() });
+                });
+                
+                console.log("Tags loaded:", allTags.length);
+                renderTagTable(); // Render Tag List
+                renderShowModalTagCheckboxes(); // Update Show Modal Checkboxes
+                renderShowTable(); // Re-render Show list (to use new tags)
+                
+            }, (error) => console.error("Error listening to tags:", error));
+
+            // 2. Listen to Shows (อนิเมะ)
             const showQuery = query(getCollectionRef("shows"));
             onSnapshot(showQuery, (snapshot) => {
-                shows = []; // (MODIFIED) Store in global array
+                shows = []; 
                 
                 const showSelectHtml = '<option value="">-- เลือกอนิเมะ --</option>';
                 let episodeOptions = showSelectHtml;
@@ -572,7 +634,6 @@
                     const data = doc.data();
                     shows.push({ id: doc.id, ...data });
                     
-                    // (MODIFIED) Logic to build dropdowns remains here
                     const option = `<option value="${doc.id}">${data.title}</option>`;
                     episodeOptions += option;
                     bannerOptions += option; 
@@ -583,32 +644,26 @@
 
                 console.log("Shows loaded:", shows.length);
                 
-                // (NEW) Call render function
                 renderShowTable();
-                renderReportTable(); // Re-render reports
-                updateReportBadge(); // Update badge 
+                renderReportTable(); 
+                updateReportBadge(); 
                 
             }, (error) => console.error("Error listening to shows:", error));
 
-            // 2. Listen to Episodes (ตอน)
+            // 3. Listen to Episodes (ตอน)
             const episodeQuery = query(getCollectionRef("episodes"));
             onSnapshot(episodeQuery, (snapshot) => {
-                allEpisodes = []; // (NEW) Store in global array
+                allEpisodes = []; 
                 
                 const changedShowIds = new Set();
                 
-                // (FIX) แก้ไขตรรกะที่ทำให้เกิด Error
                 snapshot.docChanges().forEach((change) => {
-                    // (FIX) ตรวจสอบข้อมูลก่อน
                     const showId = change.doc.data()?.showId;
-                    if (!showId) return; // ถ้าไม่มี showId ก็ข้าม
+                    if (!showId) return; 
 
                     if (change.type === 'added' || change.type === 'removed') {
-                        // ถ้ามีการเพิ่มหรือลบตอนใหม่, ให้อัปเดต max episode เสมอ
                         changedShowIds.add(showId);
                     } else if (change.type === 'modified') {
-                        // ถ้ามีการแก้ไข, ให้อัปเดตเฉพาะเมื่อ episodeNumber เปลี่ยนไป
-                        // (FIX) ต้องตรวจสอบว่า oldDoc มีอยู่จริงก่อน (ซึ่งควรจะมีใน 'modified')
                         const oldEpNum = change.oldDoc?.data()?.episodeNumber;
                         const newEpNum = change.doc.data()?.episodeNumber;
                         
@@ -629,17 +684,15 @@
                 
                 console.log("Episodes loaded:", allEpisodes.length);
                 
-                // (NEW) Call render function
                 renderEpisodeTable();
-                renderReportTable(); // Re-render reports
-                updateReportBadge(); // <--- NEW: Update badge when episodes change (FIX FOR USER ISSUE)
+                renderReportTable(); 
+                updateReportBadge(); 
                 
             }, (error) => console.error("Error listening to episodes:", error));
 
-            // 3. Listen to Banners
+            // 4. Listen to Banners
             const bannerQuery = query(getCollectionRef("banners"));
             onSnapshot(bannerQuery, (snapshot) => {
-                // (MODIFIED) This doesn't need filtering, so we render directly
                 if (bannerTableBody) bannerTableBody.innerHTML = '';
                 snapshot.forEach((doc) => {
                     const data = doc.data();
@@ -662,7 +715,7 @@
                 console.log("Banners loaded:", snapshot.size);
             }, (error) => console.error("Error listening to banners:", error));
 
-            // 4. Listen to Reports
+            // 5. Listen to Reports
             const reportQuery = query(getCollectionRef("reports"));
             onSnapshot(reportQuery, (snapshot) => {
                 allReports = [];
@@ -671,9 +724,7 @@
                 });
                 
                 console.log("Reports loaded:", allReports.length);
-                renderReportTable(); // (NEW) เรียกใช้ฟังก์ชัน render
-                
-                // (MODIFIED) Replaced inline logic with helper function
+                renderReportTable(); 
                 updateReportBadge();
 
             }, (error) => console.error("Error listening to reports:", error));
@@ -685,11 +736,13 @@
             if (showListView) showListView.classList.add('hidden');
             if (bannerListView) bannerListView.classList.add('hidden'); 
             if (reportListView) reportListView.classList.add('hidden'); 
+            if (tagListView) tagListView.classList.add('hidden'); // (NEW) Hide Tag View
 
             if (showEpisodeListBtn) showEpisodeListBtn.classList.remove('bg-gray-900', 'text-white');
             if (showShowListBtn) showShowListBtn.classList.remove('bg-gray-900', 'text-white');
             if (showBannerListBtn) showBannerListBtn.classList.remove('bg-gray-900', 'text-white'); 
             if (showReportListBtn) showReportListBtn.classList.remove('bg-gray-900', 'text-white'); 
+            if (showTagListBtn) showTagListBtn.classList.remove('bg-gray-900', 'text-white'); // (NEW) Deactivate Tag Button
 
             if (viewId === 'episode') {
                 if (episodeListView) episodeListView.classList.remove('hidden');
@@ -703,15 +756,18 @@
             } else if (viewId === 'report') { 
                 if (reportListView) reportListView.classList.remove('hidden');
                 if (showReportListBtn) showReportListBtn.classList.add('bg-gray-900', 'text-white');
+            } else if (viewId === 'tag') { // (NEW) Show Tag View
+                if (tagListView) tagListView.classList.remove('hidden');
+                if (showTagListBtn) showTagListBtn.classList.add('bg-gray-900', 'text-white');
             }
             
-            // (NEW) เพิ่มบรรทัดนี้เพื่ออัปเดต URL hash
             window.location.hash = viewId;
         }
         if (showEpisodeListBtn) showEpisodeListBtn.addEventListener('click', () => switchView('episode'));
         if (showShowListBtn) showShowListBtn.addEventListener('click', () => switchView('show'));
         if (showBannerListBtn) showBannerListBtn.addEventListener('click', () => switchView('banner')); 
         if (showReportListBtn) showReportListBtn.addEventListener('click', () => switchView('report')); 
+        if (showTagListBtn) showTagListBtn.addEventListener('click', () => switchView('tag')); // (NEW) Tag Button Listener
 
         
         // (NEW) Event Listeners for Report Actions
@@ -728,37 +784,31 @@
                         
                         const docRef = doc(getCollectionRef("episodes"), episodeId);
                         await updateDoc(docRef, { status: 'broken' });
-                        // onSnapshot จะ re-render ให้อัตโนมัติ (เพราะ allEpisodes จะเปลี่ยน)
+                        // onSnapshot will re-render
                         console.log(`Episode ${episodeId} marked as broken.`);
                     }
                     
                     // (MODIFIED) Action 2: Go to Edit Episode (ปรับปรุงตรรกะ)
                     else if (target.classList.contains('goto-episode-btn')) {
                         const episodeId = target.dataset.episodeId;
-                        const reportId = target.dataset.reportId; // (NEW) ดึง reportId (อาจจะเป็น "" (สตริงว่าง) ถ้าไม่มี)
+                        const reportId = target.dataset.reportId; 
                         
                         if (!episodeId) return;
                         
-                        // ใช้ Logic เดิมจากตาราง Episode (ดึงข้อมูลและเปิด Modal)
                         const docRef = doc(getCollectionRef("episodes"), episodeId);
                         const docSnap = await getDoc(docRef);
                         
                         if (docSnap.exists()) {
-                            // กรณีที่ 1: ตอนยังอยู่ -> เปิดหน้าแก้ไขตอนนั้น
                             openEpisodeModal('edit', docSnap.data(), episodeId);
                         } else {
-                            // กรณีที่ 2: ตอนถูกลบไปแล้ว (N/A)
-                            // เคสนี้จะต้องมี reportId ถึงจะทำงานได้
-                            if (!reportId || reportId === "") { // (FIX) ตรวจสอบ string ว่างด้วย
+                            if (!reportId || reportId === "") { 
                                 console.error("Cannot resolve N/A item without a reportId.");
                                 return;
                             }
                             console.warn(`Episode ${episodeId} not found. Opening 'Add New Episode' modal and resolving report ${reportId}.`);
 
-                            // 1. เปิดหน้าต่าง "เพิ่มตอนใหม่"
                             openEpisodeModal('add');
                             
-                            // 2. ยืนยันและลบรายงานเก่าที่อ้างอิงถึงตอนที่ไม่มีอยู่แล้ว
                             openConfirmModal(`"ตอน" ที่ถูกอ้างอิง (ID: ${episodeId}) ถูกลบไปแล้ว ระบบจะเปิดหน้า "เพิ่มตอนใหม่" ให้แทน และจะลบรายงานเก่านี้ทิ้ง`, 
                                 async () => {
                                     try {
@@ -779,12 +829,10 @@
                         const reportId = target.dataset.reportId;
                         if (!reportId) return;
 
-                        // ยืนยันก่อนลบ (ใช้ Modal เดิม)
                         openConfirmModal(`คุณแน่ใจหรือไม่ว่าจัดการปัญหานี้ และต้องการลบรายงานนี้?`, 
                             async () => {
                                 try {
                                     await deleteDoc(doc(getCollectionRef("reports"), reportId));
-                                    // onSnapshot ของ reports จะ re-render ให้อัตโนมัติ
                                     console.log(`Report ${reportId} resolved and deleted.`);
                                 } catch (error) {
                                     console.error("Error resolving report: ", error);
@@ -800,13 +848,10 @@
                         const episodeId = target.dataset.episodeId;
                         if (!episodeId) return;
 
-                        // นี่คือตอนที่ถูก Mark 'broken' โดยตรง (เช่น จาก player.html)
-                        // เราแค่ล้างสถานะ 'broken'
                         openConfirmModal(`คุณแน่ใจหรือไม่ว่าจัดการปัญหานี้แล้ว และต้องการล้างสถานะ "เสีย" (Broken)?`, 
                             async () => {
                                 try {
                                     const docRef = doc(getCollectionRef("episodes"), episodeId);
-                                    // ตั้งค่า status เป็น null (หรือ 'active')
                                     await updateDoc(docRef, { status: null });
                                     console.log(`Cleared broken status for ${episodeId}.`);
                                 } catch (error) {
@@ -840,7 +885,6 @@
         }
 
         // (NEW) Update UI based on selection (Episodes)
-        // (MODIFIED) Pass totalRows to avoid querying DOM
         function updateBulkActionUIEpisodes(totalRows) {
             if (!bulkActionBarEpisodes || !selectedEpisodesCount || !episodeSelectAll) return;
 
@@ -870,7 +914,6 @@
         }
         
         // (NEW) Update UI based on selection (Shows)
-        // (MODIFIED) Pass totalRows to avoid querying DOM
         function updateBulkActionUIShows(totalRows) {
             if (!bulkActionBarShows || !selectedShowsCount || !showSelectAll) return;
 
@@ -904,7 +947,6 @@
         if (episodeSelectAll) {
             episodeSelectAll.addEventListener('change', (e) => {
                 const isChecked = e.target.checked;
-                // (MODIFIED) Select only visible rows
                 const rowCheckboxes = document.querySelectorAll('.episode-row-checkbox');
                 
                 rowCheckboxes.forEach(checkbox => {
@@ -925,7 +967,6 @@
         if (showSelectAll) {
             showSelectAll.addEventListener('change', (e) => {
                 const isChecked = e.target.checked;
-                // (MODIFIED) Select only visible rows
                 const rowCheckboxes = document.querySelectorAll('.show-row-checkbox');
                 
                 rowCheckboxes.forEach(checkbox => {
@@ -986,9 +1027,7 @@
                         try {
                             // 1. Find all affected show IDs *before* deleting
                             const affectedShowIds = new Set();
-                            const docsToGet = [];
                             selectedEpisodes.forEach(id => {
-                                // (FIX) Find from local array instead of re-fetching
                                 const ep = allEpisodes.find(e => e.id === id);
                                 if (ep) {
                                     affectedShowIds.add(ep.showId);
@@ -1013,7 +1052,6 @@
                             });
                             
                             // 5. Clear selection and hide bar
-                            // (Snapshot will auto-refresh the list)
                             selectedEpisodes.clear();
                             updateBulkActionUIEpisodes(0);
                             
@@ -1058,7 +1096,6 @@
                             
                         } catch (error) {
                             console.error("Error during bulk show delete:", error);
-                            // In a real app, show a message box error
                         } finally {
                             closeConfirmModal();
                         }
@@ -1084,18 +1121,45 @@
 
 
         // --- Show (อนิเมะ) Modal Logic ---
+        function renderShowModalTagCheckboxes() {
+            if (!showTagCheckboxesContainer) return;
+            
+            let html = '';
+            // (NEW) Sort tags alphabetically
+            const sortedTags = [...allTags].sort((a, b) => a.name.localeCompare(b.name, 'th')); 
+            
+            sortedTags.forEach(tag => {
+                // We use the tag.name as the checkbox value for simplicity
+                html += `
+                    <label class="flex items-center space-x-2 text-gray-200">
+                        <input type="checkbox" value="${tag.name}" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
+                        <span>${tag.name}</span>
+                    </label>
+                `;
+            });
+            
+            // Add a mandatory default if no tags exist
+            if (sortedTags.length === 0) {
+                 html = '<p class="text-sm text-red-400">** ไม่พบ Tags! กรุณาเพิ่ม Tags ในหน้าจัดการ Tags ก่อน **</p>';
+            }
+            
+            showTagCheckboxesContainer.innerHTML = html;
+        }
+
         function openShowModal(mode, showData = {}, showId = null) {
             currentEditingId = showId;
             
+            // 1. Reset/Set default values
             if (mode === 'add') {
                 if (showModalTitle) showModalTitle.textContent = "เพิ่มอนิเมะใหม่";
                 if (showForm) showForm.reset();
                 if (showViewCountInput) showViewCountInput.value = 0; 
                 if (showCompletedCheckbox) showCompletedCheckbox.checked = false; 
-                document.querySelectorAll('.show-tag-option').forEach(checkbox => {
+                if (deleteShowBtn) deleteShowBtn.classList.add('hidden');
+                // Ensure all checkboxes are unchecked for ADD mode
+                document.querySelectorAll('#show-tag-checkboxes input[type="checkbox"]').forEach(checkbox => {
                     checkbox.checked = false;
                 });
-                if (deleteShowBtn) deleteShowBtn.classList.add('hidden');
             } else {
                 if (showModalTitle) showModalTitle.textContent = "แก้ไขอนิเมะ";
                 if (showTitleInput) showTitleInput.value = showData.title || '';
@@ -1103,13 +1167,13 @@
                 if (showThumbnailInput) showThumbnailInput.value = showData.thumbnailUrl || '';
                 if (showViewCountInput) showViewCountInput.value = showData.viewCount || 0; 
                 if (showCompletedCheckbox) showCompletedCheckbox.checked = showData.isCompleted === true; 
-                
+                if (deleteShowBtn) deleteShowBtn.classList.remove('hidden');
+
+                // 2. Set tag checkboxes based on existing data
                 const tags = showData.tags || [];
-                document.querySelectorAll('.show-tag-option').forEach(checkbox => {
+                document.querySelectorAll('#show-tag-checkboxes input[type="checkbox"]').forEach(checkbox => {
                     checkbox.checked = tags.includes(checkbox.value);
                 });
-
-                if (deleteShowBtn) deleteShowBtn.classList.remove('hidden');
             }
             if (showModal) showModal.classList.add('flex');
         }
@@ -1121,13 +1185,12 @@
                 e.preventDefault();
                 
                 let tagsArray = [];
-                document.querySelectorAll('.show-tag-option:checked').forEach(checkbox => {
+                document.querySelectorAll('#show-tag-checkboxes input[type="checkbox"]:checked').forEach(checkbox => {
                     tagsArray.push(checkbox.value);
                 });
-                if (tagsArray.length === 0) {
-                    tagsArray.push('อนิเมะ');
-                }
                 
+                // (MODIFIED) Removed default 'อนิเมะ' push. If no tag is selected, it should be an empty array or the admin must select one.
+
                 const isCompletedByAdmin = showCompletedCheckbox.checked; 
                 
                 const showData = {
@@ -1295,13 +1358,12 @@
                     embedCode: embedCodeToSave, 
                     showId: episodeShowSelect.value,
                     updatedAt: serverTimestamp()
-                    // (NEW) If episode is being edited (and status was broken), clear status
                 };
                 
                 if (currentEditingId) {
                     const oldData = allEpisodes.find(ep => ep.id === currentEditingId);
                     if (oldData && oldData.status === 'broken') {
-                        episodeData.status = null; // หรือ deleteField() แต่ null ก็ใช้ได้
+                        episodeData.status = null; 
                         console.log("Cleared 'broken' status after edit.");
                     }
                 }
@@ -1460,6 +1522,107 @@
                 }
             });
         }
+        
+        // --- (NEW) Tag Modal Logic ---
+        function openTagModal(mode, tagData = {}, tagId = null) {
+            currentEditingId = tagId;
+            if (mode === 'add') {
+                if (tagModalTitle) tagModalTitle.textContent = "เพิ่ม Tag ใหม่";
+                if (tagForm) tagForm.reset();
+                if (deleteTagBtn) deleteTagBtn.classList.add('hidden');
+            } else {
+                if (tagModalTitle) tagModalTitle.textContent = "แก้ไข Tag";
+                if (tagNameInput) tagNameInput.value = tagData.name || '';
+                if (deleteTagBtn) deleteTagBtn.classList.remove('hidden');
+            }
+            if (tagModal) tagModal.classList.add('flex');
+        }
+        if (addTagBtn) addTagBtn.addEventListener('click', () => openTagModal('add'));
+        if (closeTagModalBtn) closeTagModalBtn.addEventListener('click', () => tagModal.classList.remove('flex'));
+        
+        if (tagForm) {
+            tagForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const tagName = tagNameInput.value.trim();
+                
+                if (!tagName) {
+                    console.error("Tag name is required.");
+                    return;
+                }
+                
+                // Simple slug generation (using name)
+                const tagData = {
+                    name: tagName,
+                    slug: tagName.toLowerCase().replace(/\s/g, '-'), 
+                    updatedAt: serverTimestamp()
+                };
+
+                try {
+                    if (currentEditingId) {
+                        const docRef = doc(getCollectionRef("tags"), currentEditingId);
+                        await updateDoc(docRef, tagData);
+                    } else {
+                        tagData.createdAt = serverTimestamp();
+                        await addDoc(getCollectionRef("tags"), tagData);
+                    }
+                    if (tagForm) tagForm.reset();
+                    if (tagModal) tagModal.classList.remove('flex');
+                } catch (error) {
+                    console.error("Error saving tag: ", error);
+                }
+            });
+        }
+
+        if (deleteTagBtn) {
+            deleteTagBtn.addEventListener('click', async () => {
+                if (!currentEditingId) return;
+                
+                // (NEW) Check if any shows are using this tag
+                const tagName = tagNameInput.value.trim();
+                const showsUsingTagQuery = query(getCollectionRef("shows"), where("tags", "array-contains", tagName));
+                const showsUsingTagSnapshot = await getDocs(showsUsingTagQuery);
+                
+                if (!showsUsingTagSnapshot.empty) {
+                    // (NEW) If shows are using it, warn and prevent deletion
+                    openConfirmModal(`**ไม่สามารถลบได้!** มีอนิเมะ ${showsUsingTagSnapshot.size} เรื่องที่กำลังใช้ Tag "${tagName}" นี้อยู่ คุณต้องแก้ไขอนิเมะเหล่านั้นก่อน`, 
+                        closeConfirmModal
+                    );
+                    return;
+                }
+
+
+                openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบ Tag นี้?`,
+                    async () => {
+                        try {
+                            await deleteDoc(doc(getCollectionRef("tags"), currentEditingId));
+                            if (tagModal) tagModal.classList.remove('flex');
+                        } catch (error) {
+                            console.error("Error deleting tag: ", error);
+                        } finally {
+                            closeConfirmModal();
+                        }
+                    }
+                );
+            });
+        }
+        
+        if (tagTableBody) {
+            tagTableBody.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('edit-tag-btn')) {
+                    const tagId = e.target.dataset.id;
+                    try {
+                        const docRef = doc(getCollectionRef("tags"), tagId);
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                            openTagModal('edit', docSnap.data(), tagId);
+                        }
+                    } catch (error) {
+                        console.error("Error fetching tag for edit:", error);
+                    }
+                }
+            });
+        }
+        // --- (END NEW) Tag Modal Logic ---
 
 
         // Initialize
@@ -1467,7 +1630,8 @@
             // (NEW) Get search inputs
             showSearchInput = document.getElementById('show-search-input');
             episodeSearchInput = document.getElementById('episode-search-input');
-            reportSearchInput = document.getElementById('report-search-input'); // (NEW FIX 2)
+            reportSearchInput = document.getElementById('report-search-input');
+            tagSearchInput = document.getElementById('tag-search-input'); // (NEW)
 
             // (NEW) Add search listeners
             if (showSearchInput) {
@@ -1476,8 +1640,11 @@
             if (episodeSearchInput) {
                 episodeSearchInput.addEventListener('input', renderEpisodeTable);
             }
-            if (reportSearchInput) { // (NEW FIX 2) Add listener for report search
+            if (reportSearchInput) { 
                 reportSearchInput.addEventListener('input', renderReportTable);
+            }
+            if (tagSearchInput) { // (NEW)
+                tagSearchInput.addEventListener('input', renderTagTable);
             }
             
             if (episodeNumberInput && episodeTitleInput) {
@@ -1491,18 +1658,14 @@
                 });
             }
             
-            // (MODIFIED) เพิ่มตรรกะการอ่าน Hash ตอนโหลดหน้า
-            // (NEW) Read the hash from the URL to determine the initial view
-            let initialViewId = 'show'; // Default to 'show' (Anime)
+            let initialViewId = 'show'; 
             const hash = window.location.hash;
             if (hash) {
-                const viewIdFromHash = hash.substring(1); // Remove '#'
-                // Validate if it's one of our known view IDs
-                if (['episode', 'show', 'banner', 'report'].includes(viewIdFromHash)) {
+                const viewIdFromHash = hash.substring(1); 
+                if (['episode', 'show', 'banner', 'report', 'tag'].includes(viewIdFromHash)) { // (MODIFIED) Add 'tag'
                     initialViewId = viewIdFromHash;
                 }
             }
-            // Call switchView ONCE on load to set the correct view
             switchView(initialViewId); 
 
             initializeFirebase();
@@ -1554,44 +1717,43 @@
             
             <!-- (NEW) Row 2: Navigation -->
             <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-                <!-- (MOVED) Horizontal Navigation -->
-                <!-- (NEW) Added border-t border-gray-700/50 for separation -->
                 <nav class="flex flex-row space-x-2 pt-2 pb-3 border-t border-gray-700/50 overflow-x-auto">
-                    <!-- (MODIFIED) 1. Banner Button (Now inactive) -->
+                    <!-- 1. Banner Button -->
                     <button id="show-banner-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
                         <i class="ri-image-line"></i>
                         <span>แบนเนอร์ (Banner)</span>
                     </button>
-                    <!-- (MODIFIED) 2. Show Button (Renamed, (MODIFIED) ลบ class active เริ่มต้นออก) -->
+                    <!-- 2. Show Button -->
                     <button id="show-show-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
                         <i class="ri-play-list-line"></i>
                         <span>อนิเมะ (Anime)</span>
                     </button>
-                    <!-- (MODIFIED) 3. Episode Button (Now inactive) -->
+                    <!-- 3. Episode Button -->
                     <button id="show-episode-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 font-medium flex-shrink-0">
                         <i class="ri-movie-2-line"></i>
                         <span>ตอน (Episodes)</span>
                     </button>
-                    <!-- (MODIFIED) 4. Report Button (เพิ่ม relative และป้าย Badge) -->
+                    <!-- 4. Report Button -->
                     <button id="show-report-list-btn" class="relative flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 font-medium flex-shrink-0">
                         <i class="ri-flag-line"></i>
                         <span>รายงาน (Reports)</span>
-                        <!-- (NEW) Notification Badge (เหมือนในรูปภาพ) -->
                         <span id="report-count-badge" class="hidden absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-gray-800">
                             0
                         </span>
+                    </button>
+                    <!-- (NEW) 5. Tags Button -->
+                    <button id="show-tag-list-btn" class="relative flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 font-medium flex-shrink-0">
+                        <i class="ri-price-tag-3-line"></i>
+                        <span>Tags</span>
                     </button>
                 </nav>
             </div>
         </header>
 
-        <!-- (MODIFIED) Main Content Area (Sidebar Removed) -->
-        <!-- (NEW) Added 'relative' for sticky bar positioning -->
-        <!-- (MODIFIED) Increased sticky top to 125px to account for new menu bar height -->
+        <!-- (MODIFIED) Main Content Area -->
         <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 relative">
             
             <!-- (NEW) Bulk Action Bar (Episodes) -->
-            <!-- This bar is sticky and will appear *under* the header when items are selected -->
             <div id="bulk-action-bar-episodes" class="hidden sticky top-[125px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     <span id="selected-episodes-count" class="font-bold text-white">เลือก 0 รายการ</span>
@@ -1615,10 +1777,9 @@
 
 
             <!-- Main Content Area -->
-            <!-- (REMOVED) ml-8 class -->
             <main class="flex-1">
 
-                <!-- (MODIFIED) 1. Banner List View (Ensured 'hidden' is present) -->
+                <!-- 1. Banner List View -->
                 <div id="banner-list-view" class="hidden">
                     <div class="flex justify-between items-center mb-6">
                         <h2 class="text-3xl font-bold text-white">รายการแบนเนอร์ (Banner)</h2>
@@ -1644,13 +1805,11 @@
                     </div>
                 </div>
 
-                <!-- (MODIFIED) 2. Show List View ((MODIFIED) เพิ่ม class 'hidden') -->
+                <!-- 2. Show List View -->
                 <div id="show-list-view" class="hidden">
-                    <!-- (MODIFIED) Header with Search -->
                     <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
                         <h2 class="text-3xl font-bold text-white">รายการอนิเมะ (Anime)</h2>
                         <div class="flex items-center space-x-4">
-                            <!-- (NEW) Show Search Input -->
                             <input type="text" id="show-search-input" placeholder="ค้นหาอนิเมะ..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <button id="add-show-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
                                 <i class="ri-add-line"></i>
@@ -1659,7 +1818,6 @@
                         </div>
                     </div>
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
-                        <!-- (MODIFIED) Added table-fixed and th widths -->
                         <table class="w-full table-fixed min-w-[768px]">
                             <thead class="bg-gray-900">
                                 <tr>
@@ -1669,7 +1827,6 @@
                                     <th class="w-32 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ปก</th>
                                     <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อเรื่อง</th>
                                     <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
-                                    <!-- (MODIFIED) เพิ่ม Header ยอดเข้าชม -->
                                     <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase">ยอดเข้าชม</th>
                                     <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
                                 </tr>
@@ -1681,13 +1838,11 @@
                     </div>
                 </div>
                 
-                <!-- (FIXED) 3. Episode List View (Restored and set to 'hidden') -->
+                <!-- 3. Episode List View -->
                 <div id="episode-list-view" class="hidden">
-                    <!-- (MODIFIED) Header with Search -->
                     <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
                         <h2 class="text-3xl font-bold text-white">รายการตอน</h2>
                         <div class="flex items-center space-x-4">
-                            <!-- (NEW) Episode Search Input -->
                             <input type="text" id="episode-search-input" placeholder="ค้นหาตอน หรือ ชื่อเรื่อง..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
                             <button id="add-episode-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
                                 <i class="ri-add-line"></i>
@@ -1696,7 +1851,6 @@
                         </div>
                     </div>
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
-                        <!-- (MODIFIED) Added table-fixed and th widths -->
                         <table class="w-full table-fixed min-w-[768px]">
                             <thead class="bg-gray-900">
                                 <tr>
@@ -1716,9 +1870,8 @@
                     </div>
                 </div>
 
-                <!-- (NEW) 4. Report List View -->
+                <!-- 4. Report List View -->
                 <div id="report-list-view" class="hidden">
-                    <!-- (NEW FIX 2) Header with Search Input for Reports -->
                     <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
                         <h2 class="text-3xl font-bold text-white">รายการแจ้งปัญหา (Reports)</h2>
                         <div class="flex items-center space-x-4">
@@ -1741,6 +1894,35 @@
                         </table>
                     </div>
                 </div>
+                
+                <!-- (NEW) 5. Tag List View -->
+                <div id="tag-list-view" class="hidden">
+                    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold text-white">รายการ Tags</h2>
+                        <div class="flex items-center space-x-4">
+                            <input type="text" id="tag-search-input" placeholder="ค้นหา Tag..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button id="add-tag-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
+                                <i class="ri-add-line"></i>
+                                <span>เพิ่ม Tag</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
+                        <table class="w-full table-fixed min-w-[300px]">
+                            <thead class="bg-gray-900">
+                                <tr>
+                                    <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อ Tag</th>
+                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tag-table-body" class="divide-y divide-gray-700">
+                                <!-- Data injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
 
             </main>
         </div>
@@ -1816,37 +1998,25 @@
                         <input type="url" id="show-thumbnail" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                     </div>
                     
-                    <!-- (NEW) View Count Input -->
                     <div>
                         <label for="show-view-count" class="block text-sm font-medium text-gray-300 mb-1">ยอดเข้าชม (View Count)</label>
                         <input type="number" id="show-view-count" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="0">
                     </div>
                     
-                    <!-- (MODIFIED/NEW) Checkbox สำหรับสถานะจบ -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">สถานะ</label>
                         <div class="flex items-center space-x-2">
-                             <!-- Checkbox ตรงตามภาพที่แนบมา -->
                             <input type="checkbox" id="show-completed-checkbox" class="h-5 w-5 bg-gray-700 border-gray-600 rounded text-green-500 focus:ring-green-500">
                             <label for="show-completed-checkbox" class="text-gray-200">จบแล้ว (Completed)</label>
                         </div>
                     </div>
 
+                    <!-- (MODIFIED) Dynamic Tags Checkboxes -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">Tags</label>
-                        <div class="flex flex-wrap gap-x-6 gap-y-2 mt-2">
-                            <label class="flex items-center space-x-2 text-gray-200">
-                                <input type="checkbox" value="อนิเมะ" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
-                                <span>อนิเมะ</span>
-                            </label>
-                            <label class="flex items-center space-x-2 text-gray-200">
-                                <input type="checkbox" value="อนิเมะจีน" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
-                                <span>อนิเมะจีน</span>
-                            </label>
-                            <label class="flex items-center space-x-2 text-gray-200">
-                                <input type="checkbox" value="อนิเมะพากย์ไทย" class="show-tag-option h-5 w-5 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500">
-                                <span>อนิเมะพากย์ไทย</span>
-                            </label>
+                        <div id="show-tag-checkboxes" class="flex flex-wrap gap-x-6 gap-y-2 mt-2">
+                            <!-- Tags injected by JS (renderShowModalTagCheckboxes) -->
+                            <p class="text-sm text-gray-400">กำลังโหลด Tags...</p>
                         </div>
                     </div>
 
@@ -1863,7 +2033,7 @@
         </div>
     </div>
 
-    <!-- (NEW) Modal for Adding/Editing Banner -->
+    <!-- Modal for Adding/Editing Banner -->
     <div id="banner-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <form id="banner-form">
@@ -1891,6 +2061,34 @@
                         ลบแบนเนอร์
                     </button>
                     <button type="submit" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg">
+                        บันทึก
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- (NEW) Modal for Adding/Editing Tag -->
+    <div id="tag-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <form id="tag-form">
+                <div class="flex justify-between items-center p-5 border-b border-gray-700">
+                    <h3 id="tag-modal-title" class="text-2xl font-bold text-white">เพิ่ม Tag ใหม่</h3>
+                    <button type="button" id="close-tag-modal" class="text-gray-400 hover:text-white">
+                        <i class="ri-close-line text-2xl"></i>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label for="tag-name-input" class="block text-sm font-medium text-gray-300 mb-1">ชื่อ Tag (เช่น อนิเมะจีน, พากย์ไทย) *</label>
+                        <input type="text" id="tag-name-input" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" required>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between p-5 border-t border-gray-700">
+                    <button type="button" id="delete-tag-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg hidden">
+                        ลบ Tag
+                    </button>
+                    <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-lg">
                         บันทึก
                     </button>
                 </div>
