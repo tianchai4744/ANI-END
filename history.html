@@ -65,7 +65,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, setLogLevel,
-            limit, orderBy, startAfter, getDocs, doc, queryEqual, writeBatch
+            limit, orderBy, startAfter, getDocs, doc, where, queryEqual, writeBatch 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config ***)
@@ -184,11 +184,20 @@
                 // หากไม่ใช่การโหลดครั้งแรก ให้ใช้ startAfter
                 if (lastWatchedAtTimestamp) {
                     // (FIX) ดึง Document Snapshot จาก Timestamp เพื่อใช้ใน startAfter
-                    const startAfterDoc = await getDocs(query(getHistoryCollectionRef(), orderBy("watchedAt", "desc"), where("watchedAt", "<=", lastWatchedAtTimestamp), limit(1)));
+                    const startAfterDocQuery = query(
+                        getHistoryCollectionRef(), 
+                        orderBy("watchedAt", "desc"), 
+                        where("watchedAt", "<=", lastWatchedAtTimestamp), 
+                        limit(1)
+                    );
+                    const startAfterDocSnap = await getDocs(startAfterDocQuery);
                     
-                    if (!startAfterDoc.empty) {
+                    if (!startAfterDocSnap.empty) {
                         // (FIX) ต้องใช้ startAfter(snapshot.docs[0])
-                        historyQuery = query(historyQuery, startAfter(startAfterDoc.docs[0])); 
+                        historyQuery = query(getHistoryCollectionRef(), 
+                                             orderBy("watchedAt", "desc"), 
+                                             startAfter(startAfterDocSnap.docs[0]), 
+                                             limit(HISTORY_LIMIT)); 
                     } else {
                          // หากไม่พบเอกสารสำหรับ startAfter (เช่น เพิ่งโหลดมาครั้งแรก หรือถึงรายการสุดท้ายแล้ว)
                          if (initialLoadDone) hasMore = false; // ป้องกันการเรียกซ้ำ
