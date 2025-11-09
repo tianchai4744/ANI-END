@@ -232,7 +232,7 @@
 
 
         /**
-         * (MODIFIED) สร้าง Card สำหรับประวัติการเข้าชม (ปรับขนาดใหญ่ขึ้น)
+         * (MODIFIED) สร้าง Card สำหรับประวัติการเข้าชม (ลบแถบ Progress Bar และข้อความ "ดูจบแล้ว" ออก)
          */
         function createHistoryCard(history) {
             const showId = history.showId; 
@@ -241,6 +241,8 @@
             const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.lastWatchedEpisodeNumber || 'N/A'}`;
             const thumbnail = history.showThumbnail || 'https://placehold.co/80x110/333/fff?text=Img';
             
+            // (REMOVED) ลบการคำนวณ Progress ออกไปตามคำขอ
+            /*
             const currentEpNum = history.lastWatchedEpisodeNumber || 0;
             const latestEpNum = history.latestEpisodeNumber || 1; 
             
@@ -255,6 +257,7 @@
 
             const progressColor = progress < 100 ? 'bg-green-500' : 'bg-red-500'; 
             const progressText = progress < 100 ? `ดูถึง ${progress}%` : `ดูจบแล้ว`;
+            */
 
             return `
                 <!-- (MODIFIED) เพิ่ม ep_id=${episodeId} ใน URL -->
@@ -265,12 +268,8 @@
                         <h4 class="font-bold text-lg text-white line-clamp-1">${title}</h4>
                         <!-- ชื่อตอนที่ดู/สถานะ -->
                         <p class="text-sm text-gray-300 line-clamp-1 mt-1">${episodeTitle}</p>
-                        <!-- Progress Bar -->
-                        <div class="mt-3 w-full bg-gray-600 rounded-full h-2">
-                            <div class="${progressColor} h-2 rounded-full" style="width: ${progress}%;"></div>
-                        </div>
-                        <!-- Progress Text -->
-                        <p class="text-xs text-gray-400 mt-1">${progressText}</p>
+                        <!-- (REMOVED) Progress Bar Section Removed -->
+                        <!-- (REMOVED) Progress Text Section Removed -->
                     </div>
                     <!-- ปุ่ม Play -->
                     <div class="text-white flex-shrink-0">
