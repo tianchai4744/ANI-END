@@ -232,7 +232,8 @@
         
         // (NEW) Global History State
         let historyItems = []; 
-
+        let allReportsForCurrentEpisode = []; // (NEW) เก็บรายงานทั้งหมดสำหรับตอนปัจจุบัน
+        
         // (NEW) Global State for search function
         let allShows = []; // Required for Search Functionality
 
@@ -558,47 +559,17 @@
             const episode = currentEpisodes[currentEpisodeIndex];
             const episodeId = episode.id;
 
-            // (NEW) Disable button immediately to prevent double click
+            // 1. (NEW) Disable button immediately
             reportBrokenBtn.disabled = true;
             reportBrokenBtn.innerHTML = '<i class="ri-loader-4-line animate-spin mr-1"></i> กำลังแจ้ง...';
 
             console.log(`User ${userId} reporting episode ${episodeId} (${episode.title}) as broken...`);
             
-            // *** (FIX 6) ลบการตรวจสอบซ้ำซ้อนออก และพยายาม addDoc ทันทีเพื่อให้ Rules ผ่าน
             try {
-                // 1. กำหนด Reports Collection (Public Path)
+                // (NEW LOGIC) 1. กำหนด Reports Collection (Public Path)
                 const reportsRef = collection(db, `artifacts/${appId}/public/data/reports`);
                 
-                // 2. ตรวจสอบรายงานที่มีอยู่ก่อน (ใช้ Query)
-                const q = query(reportsRef, where("episodeId", "==", episodeId));
-                const existingReportSnap = await getDocs(q);
-
-                if (!existingReportSnap.empty) {
-                    console.warn(`Report for episode ${episodeId} already exists.`);
-                    
-                    // มีรายงานอยู่แล้ว (ไม่จำเป็นต้องสร้างใหม่)
-                    
-                    // ดึงสถานะปัจจุบันของตอนนี้
-                    const latestEpisodeSnap = await getDoc(doc(getCollectionRef("episodes"), episode.id));
-                    const currentStatus = latestEpisodeSnap.data()?.status; 
-                    
-                    if (currentStatus === 'broken') {
-                        brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกระบุว่ามีปัญหาโดยระบบ กำลังรอการแก้ไขโดยผู้ดูแลระบบ.`;
-                        reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว (เสีย)'; 
-                    } else {
-                        // สถานะ user_reported หรือ null (แต่มี doc ค้าง)
-                        brokenAlertDiv.innerHTML = `<i class="ri-information-line mr-2"></i> ปัญหาวิดีโอนี้ถูกแจ้งไปแล้ว กำลังรอการแก้ไข.`;
-                        reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว'; 
-                    }
-                    
-                    brokenAlertDiv.classList.remove('hidden');
-                    reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
-                    reportBrokenBtn.classList.remove('hover:bg-red-600');
-                    
-                    return; 
-                }
-
-                // 3. ถ้าไม่มีรายงาน ให้สร้างรายงานใหม่ (ใช้ ADD DOC ซึ่ง Rules อนุญาตให้ create)
+                // (NEW LOGIC) 2. สร้างรายงานใหม่เสมอ (ALLOW DUPLICATES TO BE CREATED)
                 const reportData = {
                     episodeId: episodeId,
                     showId: currentShow.id,
@@ -608,14 +579,14 @@
                 };
                 
                 // Rules ตรวจสอบว่ามีฟิลด์เหล่านี้ครบถ้วนและ request.method == 'create'
-                // หาก Rules ยังคงล้มเหลวที่บรรทัดนี้ แสดงว่าเงื่อนไขใน Rules ผิดพลาดแน่นอน
                 await addDoc(reportsRef, reportData);
                 
-                // (NEW) 4. Update the episode status to 'user_reported'
+                // (NEW LOGIC) 3. Update the episode status to 'user_reported'
+                // (ถ้าสถานะเป็น 'broken' อยู่แล้ว จะถูกเขียนทับเป็น 'user_reported' ซึ่งไม่เป็นปัญหาในมุมมองของ User)
                 const episodeRef = doc(getCollectionRef("episodes"), episodeId);
                 await updateDoc(episodeRef, { status: 'user_reported' }); 
 
-                // 4. Update UI to "Reported"
+                // 4. Update UI to "Reported" (Force disable and success message)
                 reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
                 reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
                 reportBrokenBtn.classList.remove('hover:bg-red-600');
@@ -625,6 +596,9 @@
                     brokenAlertDiv.innerHTML = `<i class="ri-check-line mr-2"></i> ขอบคุณสำหรับการแจ้งปัญหา! เราจะเร่งแก้ไขโดยเร็วที่สุด.`;
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
+                
+                // (NEW) Force reload of report list for the current episode to get the latest count
+                await loadReportsForCurrentEpisode(episodeId);
                 
                 return;
 
@@ -649,6 +623,21 @@
                     `;
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
+            }
+        }
+
+        // (NEW FUNCTION) Load reports for the current episode
+        async function loadReportsForCurrentEpisode(episodeId) {
+            const reportsRef = collection(db, `artifacts/${appId}/public/data/reports`);
+            const q = query(reportsRef, where("episodeId", "==", episodeId));
+            
+            try {
+                const snapshot = await getDocs(q);
+                allReportsForCurrentEpisode = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log(`Loaded ${allReportsForCurrentEpisode.length} reports for episode ${episodeId}.`);
+            } catch (error) {
+                console.error("Error loading reports:", error);
+                allReportsForCurrentEpisode = [];
             }
         }
 
@@ -805,16 +794,20 @@
             // (MODIFIED) อัปเดตสถานะปุ่ม "แจ้งเสีย" (ต้องเป็น async)
             if (reportBrokenBtn && brokenAlertDiv) {
                 
-                // *** FIX: FETCH LATEST STATUS BEFORE CHECKING ***
-                // Note: การใช้ getDoc จะรับ status: null หรือ status: undefined (ถ้าฟิลด์ถูกลบด้วย FieldValue.delete())
+                // 1. ดึงสถานะปัจจุบันของตอนนี้
                 const latestEpisodeSnap = await getDoc(doc(getCollectionRef("episodes"), episode.id));
-                const currentStatus = latestEpisodeSnap.data()?.status; // Get live status (null, 'broken', or 'user_reported', or undefined if FieldValue.delete() was used)
-                // *** END FIX ***
+                const currentStatus = latestEpisodeSnap.data()?.status; // Get live status
+                
+                // 2. ดึงรายงานทั้งหมดสำหรับตอนนี้
+                await loadReportsForCurrentEpisode(episode.id);
+                const reportCount = allReportsForCurrentEpisode.length;
 
-                // 1. ตรวจสอบสถานะ 'broken' (ยืนยันว่าเสียจริง)
+
+                // 3. ตรวจสอบสถานะ 'broken' (ยืนยันว่าเสียจริงโดยระบบ)
                 if (currentStatus === 'broken') {
+                    // สถานะเสียจริงโดยระบบ (ปุ่มถูกปิดใช้งานเสมอและแจ้งให้ทราบ)
                     reportBrokenBtn.disabled = true;
-                    reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว (เสีย)';
+                    reportBrokenBtn.innerHTML = `<i class="ri-check-line mr-1"></i> แจ้งแล้ว (เสีย)`;
                     reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
                     reportBrokenBtn.classList.remove('hover:bg-red-600');
 
@@ -822,18 +815,19 @@
                     brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกระบุว่ามีปัญหาโดยระบบ กำลังรอการแก้ไขโดยผู้ดูแลระบบ.`;
                 }
                 
-                // 2. ตรวจสอบสถานะ 'user_reported' (แจ้งโดยผู้ใช้)
-                else if (currentStatus === 'user_reported') {
+                // 4. ตรวจสอบรายงานที่มีอยู่ (กรณีที่วิดีโอยังไม่เสียจริง, user_reported, หรือ null)
+                else if (reportCount > 0) {
+                    // มีรายงานในฐานข้อมูล (แม้สถานะจะเป็น null ก็ตาม) -> แสดงเป็นแจ้งแล้ว และปิดใช้งานชั่วคราว
                     reportBrokenBtn.disabled = true;
-                    reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
+                    reportBrokenBtn.innerHTML = `<i class="ri-check-line mr-1"></i> แจ้งแล้ว (${reportCount} ครั้ง)`;
                     reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
                     reportBrokenBtn.classList.remove('hover:bg-red-600');
-                    brokenAlertDiv.classList.add('hidden'); // ซ่อน Alert หากเป็นแค่การแจ้งโดยผู้ใช้
+                    brokenAlertDiv.classList.add('hidden'); 
                 }
                 
-                // 3. สถานะเป็น null, undefined (หายไปจากการใช้ FieldValue.delete) หรือค่าอื่น ๆ (ถือว่าปกติ)
+                // 5. สถานะปกติ
                 else { 
-                    // สถานะปกติ (Button reverts to "แจ้ง (เสีย)")
+                    // สถานะปกติ (ไม่มีรายงานในฐานข้อมูล) -> ปุ่มใช้งานได้
                     reportBrokenBtn.disabled = false;
                     reportBrokenBtn.innerHTML = '<i class="ri-error-warning-line mr-1"></i> แจ้ง (เสีย)';
                     reportBrokenBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-red-600');
