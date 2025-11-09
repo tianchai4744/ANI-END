@@ -855,13 +855,15 @@
             
             // (MODIFIED) Responsive classes:
             // Mobile: flex-nowrap (horizontal scroll) with padding-bottom
-            // Desktop (lg): flex-wrap (vertical scroll) with padding-right
+            // Desktop (lg): grid (vertical scroll) with 7 columns
             // (NEW FIX) เพิ่ม 'relative' เพื่อให้เป็น offsetParent สำหรับการคำนวณ scroll
-            episodeListContainer.className = 'relative flex gap-2 pb-3 lg:pb-0 flex-nowrap overflow-x-auto overflow-y-hidden lg:flex-wrap lg:overflow-y-auto lg:overflow-x-hidden lg:pr-2'; 
+            // (MODIFIED) เปลี่ยนจาก lg:flex-wrap เป็น lg:grid lg:grid-cols-7
+            episodeListContainer.className = 'relative flex gap-2 pb-3 flex-nowrap overflow-x-auto overflow-y-hidden lg:grid lg:grid-cols-7 lg:gap-2 lg:overflow-y-auto lg:overflow-x-hidden lg:pr-2 lg:pb-0'; 
             
             episodes.forEach((ep, index) => {
                 const button = document.createElement('button');
-                button.className = "ep-button w-12 h-12 flex-shrink-0 bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200";
+                // (MODIFIED) เพิ่ม lg:w-full เพื่อให้ปุ่มขยายเต็มช่อง grid
+                button.className = "ep-button w-12 h-12 flex-shrink-0 lg:w-full bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200";
                 button.textContent = ep.episodeNumber || (index + 1);
                 button.dataset.episodeId = ep.id;
                 
