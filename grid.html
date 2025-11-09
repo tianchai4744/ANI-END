@@ -154,12 +154,13 @@
         
         let db, auth, userId;
         let allShows = []; 
-        let allTags = new Set(); 
+        let allTags = []; // (MODIFIED) Changed from Set to Array for dynamic tags
         let historyItems = []; 
         
         // (MODIFIED) Data loading flags
         let isShowsLoaded = false;
         let isHistoryLoaded = false;
+        let isTagsLoaded = false; // (NEW) Flag for Tags
         let initialLoadDone = false; // Flag to track if initial load logic completed
         
         // State for Grid View Pagination
@@ -230,11 +231,9 @@
             const showsQuery = query(getCollectionRef("shows"));
             onSnapshot(showsQuery, (snapshot) => {
                 allShows = [];
-                allTags.clear();
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     allShows.push({ id: doc.id, ...data });
-                    (data.tags || []).forEach(tag => allTags.add(tag));
                 });
                 
                 console.log("Shows loaded:", allShows.length);
@@ -244,6 +243,25 @@
             }, (error) => {
                 console.error("Error listening to shows:", error);
                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-red-500">ไม่สามารถโหลดข้อมูลอนิเมะได้</p>`;
+            });
+            
+            // (NEW) 2. Listener for Tags
+            const tagQuery = query(getCollectionRef("tags"), orderBy("name"));
+            onSnapshot(tagQuery, (snapshot) => {
+                allTags = []; 
+                snapshot.forEach((doc) => {
+                    allTags.push(doc.data().name); // Store only the name for easy filtering/nav
+                });
+                
+                console.log("Tags loaded:", allTags.length);
+                isTagsLoaded = true; // (NEW) Set flag
+                attemptInitialLoad(); // (NEW) Call gatekeeper
+            }, (error) => {
+                console.error("Error listening to tags:", error);
+                if (!isTagsLoaded) {
+                     isTagsLoaded = true;
+                     attemptInitialLoad(); 
+                }
             });
             
             // 3. Listener for View History (Needed for correct card linking)
@@ -287,11 +305,11 @@
             });
         }
         
-        // (NEW) Gatekeeper function to ensure both data sets are ready
+        // (MODIFIED) Gatekeeper function to ensure all data sets are ready
         function attemptInitialLoad() {
-            // Run only if both data sets are loaded AND the initial load hasn't run yet
-            if (isShowsLoaded && isHistoryLoaded && !initialLoadDone) {
-                console.log("Data Gatekeeper: Shows and History are loaded. Proceeding with initial render.");
+            // Run only if ALL data sets are loaded AND the initial load hasn't run yet
+            if (isShowsLoaded && isHistoryLoaded && isTagsLoaded && !initialLoadDone) {
+                console.log("Data Gatekeeper: Shows, History, and Tags are loaded. Proceeding with initial render.");
                 initialLoadDone = true; // Mark as run
                 checkInitialLoad(); // Run the original initial load logic
             }
@@ -304,6 +322,9 @@
             const tagFromUrl = urlParams.get('tag');
             const searchFromUrl = urlParams.get('search'); 
             
+            // (NEW LOGIC) Get the first dynamic tag if no specific tag is requested
+            const defaultTag = allTags.length > 0 ? allTags[0] : 'อนิเมะ'; // Fallback to 'อนิเมะ' if no dynamic tags
+            
             if (searchFromUrl) {
                 const query = decodeURIComponent(searchFromUrl);
                 currentSearchQuery = query;
@@ -314,8 +335,8 @@
                 initializeGridPaging(currentGridTag); 
                 renderDynamicNav(currentGridTag); 
             } else {
-                 // No tag or search specified, default to 'อนิเมะ' 
-                 currentGridTag = 'อนิเมะ';
+                 // No tag or search specified, default to first dynamic tag
+                 currentGridTag = defaultTag;
                  initializeGridPaging(currentGridTag); 
                  renderDynamicNav(currentGridTag); 
             }
@@ -325,20 +346,42 @@
         function renderDynamicNav(activePageId) {
             if (!desktopNavLinks || !mobileNavLinks) return;
             
-            // 1. Reset all links to inactive state first (if they exist)
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active', 'text-green-500');
-                link.classList.add('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
-            });
+            // 1. Reset/Clear existing links (except "Home" and "Admin")
+            desktopNavLinks.innerHTML = '';
+            mobileNavLinks.innerHTML = '';
+            
+            // 2. Add "Home" link manually
+            const homeLinkHtml = `<a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>`;
+            desktopNavLinks.innerHTML += homeLinkHtml;
+            mobileNavLinks.innerHTML += `<a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>`;
+            
+            // 3. Add Dynamic Tag Links
+            const sortedTags = [...allTags].sort((a, b) => a.localeCompare(b, 'th')); // Sort locally
 
-            // 2. Determine which link to set as active (based on currentGridTag or 'home')
+            sortedTags.forEach(tag => {
+                const tagLinkHtml = `
+                    <a href="grid.html?tag=${encodeURIComponent(tag)}" data-page="${tag}" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                        ${tag}
+                    </a>
+                `;
+                const tagLinkMobileHtml = `
+                    <a href="grid.html?tag=${encodeURIComponent(tag)}" data-page="${tag}" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+                        ${tag}
+                    </a>
+                `;
+                desktopNavLinks.innerHTML += tagLinkHtml;
+                mobileNavLinks.innerHTML += tagLinkMobileHtml;
+            });
+            
+            // 4. Add Admin Link (Mobile only)
+             mobileNavLinks.innerHTML += `<a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"><i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน</a>`;
+
+            // 5. Set the active link(s)
             let targetPageId = activePageId;
             if (activePageId === 'search-results') {
-                // If it's a search result, don't activate any tag link, default to 'home' visually
                 targetPageId = 'home';
             }
             
-            // 3. Set the active link(s)
             document.querySelectorAll(`.nav-link[data-page="${targetPageId}"]`).forEach(link => {
                 link.classList.add('active', 'text-green-500');
                 link.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
@@ -396,6 +439,7 @@
             gridViewTitle.textContent = tag;
             currentSearchQuery = null;
             
+            // (FIX) Use array includes for filtering
             gridFilteredShows = allShows
                 .filter(s => (s.tags || []).includes(tag))
                 .sort((a, b) => {
@@ -425,8 +469,6 @@
             gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
         }
 
-        // (REMOVED) renderPage function
-        
         // (NEW) Load More Cards function
         function loadMoreCards() {
             if (!loadMoreBtn) return;
@@ -466,10 +508,6 @@
             }
         }
         
-        // (REMOVED) updatePageUrl function (Solves SecurityError)
-        // (REMOVED) renderPaginationControls function
-        // (REMOVED) createPageButton function
-
         // --- Search Logic (Adjusted for Load More) ---
         function updateSearchDropdown(query, dropdownEl) {
             const normalizedQuery = normalizeThai(query).toLowerCase().trim();
@@ -594,7 +632,6 @@
             initializeFirebase(); 
             
             // (NEW FIX) Set the active nav state IMMEDIATELY based on the URL.
-            // This stops the "flicker" of the active (green) link.
             const urlParams = new URLSearchParams(window.location.search);
             const tagFromUrl = urlParams.get('tag');
             const searchFromUrl = urlParams.get('search'); 
@@ -605,7 +642,7 @@
             } else if (tagFromUrl) {
                 activePageId = tagFromUrl;
             } else {
-                activePageId = 'อนิเมะ'; // Default grid page
+                activePageId = 'home'; 
             }
             renderDynamicNav(activePageId);
             
@@ -646,7 +683,13 @@
                     
                     const pageId = navLink.dataset.page;
                     if (pageId) {
-                        // Prevent the full page reload
+                        // Check if it's a link to the homepage
+                        if (pageId === 'home') {
+                            // Let the default link behavior handle index.html navigation
+                            return; 
+                        }
+                        
+                        // Prevent the full page reload for internal grid links
                         e.preventDefault(); 
                         
                         // Close mobile menu if open
@@ -654,12 +697,6 @@
                             mobileMenu.classList.add('hidden');
                         }
 
-                        // Check if it's a link to the homepage
-                        if (pageId === 'home') {
-                            window.location.href = 'index.html'; // Go to index.html
-                            return;
-                        }
-                        
                         // Check if we are already on this tag
                         if (pageId === currentGridTag) {
                             return; // Do nothing if clicking the active tag
@@ -679,8 +716,6 @@
                     }
                 }
             });
-
-            // (REMOVED) popstate listener
 
             // (NEW) Add Load More button listener
             if (loadMoreBtn) {
@@ -713,11 +748,8 @@
                     <!-- Desktop Nav Links (Secondary Navigation) -->
                     <div class="hidden md:block">
                         <div id="desktop-nav-links" class="ml-6 flex items-baseline space-x-4">
-                            <!-- Links are now hardcoded in HTML for instant display -->
+                            <!-- Links are now DYNAMICALLY injected by JS -->
                             <a href="index.html" data-page="home" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
-                            <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                            <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                            <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
                         </div>
                     </div>
                 </div>
@@ -767,15 +799,8 @@
         <!-- Mobile Menu -->
         <div id="mobile-menu" class="md:hidden hidden">
             <div id="mobile-nav-links" class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                <!-- Links are now hardcoded in HTML for instant display -->
-                <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
-                <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
-                <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
-                <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
-                <!-- ลิงก์ Admin สำหรับ Mobile -->
-                <a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
-                    <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
-                </a>
+                 <!-- Links are now DYNAMICALLY injected by JS -->
+                 <a href="index.html" data-page="home" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">หน้าแรก</a>
             </div>
         </div>
     </header>
