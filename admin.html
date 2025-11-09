@@ -369,22 +369,27 @@
             }
         }
 
-        // (MODIFIED) Render Function for Episodes Table (รองรับสถานะ "ถูกรายงาน")
+        // (MODIFIED) Render Function for Episodes Table (รองรับสถานะ "แจ้งเสีย" และซ่อน "เสียจริง")
         function renderEpisodeTable() {
             if (!episodeTableBody) return;
             
             // 1. (FIX) ใช้ normalizeThai สำหรับการค้นหา
             const searchQuery = episodeSearchInput ? normalizeThai(episodeSearchInput.value).toLowerCase() : '';
 
-            // NEW LOGIC: Filter out confirmed broken episodes (status === 'broken')
+            // NEW LOGIC: Filter to include only null (OK) or 'user_reported'
             const filteredEpisodes = allEpisodes.filter(ep => {
-                // (NEW) ตรรกะการกรอง: ซ่อนรายการที่ได้รับการยืนยันว่าเสียจริง (status: broken)
+                // ซ่อนรายการที่ได้รับการยืนยันว่าเสียจริง (status: broken) ออกจากรายการ Episodes
                 if (ep.status === 'broken') return false; 
                 
                 const show = shows.find(s => s.id === ep.showId);
                 const showTitle = show ? normalizeThai(show.title).toLowerCase() : '';
                 const epTitle = normalizeThai(ep.title).toLowerCase();
-                return epTitle.includes(searchQuery) || showTitle.includes(searchQuery);
+                
+                // กรองตามคำค้นหา
+                const matchesSearch = epTitle.includes(searchQuery) || showTitle.includes(searchQuery);
+
+                // แสดงเฉพาะรายการที่สถานะเป็น null (OK) หรือ user_reported
+                return matchesSearch && (ep.status === null || ep.status === undefined || ep.status === 'user_reported');
             });
 
             let tableHtml = '';
@@ -399,14 +404,14 @@
                 let statusBadge = '';
                 let rowClass = 'border-b border-gray-700 hover:bg-gray-700'; 
                 
-                // NEW LOGIC: Status is only 'ถูกรายงาน' since 'เสีย' items are filtered out
-                // Check if there is ANY report document associated with this episode ID
-                const isReported = reportCountMap.get(data.id) > 0; 
+                // NEW LOGIC: Check for 'user_reported' status
+                const isUserReported = data.status === 'user_reported'; 
                 
-                if (isReported) {
-                    // Show "ถูกรายงาน"
-                    statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-blue-600 px-2 py-0.5 rounded-full">ถูกรายงาน</span>';
-                    rowClass = 'border-b border-blue-900/50 bg-blue-900/20 hover:bg-blue-900/30';
+                if (isUserReported) {
+                    // Show "แจ้งเสีย" (Reported Broken)
+                    // ใช้สีเตือนเพื่อให้ผู้ดูแลระบบรู้ว่าต้องตรวจสอบ
+                    statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-yellow-600 px-2 py-0.5 rounded-full">แจ้งเสีย</span>'; 
+                    rowClass = 'border-b border-yellow-900/50 bg-yellow-900/20 hover:bg-yellow-900/30'; 
                 }
                 
                 tableHtml += `
@@ -489,9 +494,11 @@
             
             // NEW LOGIC: รายการที่ต้องแสดงใน Reports View คือ:
             // A. Episodes ที่มี status: 'broken' (เสียจริงจากการตรวจสอบ)
+            // B. Episodes ที่มี status: 'user_reported' และยังไม่มี Report Doc (ป้องกันกรณีที่สคริปต์อาจจะล้าง Report Doc ไปแล้ว) <- (NO: The script creates the report doc if broken, and clears both doc and status if fixed)
             
             allEpisodes.forEach((episode) => {
-                if (episode.status === 'broken') { // Only confirmed broken are actionable now
+                // แสดงเฉพาะรายการที่ถูกยืนยันว่าเสียจริงแล้วเท่านั้น
+                if (episode.status === 'broken') { 
                     const reportCount = reportCountMap.get(episode.id) || 1; // นับอย่างน้อย 1 ครั้ง
                     todoMap.set(episode.id, {
                         episode: episode, 
@@ -968,20 +975,10 @@
                 if (!target) return;
 
                 try {
-                    // Action 1: Mark as Broken (ยืนยันว่าเสีย)
-                    if (target.classList.contains('mark-broken-btn')) {
-                        const episodeId = target.dataset.episodeId;
-                        if (!episodeId) return;
-                        
-                        // Action: Set status to 'broken' (This is the critical change)
-                        const docRef = doc(getCollectionRef("episodes"), episodeId);
-                        await updateDoc(docRef, { status: 'broken' });
-                        
-                        console.log(`Episode ${episodeId} confirmed and marked as broken.`);
-                    }
+                    // Action 1: Mark as Broken (ยืนยันว่าเสีย) - (REMOVED: This button is not needed in the current flow)
                     
                     // (MODIFIED) Action 2: Go to Edit Episode (ปรับปรุงตรรกะ)
-                    else if (target.classList.contains('goto-episode-btn')) {
+                    if (target.classList.contains('goto-episode-btn')) { // <--- FIXED: Changed else if to if
                         const episodeId = target.dataset.episodeId;
                         const reportId = target.dataset.reportId; 
                         
@@ -1027,14 +1024,14 @@
                                     // 1. ลบ report doc
                                     await deleteDoc(doc(getCollectionRef("reports"), reportId));
                                     
-                                    // 2. ถ้า episode มีสถานะ broken ให้ล้างสถานะ broken ด้วย
+                                    // 2. ถ้า episode มีสถานะ broken/user_reported ให้ล้างสถานะด้วย
                                     const reportDoc = allReports.find(r => r.id === reportId);
                                     if (reportDoc && reportDoc.episodeId) {
                                         const episode = allEpisodes.find(ep => ep.id === reportDoc.episodeId);
-                                        // NEW LOGIC: Only clear if status is 'broken' (confirmed broken)
-                                        if (episode && episode.status === 'broken') {
+                                        // NEW LOGIC: Clear status if it was 'broken' (confirmed broken) OR 'user_reported'
+                                        if (episode && (episode.status === 'broken' || episode.status === 'user_reported')) {
                                              await updateDoc(doc(getCollectionRef("episodes"), episode.id), { status: null });
-                                             console.log(`Cleared broken status for ${episode.id} after resolving report.`);
+                                             console.log(`Cleared status for ${episode.id} after resolving report.`);
                                         }
                                     }
 
@@ -1554,15 +1551,15 @@
                     embedCode: embedCodeToSave, 
                     showId: episodeShowSelect.value,
                     updatedAt: serverTimestamp()
-                    // (NEW) If episode is being edited (and status was broken), clear status
+                    // (NEW) If episode is being edited (and status was broken/user_reported), clear status
                 };
                 
                 if (currentEditingId) {
                     const oldData = allEpisodes.find(ep => ep.id === currentEditingId);
                     // Clear status if the admin edits the embed code OR clears the status explicitly (though there's no checkbox for it)
-                    if (oldData && oldData.status === 'broken') {
+                    if (oldData && (oldData.status === 'broken' || oldData.status === 'user_reported')) {
                         episodeData.status = null; 
-                        console.log("Cleared 'broken' status after edit.");
+                        console.log(`Cleared '${oldData.status}' status after admin edit.`);
                     }
                 }
 
