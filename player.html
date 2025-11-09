@@ -577,25 +577,23 @@
                     console.warn(`Report for episode ${episodeId} already exists.`);
                     
                     // มีรายงานอยู่แล้ว (ไม่จำเป็นต้องสร้างใหม่)
-                    reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว';
-                    reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
-                    reportBrokenBtn.classList.remove('hover:bg-red-600');
                     
-                    brokenAlertDiv.classList.remove('hidden');
-                    brokenAlertDiv.innerHTML = `<i class="ri-information-line mr-2"></i> ปัญหาวิดีโอนี้ถูกแจ้งไปแล้ว กำลังรอการแก้ไข.`;
-                    
-                    // (FIX) อัปเดตสถานะปุ่มอีกครั้ง (ถ้าสถานะตอนเป็น 'broken' ต้องแสดง alert ที่ถูกต้อง)
+                    // ดึงสถานะปัจจุบันของตอนนี้
                     const latestEpisodeSnap = await getDoc(doc(getCollectionRef("episodes"), episode.id));
                     const currentStatus = latestEpisodeSnap.data()?.status; 
                     
                     if (currentStatus === 'broken') {
-                        brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกยืนยันว่ามีปัญหา กำลังรอการแก้ไข.`;
-                        // และเปลี่ยนปุ่มให้เป็น 'แจ้งแล้ว (เสีย)'
+                        brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกระบุว่ามีปัญหาโดยระบบ กำลังรอการแก้ไขโดยผู้ดูแลระบบ.`;
                         reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว (เสีย)'; 
                     } else {
-                        // ถ้าสถานะเป็น user_reported หรือ null (แต่มี doc ค้าง) ก็แสดงเป็น 'แจ้งแล้ว' ปกติ
+                        // สถานะ user_reported หรือ null (แต่มี doc ค้าง)
+                        brokenAlertDiv.innerHTML = `<i class="ri-information-line mr-2"></i> ปัญหาวิดีโอนี้ถูกแจ้งไปแล้ว กำลังรอการแก้ไข.`;
                         reportBrokenBtn.innerHTML = '<i class="ri-check-line mr-1"></i> แจ้งแล้ว'; 
                     }
+                    
+                    brokenAlertDiv.classList.remove('hidden');
+                    reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
+                    reportBrokenBtn.classList.remove('hover:bg-red-600');
                     
                     return; 
                 }
@@ -808,8 +806,9 @@
             if (reportBrokenBtn && brokenAlertDiv) {
                 
                 // *** FIX: FETCH LATEST STATUS BEFORE CHECKING ***
+                // Note: การใช้ getDoc จะรับ status: null หรือ status: undefined (ถ้าฟิลด์ถูกลบด้วย FieldValue.delete())
                 const latestEpisodeSnap = await getDoc(doc(getCollectionRef("episodes"), episode.id));
-                const currentStatus = latestEpisodeSnap.data()?.status; // Get live status (null, 'broken', or 'user_reported')
+                const currentStatus = latestEpisodeSnap.data()?.status; // Get live status (null, 'broken', or 'user_reported', or undefined if FieldValue.delete() was used)
                 // *** END FIX ***
 
                 // 1. ตรวจสอบสถานะ 'broken' (ยืนยันว่าเสียจริง)
@@ -820,7 +819,6 @@
                     reportBrokenBtn.classList.remove('hover:bg-red-600');
 
                     brokenAlertDiv.classList.remove('hidden');
-                    // (MODIFIED) เปลี่ยนข้อความ Alert ให้ชัดเจนว่าเป็นปัญหาที่ตรวจพบโดยระบบ (สคริปต์)
                     brokenAlertDiv.innerHTML = `<i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกระบุว่ามีปัญหาโดยระบบ กำลังรอการแก้ไขโดยผู้ดูแลระบบ.`;
                 }
                 
@@ -833,10 +831,9 @@
                     brokenAlertDiv.classList.add('hidden'); // ซ่อน Alert หากเป็นแค่การแจ้งโดยผู้ใช้
                 }
                 
-                // 3. สถานะเป็น null หรือ undefined (ถือว่าปกติ)
+                // 3. สถานะเป็น null, undefined (หายไปจากการใช้ FieldValue.delete) หรือค่าอื่น ๆ (ถือว่าปกติ)
                 else { 
                     // สถานะปกติ (Button reverts to "แจ้ง (เสีย)")
-                    // (FIXED) ลบการตรวจสอบ Report Document ที่ค้างอยู่ออก เพื่อให้แน่ใจว่าปุ่มกลับสู่สถานะปกติ
                     reportBrokenBtn.disabled = false;
                     reportBrokenBtn.innerHTML = '<i class="ri-error-warning-line mr-1"></i> แจ้ง (เสีย)';
                     reportBrokenBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-red-600');
