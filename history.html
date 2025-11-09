@@ -33,6 +33,20 @@
             flex-shrink: 0;
             border-radius: 4px;
         }
+        /* (NEW) Skeleton Loading Effect */
+        .skeleton-loading {
+            background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        @keyframes loading {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100">
@@ -71,6 +85,7 @@
         let historyListContainer;
         let loadMoreBtn;
         let historyLoadingIndicator; // (NEW) Element สำหรับข้อความ Loading
+        let initialLoadDone = false; // (NEW) Flag เพื่อควบคุมการแสดง Skeleton
 
         async function initializeFirebase() {
             try {
@@ -120,7 +135,12 @@
                  loadMoreBtn.textContent = 'กำลังโหลด...';
             }
             if (historyLoadingIndicator && lastWatchedAtTimestamp === null) {
-                 historyLoadingIndicator.classList.remove('hidden');
+                 // (MODIFIED) ลบ Loading Indicator หลักออก
+                 historyLoadingIndicator.classList.add('hidden'); 
+                 // (NEW) แสดง Skeleton แทนใน container
+                 if (!initialLoadDone) {
+                      historyListContainer.innerHTML = createHistorySkeleton(4); 
+                 }
             }
 
 
@@ -158,13 +178,14 @@
                 }
 
                 // 4. Render ข้อมูล
-                const isFirstLoad = lastWatchedAtTimestamp === null && snapshot.docs.length === newItems.length;
-                renderHistoryList(newItems, isFirstLoad); // ส่ง isFirstLoad ด้วย
+                const isFirstLoad = !initialLoadDone; // ใช้ Flag นี้แทน
+                renderHistoryList(newItems, isFirstLoad); 
+                initialLoadDone = true;
                 
             } catch (error) {
                 console.error("Error loading history:", error);
                 // ถ้าเป็นการโหลดครั้งแรก ให้แสดงข้อความ Error
-                if (!lastWatchedAtTimestamp) {
+                if (!initialLoadDone) {
                     historyListContainer.innerHTML = createHistoryEmptyState("ไม่สามารถโหลดประวัติได้. กรุณาลองใหม่.");
                 }
                 hasMore = false; // หยุดการพยายามโหลดต่อ
@@ -230,9 +251,8 @@
             }
         }
 
-
         /**
-         * (MODIFIED) สร้าง Card สำหรับประวัติการเข้าชม (ลบแถบ Progress Bar และข้อความ "ดูจบแล้ว" ออก)
+         * (MODIFIED) สร้าง Card สำหรับประวัติการเข้าชม (เพิ่ม WatchedAt)
          */
         function createHistoryCard(history) {
             const showId = history.showId; 
@@ -241,23 +261,20 @@
             const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.lastWatchedEpisodeNumber || 'N/A'}`;
             const thumbnail = history.showThumbnail || 'https://placehold.co/80x110/333/fff?text=Img';
             
-            // (REMOVED) ลบการคำนวณ Progress ออกไปตามคำขอ
-            /*
-            const currentEpNum = history.lastWatchedEpisodeNumber || 0;
-            const latestEpNum = history.latestEpisodeNumber || 1; 
-            
-            let progress = Math.min(100, Math.round((currentEpNum / latestEpNum) * 100));
-            if (history.isCompleted === true) {
-                 progress = 100;
-            } else if (currentEpNum === 0) {
-                 progress = 0;
-            } else if (progress === 0 && currentEpNum > 0) {
-                 progress = 1; // Minimum 1% if an episode was watched
+            // (NEW) การแสดงวันที่/เวลาที่เข้าชมล่าสุด
+            let watchedDateString = 'N/A';
+            if (history.watchedAt && history.watchedAt.seconds) {
+                 // แปลง Firestore Timestamp เป็น Date object
+                 const watchedDate = new Date(history.watchedAt.seconds * 1000);
+                 // Format วันที่/เวลา
+                 watchedDateString = watchedDate.toLocaleDateString('th-TH', { 
+                     year: 'numeric', 
+                     month: 'short', 
+                     day: 'numeric',
+                     hour: '2-digit',
+                     minute: '2-digit'
+                 });
             }
-
-            const progressColor = progress < 100 ? 'bg-green-500' : 'bg-red-500'; 
-            const progressText = progress < 100 ? `ดูถึง ${progress}%` : `ดูจบแล้ว`;
-            */
 
             return `
                 <!-- (MODIFIED) เพิ่ม ep_id=${episodeId} ใน URL -->
@@ -268,8 +285,10 @@
                         <h4 class="font-bold text-lg text-white line-clamp-1">${title}</h4>
                         <!-- ชื่อตอนที่ดู/สถานะ -->
                         <p class="text-sm text-gray-300 line-clamp-1 mt-1">${episodeTitle}</p>
-                        <!-- (REMOVED) Progress Bar Section Removed -->
-                        <!-- (REMOVED) Progress Text Section Removed -->
+                        <!-- (NEW) วันที่/เวลาเข้าชมล่าสุด -->
+                        <p class="text-xs text-gray-400 mt-2">
+                             เข้าชมล่าสุด: ${watchedDateString}
+                        </p>
                     </div>
                     <!-- ปุ่ม Play -->
                     <div class="text-white flex-shrink-0">
@@ -288,20 +307,54 @@
                          ${message}
                      </div>`;
         }
+        
+        /**
+         * (NEW) สร้าง Skeleton Loading Cards
+         */
+        function createHistorySkeleton(count) {
+             let html = '';
+             for (let i = 0; i < count; i++) {
+                 html += `
+                    <div class="history-card bg-gray-800 shadow-lg animate-pulse" aria-hidden="true">
+                        <!-- Thumb -->
+                        <div class="history-thumb bg-gray-700 skeleton-loading"></div>
+                        
+                        <!-- Content -->
+                        <div class="flex-grow min-w-0 space-y-3">
+                            <!-- Title Line -->
+                            <div class="h-5 bg-gray-700 rounded w-3/4 skeleton-loading"></div>
+                            <!-- Episode Line -->
+                            <div class="h-4 bg-gray-700 rounded w-1/2 skeleton-loading"></div>
+                            <!-- Date Line -->
+                            <div class="h-3 bg-gray-700 rounded w-1/3 skeleton-loading mt-4"></div>
+                        </div>
+                        
+                        <!-- Play Button Placeholder -->
+                        <div class="w-10 h-10 rounded-full bg-gray-700 skeleton-loading flex-shrink-0"></div>
+                    </div>
+                 `;
+             }
+             return html;
+        }
+
 
         document.addEventListener('DOMContentLoaded', () => {
             historyListContainer = document.getElementById('history-list-container');
             loadMoreBtn = document.getElementById('load-more-btn');
             historyLoadingIndicator = document.getElementById('history-loading-indicator');
             
-            // Initial render: We leave the loading indicator visible in HTML, 
-            // and the JS will hide it once data is loaded (or if an error occurs).
-            // historyListContainer.innerHTML = createHistoryEmptyState("กำลังโหลดประวัติ..."); // (REMOVED) ไม่ต้องใส่ initial state ซ้ำ
+            // (NEW) ซ่อน Loading Indicator หลักไว้ก่อน และใช้ Skeleton แทน
+            if (historyLoadingIndicator) {
+                 historyLoadingIndicator.classList.add('hidden');
+            }
 
             if (loadMoreBtn) {
                 loadMoreBtn.addEventListener('click', loadHistory);
             }
 
+            // (NEW) แสดง Skeleton 4 ตัวทันทีเมื่อ DOMContentLoaded
+            historyListContainer.innerHTML = createHistorySkeleton(4);
+            
             initializeFirebase(); 
         });
 
@@ -332,15 +385,12 @@
         <!-- Desktop Header -->
         <h2 class="text-3xl font-bold text-white mb-6 hidden md:block">ประวัติการเข้าชมทั้งหมด</h2>
 
-        <!-- (NEW) Loading Indicator for Initial Load -->
-        <div id="history-loading-indicator" class="p-8 text-center text-gray-400 text-lg bg-gray-800 rounded-lg mb-6">
-             <i class="ri-loader-4-line text-4xl mb-3 block animate-spin"></i>
-             กำลังโหลดประวัติ...
-        </div>
+        <!-- (REMOVED: Old Global Loading Indicator, but kept ID for JS reference) -->
+        <div id="history-loading-indicator" class="hidden"></div>
 
         <!-- History List Container -->
         <div id="history-list-container" class="space-y-4">
-            <!-- Data injected by JS -->
+            <!-- Data injected by JS (or Skeleton initially) -->
         </div>
 
         <!-- Load More Button -->
