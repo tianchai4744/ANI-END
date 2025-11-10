@@ -85,7 +85,9 @@
         const HISTORY_LIMIT = 25; 
         
         let db, auth, userId;
-        let lastWatchedAtTimestamp = null; // ใช้เก็บ Timestamp ของเอกสารสุดท้ายที่โหลดมา
+        // (*** MODIFIED FIX ***) 
+        // เปลี่ยนจากการเก็บ Timestamp เป็นการเก็บ Document Snapshot (ตัวเอกสาร) โดยตรง
+        let lastVisibleDoc = null; // lastWatchedAtTimestamp ถูกเปลี่ยนเป็น lastVisibleDoc
         let isLoading = false;
         let hasMore = true;
 
@@ -107,7 +109,6 @@
                         userId = user.uid;
                         console.log("User Authenticated (Anonymous):", userId);
                         
-                        // (FIX) เรียกโหลดประวัติเมื่อ Auth พร้อม
                         await loadHistory();
                     } else {
                         console.log("No user signed in. Attempting sign in...");
@@ -117,7 +118,6 @@
 
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
-                // (FIX) ใช้ historyListContainer แสดง Error หากการเชื่อมต่อล้มเหลว
                 if (historyListContainer) {
                      historyListContainer.innerHTML = createHistoryEmptyState("Error: ไม่สามารถเชื่อมต่อ Firebase ได้");
                 }
@@ -129,7 +129,6 @@
             return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
         }
         
-        // (NEW FUNCTION) จัดรูปแบบวันที่ให้เป็นหัวข้อตามที่กำหนด (วันนี้, เมื่อวาน, วันในสัปดาห์, วันที่)
         function formatDateHeader(timestamp) {
             if (!timestamp || !timestamp.toDate) return 'N/A';
 
@@ -166,7 +165,7 @@
                  loadMoreBtn.disabled = true;
                  loadMoreBtn.textContent = 'กำลังโหลด...';
             }
-            if (historyLoadingIndicator && lastWatchedAtTimestamp === null) {
+            if (historyLoadingIndicator && lastVisibleDoc === null) { // (FIX)
                  historyLoadingIndicator.classList.add('hidden'); 
                  if (!initialLoadDone) {
                       historyListContainer.innerHTML = createHistorySkeleton(4); 
@@ -181,19 +180,13 @@
                     limit(HISTORY_LIMIT)
                 );
 
-                // หากไม่ใช่การโหลดครั้งแรก ให้ใช้ startAfter
-                if (lastWatchedAtTimestamp) {
-                    // (FIX) ดึง Document Snapshot จาก Timestamp เพื่อใช้ใน startAfter
-                    const startAfterDoc = await getDocs(query(getHistoryCollectionRef(), orderBy("watchedAt", "desc"), where("watchedAt", "<=", lastWatchedAtTimestamp), limit(1)));
-                    
-                    if (!startAfterDoc.empty) {
-                        // (FIX) ต้องใช้ startAfter(snapshot.docs[0])
-                        historyQuery = query(historyQuery, startAfter(startAfterDoc.docs[0])); 
-                    } else {
-                         // หากไม่พบเอกสารสำหรับ startAfter (เช่น เพิ่งโหลดมาครั้งแรก หรือถึงรายการสุดท้ายแล้ว)
-                         if (initialLoadDone) hasMore = false; // ป้องกันการเรียกซ้ำ
-                    }
+                // (*** MODIFIED FIX ***)
+                // หากไม่ใช่การโหลดครั้งแรก ให้ใช้ startAfter(lastVisibleDoc) ที่เก็บไว้
+                if (lastVisibleDoc) {
+                    historyQuery = query(historyQuery, startAfter(lastVisibleDoc)); 
                 }
+                // (*** ลบตรรกะการ Query ซ้ำด้วย where("watchedAt", ...) ออกไป ***)
+
 
                 const snapshot = await getDocs(historyQuery);
                 
@@ -208,13 +201,13 @@
                     hasMore = false;
                 }
                 
-                // 3. บันทึก Timestamp ของเอกสารสุดท้าย เพื่อใช้ในการโหลดครั้งถัดไป
+                // 3. (*** MODIFIED FIX ***)
+                // บันทึก Document Snapshot ของเอกสารสุดท้าย เพื่อใช้ในการโหลดครั้งถัดไป
                 if (snapshot.docs.length > 0) {
-                    // (FIX) ต้องใช้ตัวแปรตัวนี้ในการ Query ครั้งต่อไป
-                    lastWatchedAtTimestamp = snapshot.docs[snapshot.docs.length - 1].data().watchedAt;
-                } else {
-                    lastWatchedAtTimestamp = null;
+                    lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
                 }
+                // (*** ไม่ต้องมี else เพราะถ้า docs.length == 0, hasMore จะเป็น false อยู่แล้ว ***)
+
 
                 // 4. Render ข้อมูล
                 const isFirstLoad = !initialLoadDone; 
@@ -243,54 +236,40 @@
             let html = isFirstLoad ? '' : historyListContainer.innerHTML;
             let lastHeader = null; 
 
-            // (NEW LOGIC) ล้าง Container หากเป็นการโหลดครั้งแรก
             if (isFirstLoad) {
                  historyListContainer.innerHTML = '';
             }
 
-            // (NEW LOGIC) ถ้า Container ไม่ว่าง (จากการโหลดครั้งที่ 2 เป็นต้นไป)
-            // ให้ตรวจสอบว่าหัวข้อสุดท้ายที่เรนเดอร์ไปแล้วคืออะไร เพื่อไม่ให้ซ้ำ
             if (!isFirstLoad) {
                  const lastChild = historyListContainer.lastElementChild;
                  if (lastChild && lastChild.classList.contains('history-card')) {
-                    // หา timestamp ของรายการสุดท้ายที่แสดงอยู่
                     const lastWatchedAtSeconds = parseInt(lastChild.dataset.timestamp || 0, 10);
                     if (lastWatchedAtSeconds > 0) {
-                        // กำหนด lastHeader จากรายการสุดท้ายที่โหลดไว้
                         lastHeader = formatDateHeader({ toDate: () => new Date(lastWatchedAtSeconds * 1000) });
                     }
                  }
             }
 
 
-            // 1. จัดกลุ่มและเรนเดอร์
             historyItems.forEach(item => {
-                // (FIX) ใช้ toDate() เพื่อแปลง Firestore Timestamp เป็น Date object
                 const header = formatDateHeader(item.watchedAt);
                 
                 if (header !== lastHeader) {
-                    // ถ้าหัวข้อใหม่ต่างจากหัวข้อสุดท้ายที่แสดง ให้แทรก Header
                     historyListContainer.innerHTML += `<h3 class="date-header">${header}</h3>`;
                     lastHeader = header;
                 }
                 
-                // (FIX) ต้องส่ง item.watchedAt.seconds ไปใน dataset เพื่อใช้ในการหา lastHeader ในการโหลดครั้งถัดไป
                 historyListContainer.innerHTML += createHistoryCard(item);
             });
             
-            // 2. ถ้าไม่พบรายการเลยในการโหลดครั้งแรก
             if (historyItems.length === 0 && isFirstLoad) {
                 historyListContainer.innerHTML = createHistoryEmptyState("ไม่พบประวัติการเข้าชม");
             }
         }
         
-        /**
-         * (NEW) อัปเดตสถานะปุ่ม Load More
-         */
         function updateLoadMoreButtonState() {
             if (!loadMoreBtn) return;
             
-            // (FIX) ตรวจสอบว่ามีรายการ History Card แสดงอยู่จริงหรือไม่
             const hasExistingContent = historyListContainer.querySelector('.history-card');
             
             if (isLoading) {
@@ -312,9 +291,6 @@
             }
         }
 
-        /**
-         * (MODIFIED) สร้าง Card สำหรับประวัติการเข้าชม (เพิ่ม WatchedAt และ dataset)
-         */
         function createHistoryCard(history) {
             const showId = history.showId; 
             const episodeId = history.lastWatchedEpisodeId; 
@@ -329,7 +305,6 @@
                  const watchedDate = new Date(history.watchedAt.seconds * 1000);
                  watchedAtSeconds = history.watchedAt.seconds;
                  
-                 // แสดงวันที่และเวลาเต็มรูปแบบ (เช่น 11:30 น.)
                  watchedDateString = watchedDate.toLocaleTimeString('th-TH', { 
                      hour: '2-digit',
                      minute: '2-digit'
@@ -360,9 +335,6 @@
             `;
         }
         
-        /**
-         * (NEW) สร้างสถานะว่างสำหรับ History List
-         */
         function createHistoryEmptyState(message) {
              return `<div id="history-status" class="p-8 text-center text-gray-400 text-lg bg-gray-800 rounded-lg">
                          <i class="ri-time-line text-4xl mb-3 block"></i>
@@ -370,9 +342,6 @@
                      </div>`;
         }
         
-        /**
-         * (NEW) สร้าง Skeleton Loading Cards
-         */
         function createHistorySkeleton(count) {
              let html = '';
              for (let i = 0; i < count; i++) {
@@ -405,7 +374,6 @@
             loadMoreBtn = document.getElementById('load-more-btn');
             historyLoadingIndicator = document.getElementById('history-loading-indicator');
             
-            // (NEW) ซ่อน Loading Indicator หลักไว้ก่อน และใช้ Skeleton แทน
             if (historyLoadingIndicator) {
                  historyLoadingIndicator.classList.add('hidden');
             }
@@ -414,7 +382,6 @@
                 loadMoreBtn.addEventListener('click', loadHistory);
             }
 
-            // (NEW) แสดง Skeleton 4 ตัวทันทีเมื่อ DOMContentLoaded
             historyListContainer.innerHTML = createHistorySkeleton(4);
             
             initializeFirebase(); 
@@ -451,7 +418,6 @@
         <div id="history-loading-indicator" class="hidden"></div>
 
         <!-- History List Container -->
-        <!-- (MODIFIED) ลบ space-y-4 ออก เพื่อให้การจัดกลุ่มด้วย header ทำงานได้ (header จะเป็นตัวสร้าง margin เอง) -->
         <div id="history-list-container">
             <!-- Data injected by JS (or Skeleton initially) -->
         </div>
