@@ -65,7 +65,8 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, setLogLevel,
-            limit, orderBy, startAfter, getDocs, doc, queryEqual, writeBatch
+            limit, orderBy, startAfter, getDocs, doc, queryEqual, writeBatch,
+            initializeFirestore, CACHE_SIZE_UNLIMITED // (MODIFIED) เพิ่ม
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config ***)
@@ -85,9 +86,8 @@
         const HISTORY_LIMIT = 25; 
         
         let db, auth, userId;
-        // (*** MODIFIED FIX ***) 
-        // เปลี่ยนจากการเก็บ Timestamp เป็นการเก็บ Document Snapshot (ตัวเอกสาร) โดยตรง
-        let lastVisibleDoc = null; // lastWatchedAtTimestamp ถูกเปลี่ยนเป็น lastVisibleDoc
+        // (MODIFIED) เปลี่ยนตัวแปรสำหรับ Pagination
+        let lastVisibleDoc = null; // ใช้เก็บ Document อ้างอิง
         let isLoading = false;
         let hasMore = true;
 
@@ -100,9 +100,19 @@
         async function initializeFirebase() {
             try {
                 const app = initializeApp(firebaseConfig); 
-                db = getFirestore(app);
                 auth = getAuth(app);
                 setLogLevel('Debug'); 
+
+                // (MODIFIED) เปิดใช้งาน Offline Persistence (Caching)
+                try {
+                    db = initializeFirestore(app, {
+                        cacheSizeBytes: CACHE_SIZE_UNLIMITED
+                    });
+                    console.log("Firebase Offline Persistence enabled for history.html.");
+                } catch (err) {
+                    if (!db) db = getFirestore(app); // Fallback
+                    console.warn("Could not enable persistence:", err.code);
+                }
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
@@ -129,6 +139,7 @@
             return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
         }
         
+        // (NEW FUNCTION) จัดรูปแบบวันที่ให้เป็นหัวข้อตามที่กำหนด (วันนี้, เมื่อวาน, วันในสัปดาห์, วันที่)
         function formatDateHeader(timestamp) {
             if (!timestamp || !timestamp.toDate) return 'N/A';
 
@@ -165,7 +176,7 @@
                  loadMoreBtn.disabled = true;
                  loadMoreBtn.textContent = 'กำลังโหลด...';
             }
-            if (historyLoadingIndicator && lastVisibleDoc === null) { // (FIX)
+            if (historyLoadingIndicator && lastVisibleDoc === null) {
                  historyLoadingIndicator.classList.add('hidden'); 
                  if (!initialLoadDone) {
                       historyListContainer.innerHTML = createHistorySkeleton(4); 
@@ -180,13 +191,10 @@
                     limit(HISTORY_LIMIT)
                 );
 
-                // (*** MODIFIED FIX ***)
-                // หากไม่ใช่การโหลดครั้งแรก ให้ใช้ startAfter(lastVisibleDoc) ที่เก็บไว้
+                // (MODIFIED) หากไม่ใช่การโหลดครั้งแรก ให้ใช้ startAfter(lastVisibleDoc)
                 if (lastVisibleDoc) {
                     historyQuery = query(historyQuery, startAfter(lastVisibleDoc)); 
                 }
-                // (*** ลบตรรกะการ Query ซ้ำด้วย where("watchedAt", ...) ออกไป ***)
-
 
                 const snapshot = await getDocs(historyQuery);
                 
@@ -201,13 +209,10 @@
                     hasMore = false;
                 }
                 
-                // 3. (*** MODIFIED FIX ***)
-                // บันทึก Document Snapshot ของเอกสารสุดท้าย เพื่อใช้ในการโหลดครั้งถัดไป
+                // 3. (MODIFIED) บันทึก Document สุดท้าย เพื่อใช้ในการโหลดครั้งถัดไป
                 if (snapshot.docs.length > 0) {
                     lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
                 }
-                // (*** ไม่ต้องมี else เพราะถ้า docs.length == 0, hasMore จะเป็น false อยู่แล้ว ***)
-
 
                 // 4. Render ข้อมูล
                 const isFirstLoad = !initialLoadDone; 
@@ -251,6 +256,7 @@
             }
 
 
+            // 1. จัดกลุ่มและเรนเดอร์
             historyItems.forEach(item => {
                 const header = formatDateHeader(item.watchedAt);
                 
@@ -262,11 +268,15 @@
                 historyListContainer.innerHTML += createHistoryCard(item);
             });
             
+            // 2. ถ้าไม่พบรายการเลยในการโหลดครั้งแรก
             if (historyItems.length === 0 && isFirstLoad) {
                 historyListContainer.innerHTML = createHistoryEmptyState("ไม่พบประวัติการเข้าชม");
             }
         }
         
+        /**
+         * (NEW) อัปเดตสถานะปุ่ม Load More
+         */
         function updateLoadMoreButtonState() {
             if (!loadMoreBtn) return;
             
@@ -291,6 +301,9 @@
             }
         }
 
+        /**
+         * (MODIFIED) สร้าง Card สำหรับประวัติการเข้าชม (เพิ่ม WatchedAt และ dataset)
+         */
         function createHistoryCard(history) {
             const showId = history.showId; 
             const episodeId = history.lastWatchedEpisodeId; 
@@ -335,6 +348,9 @@
             `;
         }
         
+        /**
+         * (NEW) สร้างสถานะว่างสำหรับ History List
+         */
         function createHistoryEmptyState(message) {
              return `<div id="history-status" class="p-8 text-center text-gray-400 text-lg bg-gray-800 rounded-lg">
                          <i class="ri-time-line text-4xl mb-3 block"></i>
@@ -342,6 +358,9 @@
                      </div>`;
         }
         
+        /**
+         * (NEW) สร้าง Skeleton Loading Cards
+         */
         function createHistorySkeleton(count) {
              let html = '';
              for (let i = 0; i < count; i++) {
