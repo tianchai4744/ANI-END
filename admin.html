@@ -6,6 +6,8 @@
     <title>ANI-END Admin Panel</title> 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <!-- (NEW) Dragula CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.2/dragula.min.css" />
     <style>
         body { 
             background-color: #1f2937; /* gray-800 */
@@ -36,7 +38,7 @@
             font-weight: 700;
         }
 
-        /* (NEW) Sortable Header Style */
+        /* Sortable Header Style */
         .sort-header {
             cursor: pointer;
             transition: color 0.15s;
@@ -51,10 +53,28 @@
             font-size: 1rem;
             line-height: 1;
         }
+        
+        /* (NEW) Dragula specific styles for visual feedback */
+        .gu-mirror {
+            background-color: #374151; /* gray-700 */
+            opacity: 0.8;
+            padding: 8px; 
+            border: 1px dashed #2563eb; /* blue-600 */
+            pointer-events: none;
+        }
+        /* (NEW) Style for rows that can be dragged */
+        .draggable-row {
+            cursor: grab;
+        }
+        .draggable-row:active {
+            cursor: grabbing;
+        }
     </style>
 </head>
 <body class="text-gray-100">
 
+    <!-- (NEW) Dragula JS Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.2/dragula.min.js"></script>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -94,13 +114,14 @@
         let allEpisodes = []; // (NEW) เก็บข้อมูลตอนทั้งหมด
         let allReports = []; // (NEW) เก็บข้อมูลรายงานทั้งหมด
         let allTags = []; // NEW: เก็บข้อมูล Tag
+        let allBanners = []; // (NEW) เก็บข้อมูล Banner ทั้งหมด
         let reportCountMap = new Map(); // NEW: เก็บจำนวนรายงานต่อ Episode ID
         let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
         let allListeners = []; // (MODIFIED) Array to store unsubscribe functions
+        let bannerDragulaInstance = null; // (NEW) Dragula instance
 
-        // (NEW) State for Client-Side Sorting
-        // { field: 'createdAt', direction: 'desc', view: 'show' }
-        let currentSort = { field: 'updatedAt', direction: 'desc', view: 'show' }; 
+        // (MODIFIED) State for Client-Side Sorting - Default to Banner view
+        let currentSort = { field: 'orderIndex', direction: 'asc', view: 'banner' }; 
 
 
         // (NEW) State for Bulk Selection
@@ -206,6 +227,7 @@
         const bannerForm = document.getElementById('banner-form');
         const bannerShowSelect = document.getElementById('banner-show-select');
         const bannerImageUrlInput = document.getElementById('banner-image-url');
+        const bannerOrderIndexInput = document.getElementById('banner-order-index'); // (NEW)
         const closeBannerModalBtn = document.getElementById('close-banner-modal');
         const addBannerBtn = document.getElementById('add-banner-btn');
         const deleteBannerBtn = document.getElementById('delete-banner-btn');
@@ -264,6 +286,8 @@
                         console.log("Admin Authenticated:", userId, user.email);
                         showMainContent();
                         await setupListeners(); 
+                        // (NEW) Setup drag and drop after initial data load
+                        setupBannerDragAndDrop();
                     } else if (user) {
                         // Possibly anonymous user from other pages, sign them out
                         await signOut(auth);
@@ -375,14 +399,23 @@
         }
         // (END NEW FUNCTION)
         
-        // (NEW FUNCTION) Client-Side Sorting Handler
+        // (MODIFIED) Client-Side Sorting Handler
         function handleSort(view, field) {
+            // (NEW) If view is 'banner' and field is 'orderIndex', ignore manual sorting because drag-and-drop is active
+            if (view === 'banner' && field === 'orderIndex') {
+                // Clicking on Order Index header manually triggers the render
+                currentSort = { field: 'orderIndex', direction: 'asc', view: 'banner' };
+                renderBannerTable();
+                return; 
+            }
+            
             // If clicking the same column, reverse direction
             if (currentSort.field === field && currentSort.view === view) {
                 currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
             } else {
                 // Otherwise, set new column and default to descending (latest/highest first)
                 currentSort.field = field;
+                // (MODIFIED) Banners should default to 'asc' for orderIndex
                 currentSort.direction = 'desc'; 
                 currentSort.view = view;
             }
@@ -391,6 +424,8 @@
                 renderShowTable();
             } else if (view === 'episode') {
                 renderEpisodeTable();
+            } else if (view === 'banner') { 
+                renderBannerTable();
             }
         }
 
@@ -413,7 +448,7 @@
                 // Case-insensitive string comparison (using normalized Thai)
                 comparison = normalizeThai(valA).toLowerCase().localeCompare(normalizeThai(valB).toLowerCase());
             } else {
-                // Numeric comparison (for episodeNumber, viewCount, timestamps)
+                // Numeric comparison (for episodeNumber, viewCount, timestamps, orderIndex)
                 if (valA > valB) {
                     comparison = 1;
                 } else if (valA < valB) {
@@ -423,6 +458,42 @@
 
             return direction === 'desc' ? (comparison * -1) : comparison;
         }
+
+        // (NEW FUNCTION) Update UI headers with sort icons
+        function updateSortHeaders(view) {
+             const headers = document.querySelectorAll(`[data-sort-field][data-sort-view="${view}"]`);
+             const dragStatusEl = document.getElementById('drag-status-message'); // (NEW) Get drag status message
+
+             headers.forEach(header => {
+                 const field = header.dataset.sortField;
+                 
+                 // Remove existing icons and classes
+                 header.classList.remove('active');
+                 const icon = header.querySelector('.sort-icon');
+                 if (icon) icon.remove();
+                 
+                 // Add active class and icon if this is the current sort field
+                 if (currentSort.view === view && currentSort.field === field) {
+                     header.classList.add('active');
+                     const iconHtml = document.createElement('i');
+                     iconHtml.classList.add('sort-icon', 'ml-1', 'ri-arrow-down-s-line');
+                     
+                     if (currentSort.direction === 'asc') {
+                          iconHtml.classList.remove('ri-arrow-down-s-line');
+                          iconHtml.classList.add('ri-arrow-up-s-line');
+                     }
+                     header.appendChild(iconHtml);
+                 }
+             });
+
+             // (NEW) Show/Hide drag status message based on current sort criteria
+             if (view === 'banner' && currentSort.field === 'orderIndex') {
+                 if (dragStatusEl) dragStatusEl.classList.remove('hidden');
+             } else {
+                 if (dragStatusEl) dragStatusEl.classList.add('hidden');
+             }
+        }
+        // (END NEW FUNCTION)
 
 
         // (FIX) Render Function for Shows Table (เพิ่มการจัดเรียง)
@@ -565,32 +636,189 @@
             }
         }
         
-        // (NEW FUNCTION) Update UI headers with sort icons
-        function updateSortHeaders(view) {
-             const headers = document.querySelectorAll(`[data-sort-field][data-sort-view="${view}"]`);
-             headers.forEach(header => {
-                 const field = header.dataset.sortField;
-                 
-                 // Remove existing icons and classes
-                 header.classList.remove('active');
-                 const icon = header.querySelector('.sort-icon');
-                 if (icon) icon.remove();
-                 
-                 // Add active class and icon if this is the current sort field
-                 if (currentSort.view === view && currentSort.field === field) {
-                     header.classList.add('active');
-                     const iconHtml = document.createElement('i');
-                     iconHtml.classList.add('sort-icon', 'ml-1', 'ri-arrow-down-s-line');
-                     
-                     if (currentSort.direction === 'asc') {
-                          iconHtml.classList.remove('ri-arrow-down-s-line');
-                          iconHtml.classList.add('ri-arrow-up-s-line');
-                     }
-                     header.appendChild(iconHtml);
-                 }
-             });
+        /**
+         * (MODIFIED) Render Function for Banners Table (เพิ่มการจัดเรียง/Dragula)
+         */
+        function renderBannerTable() {
+            if (!bannerTableBody) return;
+            
+            let filteredBanners = [...allBanners]; // Copy the array
+            
+            // 1. (MODIFIED) Client-Side Sorting
+            if (currentSort.view === 'banner') {
+                filteredBanners.sort((a, b) => {
+                    if (currentSort.field === 'showTitle') {
+                        // Custom sort by Show Title (needs lookup)
+                        const showA = shows.find(s => s.id === a.showId)?.title || '';
+                        const showB = shows.find(s => s.id === b.showId)?.title || '';
+                        
+                        // Use compareValues for string comparison logic
+                        return compareValues({ title: showA }, { title: showB }, 'title', currentSort.direction);
+                    }
+                    // Default sort by field (timestamps/orderIndex)
+                    return compareValues(a, b, currentSort.field, currentSort.direction);
+                });
+            }
+            
+            // 2. (NEW) Update Table Headers for visual sorting
+            updateSortHeaders('banner');
+            
+            // 3. (NEW) If sorting by orderIndex and we are in banner view, ENABLE DRAG-AND-DROP
+            // (If sorted by another field, we cannot allow dragging since it would break the manual order)
+            const isManualOrder = currentSort.view === 'banner' && currentSort.field === 'orderIndex';
+            const tableElement = bannerTableBody.closest('table');
+            
+            if (isManualOrder) {
+                // Re-initialize dragula if needed
+                setupBannerDragAndDrop(true); 
+                tableElement.classList.add('cursor-grab');
+            } else {
+                // Destroy dragula if sorting by another field
+                if (bannerDragulaInstance) {
+                    bannerDragulaInstance.destroy();
+                    bannerDragulaInstance = null;
+                }
+                tableElement.classList.remove('cursor-grab');
+            }
+
+
+            if (filteredBanners.length === 0) {
+                bannerTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="py-6 px-4 text-center text-gray-400">
+                            ไม่พบแบนเนอร์
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let tableHtml = '';
+            filteredBanners.forEach((data) => {
+                const show = shows.find(s => s.id === data.showId);
+                
+                tableHtml += `
+                    <tr class="border-b border-gray-700 hover:bg-gray-700 ${isManualOrder ? 'draggable-row' : ''}" 
+                        data-id="${data.id}"
+                        data-order-index="${data.orderIndex || 0}"
+                    >
+                        <!-- (NEW) Order Index -->
+                        <td class="py-3 px-4 text-center font-bold">${data.orderIndex || 0}</td> 
+                        <td class="py-3 px-4">
+                            <img src="${data.bannerImageUrl || 'https://placehold.co/150x50/333/fff?text=No+Img'}" alt="banner" class="w-36 h-12 object-cover rounded">
+                        </td>
+                        <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
+                        <!-- (NEW) Created At -->
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(data.createdAt)}</td>
+                        <!-- (NEW) Updated At -->
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(data.updatedAt)}</td>
+                        <td class="py-3 px-4">
+                            <button class="text-green-400 hover:text-green-300 edit-banner-btn" data-id="${data.id}">แก้ไข</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            bannerTableBody.innerHTML = tableHtml;
         }
-        
+
+        /**
+         * (NEW FUNCTION) Drag and Drop Setup for Banners
+         */
+        function setupBannerDragAndDrop(forceRecreate = false) {
+            // (NEW) If already active and not forced, do nothing
+            if (bannerDragulaInstance && !forceRecreate) {
+                return;
+            }
+            
+            // (NEW) Destroy previous instance if forcing recreation
+            if (bannerDragulaInstance) {
+                 bannerDragulaInstance.destroy();
+                 bannerDragulaInstance = null;
+                 console.log("Destroyed old Dragula instance.");
+            }
+            
+            // Check if we are in the banner view and sorted by orderIndex
+            if (currentSort.view !== 'banner' || currentSort.field !== 'orderIndex' || !bannerTableBody) {
+                 return;
+            }
+
+            // (NEW) Create new Dragula instance
+            bannerDragulaInstance = dragula([bannerTableBody], {
+                moves: function (el, container, handle) {
+                    // Only allow dragging if the element has the draggable-row class
+                    return el.classList.contains('draggable-row'); 
+                }
+            });
+            
+            console.log("Dragula initialized for banner ordering.");
+
+            // (NEW) Handle 'drop' event
+            bannerDragulaInstance.on('drop', async (el, target, source, sibling) => {
+                // 1. Disable dragula temporarily to prevent infinite loop or race condition
+                bannerDragulaInstance.destroy();
+                bannerDragulaInstance = null;
+                
+                // 2. Create a batch update
+                const batch = writeBatch(db);
+                const bannerRef = getCollectionRef("banners");
+                
+                // 3. Loop through all rows in the new order and update their orderIndex
+                const rows = target.querySelectorAll('tr[data-id]');
+                let newOrder = 0;
+                let updateCount = 0;
+
+                rows.forEach((row, index) => {
+                    const id = row.dataset.id;
+                    const oldOrder = parseInt(row.dataset.orderIndex || 0, 10);
+                    // Use index + 1 or index + offset if you prefer starting order at 1
+                    const newIndex = index; 
+
+                    // Update only if the order has visibly changed
+                    if (oldOrder !== newIndex) {
+                        const docRef = doc(bannerRef, id);
+                        batch.update(docRef, { orderIndex: newIndex, updatedAt: serverTimestamp() });
+                        updateCount++;
+                        // Update the DOM dataset immediately to reflect new order during local snapshot
+                        row.dataset.orderIndex = newIndex; 
+                    }
+                });
+
+                if (updateCount > 0) {
+                    console.log(`Committing batch update for ${updateCount} banner items.`);
+                    
+                    // Show a temporary message
+                    const confirmEl = document.getElementById('drag-status-message');
+                    if (confirmEl) {
+                        confirmEl.textContent = `กำลังบันทึก ${updateCount} ลำดับ...`;
+                        confirmEl.classList.remove('hidden');
+                    }
+
+                    try {
+                        await batch.commit();
+                        if (confirmEl) {
+                             confirmEl.textContent = 'ลำดับแบนเนอร์ถูกบันทึกแล้ว!';
+                             setTimeout(() => confirmEl.classList.add('hidden'), 2000);
+                        }
+                    } catch (error) {
+                        console.error("Error committing drag reorder batch:", error);
+                        if (confirmEl) {
+                             confirmEl.textContent = 'บันทึกลำดับไม่สำเร็จ!';
+                             setTimeout(() => confirmEl.classList.add('hidden'), 3000);
+                        }
+                    }
+                } else {
+                    console.log("Banner order not changed, no commit necessary.");
+                }
+
+                // 4. Re-render/Re-init Dragula (only if still in banner view with orderIndex sort)
+                setTimeout(() => {
+                    renderBannerTable(); 
+                }, 500); // Small delay to allow Firebase snapshot listener to catch up if needed
+            });
+        }
+
+
         // (NEW FUNCTION) Render Function for Tags Table (ไม่จำเป็นต้องมีการจัดเรียงซับซ้อน)
         function renderTagTable() {
             if (!tagTableBody) return;
@@ -874,9 +1102,10 @@
         function renderAllViews() {
             renderShowTable();
             renderEpisodeTable();
+            renderBannerTable(); // (MODIFIED) Call renderBannerTable
             renderReportTable();
             renderDashboard();
-            renderTagTable(); // NEW: Render tag table
+            renderTagTable(); 
             updateReportBadge();
         }
 
@@ -967,27 +1196,14 @@
             const bannerQuery = query(getCollectionRef("banners"));
             // (MODIFIED) Store the unsubscribe function
             const unsubBanners = onSnapshot(bannerQuery, (snapshot) => {
-                // (MODIFIED) This doesn't need filtering, so we render directly
-                if (bannerTableBody) bannerTableBody.innerHTML = '';
+                allBanners = []; // (NEW) Store in global array
                 snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const show = shows.find(s => s.id === data.showId);
-                    
-                    if (bannerTableBody) {
-                        bannerTableBody.innerHTML += `
-                            <tr class="border-b border-gray-700 hover:bg-gray-700">
-                                <td class="py-3 px-4">
-                                    <img src="${data.bannerImageUrl || 'https://placehold.co/150x50/333/fff?text=No+Img'}" alt="banner" class="w-36 h-12 object-cover rounded">
-                                </td>
-                                <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
-                                <td class="py-3 px-4">
-                                    <button class="text-green-400 hover:text-green-300 edit-banner-btn" data-id="${doc.id}">แก้ไข</button>
-                                </td>
-                            </tr>
-                        `;
-                    }
+                    allBanners.push({ id: doc.id, ...doc.data() });
                 });
-                console.log("Banners loaded:", snapshot.size);
+                
+                console.log("Banners loaded:", allBanners.length);
+                renderBannerTable(); // (MODIFIED) Call render function
+
             }, (error) => console.error("Error listening to banners:", error));
             allListeners.push(unsubBanners); // (MODIFIED) Add to array
 
@@ -1087,6 +1303,12 @@
             } else if (viewId === 'banner') {
                 if (bannerListView) bannerListView.classList.remove('hidden');
                 if (showBannerListBtn) showBannerListBtn.classList.add('bg-gray-900', 'text-white');
+                // (MODIFIED) Set default sort for banner view
+                 if (currentSort.view !== 'banner') {
+                    currentSort = { field: 'orderIndex', direction: 'asc', view: 'banner' };
+                }
+                renderBannerTable();
+
             } else if (viewId === 'report') { 
                 if (reportListView) reportListView.classList.remove('hidden');
                 if (showReportListBtn) showReportListBtn.classList.add('bg-gray-900', 'text-white');
@@ -1852,17 +2074,19 @@
             });
         }
 
-        // --- Banner Modal Logic ---
+        // --- Banner Modal Logic (MODIFIED) ---
         function openBannerModal(mode, bannerData = {}, bannerId = null) {
             currentEditingId = bannerId;
             if (mode === 'add') {
                 if (bannerModalTitle) bannerModalTitle.textContent = "เพิ่มแบนเนอร์ (Banner) ใหม่";
                 if (bannerForm) bannerForm.reset();
                 if (deleteBannerBtn) deleteBannerBtn.classList.add('hidden');
+                if (bannerOrderIndexInput) bannerOrderIndexInput.value = 0; // (NEW) Default to 0
             } else {
                 if (bannerModalTitle) bannerModalTitle.textContent = "แก้ไขแบนเนอร์ (Banner)";
                 if (bannerShowSelect) bannerShowSelect.value = bannerData.showId || '';
                 if (bannerImageUrlInput) bannerImageUrlInput.value = bannerData.bannerImageUrl || '';
+                if (bannerOrderIndexInput) bannerOrderIndexInput.value = bannerData.orderIndex || 0; // (NEW) Load orderIndex
                 if (deleteBannerBtn) deleteBannerBtn.classList.remove('hidden');
             }
             if (bannerModal) bannerModal.classList.add('flex');
@@ -1873,9 +2097,12 @@
         if (bannerForm) {
             bannerForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                
+                // (MODIFIED) Include orderIndex
                 const bannerData = {
                     showId: bannerShowSelect.value,
                     bannerImageUrl: bannerImageUrlInput.value,
+                    orderIndex: parseInt(bannerOrderIndexInput.value, 10) || 0, // (NEW)
                     updatedAt: serverTimestamp()
                 };
 
@@ -1933,6 +2160,16 @@
                         console.error("Error fetching banner for edit:", error);
                     }
                 }
+            });
+            // (NEW) Add listener for sorting by header click
+            bannerTableBody.closest('table').querySelectorAll('.sort-header[data-sort-view="banner"]').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    // Prevent propagation if clicking inside the header but not the header itself (e.g., table icon)
+                    if (e.target.closest('.sort-header') !== header) return; 
+                    
+                    const field = header.dataset.sortField;
+                    handleSort('banner', field);
+                });
             });
         }
         
@@ -2273,7 +2510,7 @@
                     </div>
                 </div>
 
-                <!-- 1. Banner List View -->
+                <!-- 1. Banner List View (MODIFIED: Added sorting headers) -->
                 <div id="banner-list-view" class="hidden">
                     <div class="flex justify-between items-center mb-6">
                         <h2 class="text-3xl font-bold text-white">รายการแบนเนอร์ (Banner)</h2>
@@ -2283,13 +2520,33 @@
                         </button>
                     </div>
                     
-                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-                        <table class="w-full">
+                    <!-- (NEW) Drag Status Message -->
+                    <div id="drag-status-message" class="hidden bg-blue-800/80 border border-blue-700 text-white p-3 rounded-lg mb-4 text-sm font-medium flex items-center">
+                         <i class="ri-drag-move-line mr-2 text-xl"></i> คุณกำลังอยู่ในโหมดจัดเรียงลำดับแบนเนอร์ (Drag & Drop)
+                    </div>
+
+                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden overflow-x-auto">
+                        <table class="w-full table-fixed min-w-[900px]"> <!-- (MODIFIED) Increased min-width for new column -->
                             <thead class="bg-gray-900">
                                 <tr>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">รูปแบนเนอร์</th>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่องที่ลิงก์</th>
-                                    <th class="py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
+                                    <!-- (MODIFIED) Sort by Order Index (Default for manual order) -->
+                                    <th class="w-20 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="orderIndex" data-sort-view="banner">
+                                        ลำดับ
+                                    </th>
+                                    <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">รูปแบนเนอร์</th>
+                                    <!-- Sort by Show Title -->
+                                    <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="showTitle" data-sort-view="banner">
+                                        เรื่องที่ลิงก์
+                                    </th>
+                                    <!-- Sort by Created At -->
+                                    <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="banner">
+                                        วันที่สร้าง
+                                    </th>
+                                    <!-- Sort by Updated At -->
+                                    <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="updatedAt" data-sort-view="banner">
+                                        วันที่อัปเดต
+                                    </th>
+                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
                                 </tr>
                             </thead>
                             <tbody id="banner-table-body" class="divide-y divide-gray-700">
@@ -2587,6 +2844,13 @@
                     </button>
                 </div>
                 <div class="p-6 space-y-4">
+                    <!-- (NEW) Order Index Input -->
+                    <div>
+                        <label for="banner-order-index" class="block text-sm font-medium text-gray-300 mb-1">ลำดับการแสดง (Order Index) *</label>
+                        <input type="number" id="banner-order-index" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500" value="0" required>
+                        <p class="text-xs text-gray-400 mt-1">ใช้กำหนดลำดับการแสดงผลบนหน้าแรก (เลขน้อยจะอยู่ด้านหน้า)</p>
+                    </div>
+                    
                     <div>
                         <label for="banner-show-select" class="block text-sm font-medium text-gray-300 mb-1">เรื่อง (Show) *</label>
                         <select id="banner-show-select" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500" required>
