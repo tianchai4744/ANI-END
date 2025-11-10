@@ -52,7 +52,8 @@
             setLogLevel, 
             where, getDocs, 
             writeBatch,
-            orderBy // <--- FIX: Added orderBy for Firestore queries
+            orderBy, // <--- FIX: Added orderBy for Firestore queries
+            initializeFirestore, CACHE_SIZE_UNLIMITED // (MODIFIED) เพิ่ม
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         
@@ -79,6 +80,7 @@
         let allTags = []; // NEW: เก็บข้อมูล Tag
         let reportCountMap = new Map(); // NEW: เก็บจำนวนรายงานต่อ Episode ID
         let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
+        let allListeners = []; // (MODIFIED) Array to store unsubscribe functions
 
         // (NEW) State for Bulk Selection
         let selectedEpisodes = new Set();
@@ -206,9 +208,19 @@
         async function initializeFirebase() {
             try {
                 const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
                 auth = getAuth(app);
                 setLogLevel('Debug'); 
+
+                // (MODIFIED) เปิดใช้งาน Offline Persistence (Caching)
+                try {
+                    db = initializeFirestore(app, {
+                        cacheSizeBytes: CACHE_SIZE_UNLIMITED
+                    });
+                    console.log("Firebase Offline Persistence enabled for admin.html.");
+                } catch (err) {
+                    if (!db) db = getFirestore(app); // Fallback
+                    console.warn("Could not enable persistence:", err.code);
+                }
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user && user.email) {
@@ -269,6 +281,12 @@
         if (logoutButton) {
             logoutButton.addEventListener('click', async () => {
                 try {
+                    // (MODIFIED) 1. Unsubscribe from all listeners
+                    console.log(`Unsubscribing from ${allListeners.length} listeners.`);
+                    allListeners.forEach(unsubscribe => unsubscribe());
+                    allListeners = []; // Clear the array
+
+                    // 2. Sign out
                     await signOut(auth);
                     // onAuthStateChanged จะจัดการซ่อน/แสดงหน้าเอง
                 } catch (error) {
@@ -721,9 +739,14 @@
 
 
         async function setupListeners() {
+            // (MODIFIED) Clear any existing listeners before setting new ones
+            allListeners.forEach(unsubscribe => unsubscribe());
+            allListeners = [];
+
             // 1. Listen to Shows (อนิเมะ)
             const showQuery = query(getCollectionRef("shows"));
-            onSnapshot(showQuery, (snapshot) => {
+            // (MODIFIED) Store the unsubscribe function
+            const unsubShows = onSnapshot(showQuery, (snapshot) => {
                 shows = []; // (MODIFIED) Store in global array
                 
                 const showSelectHtml = '<option value="">-- เลือกอนิเมะ --</option>';
@@ -749,10 +772,12 @@
                 renderAllViews();
                 
             }, (error) => console.error("Error listening to shows:", error));
+            allListeners.push(unsubShows); // (MODIFIED) Add to array
 
             // 2. Listen to Episodes (ตอน)
             const episodeQuery = query(getCollectionRef("episodes"));
-            onSnapshot(episodeQuery, (snapshot) => {
+            // (MODIFIED) Store the unsubscribe function
+            const unsubEpisodes = onSnapshot(episodeQuery, (snapshot) => {
                 allEpisodes = []; // (NEW) Store in global array
                 
                 const changedShowIds = new Set();
@@ -793,10 +818,12 @@
                 renderAllViews();
                 
             }, (error) => console.error("Error listening to episodes:", error));
+            allListeners.push(unsubEpisodes); // (MODIFIED) Add to array
 
             // 3. Listen to Banners
             const bannerQuery = query(getCollectionRef("banners"));
-            onSnapshot(bannerQuery, (snapshot) => {
+            // (MODIFIED) Store the unsubscribe function
+            const unsubBanners = onSnapshot(bannerQuery, (snapshot) => {
                 // (MODIFIED) This doesn't need filtering, so we render directly
                 if (bannerTableBody) bannerTableBody.innerHTML = '';
                 snapshot.forEach((doc) => {
@@ -819,10 +846,12 @@
                 });
                 console.log("Banners loaded:", snapshot.size);
             }, (error) => console.error("Error listening to banners:", error));
+            allListeners.push(unsubBanners); // (MODIFIED) Add to array
 
             // 4. Listen to Reports (MODIFIED to calculate report count)
             const reportQuery = query(getCollectionRef("reports"));
-            onSnapshot(reportQuery, (snapshot) => {
+            // (MODIFIED) Store the unsubscribe function
+            const unsubReports = onSnapshot(reportQuery, (snapshot) => {
                 allReports = [];
                 reportCountMap.clear(); // CLEAR map
                 
@@ -841,10 +870,12 @@
                 renderAllViews();
 
             }, (error) => console.error("Error listening to reports:", error));
+            allListeners.push(unsubReports); // (MODIFIED) Add to array
             
             // 5. Listen to Tags (NEW)
             const tagQuery = query(getCollectionRef("tags"), orderBy("name")); // Sort by name
-            onSnapshot(tagQuery, (snapshot) => {
+            // (MODIFIED) Store the unsubscribe function
+            const unsubTags = onSnapshot(tagQuery, (snapshot) => {
                 allTags = [];
                 snapshot.forEach((doc) => {
                     allTags.push({ id: doc.id, ...doc.data() });
@@ -855,6 +886,7 @@
                 renderTagTable(); // NEW: Render the Tag List View
                 
             }, (error) => console.error("Error listening to tags:", error));
+            allListeners.push(unsubTags); // (MODIFIED) Add to array
         }
 
         /**
@@ -1281,7 +1313,7 @@
             });
         }
         
-        // (NEW) Handle Bulk Delete Button (Shows)
+        // (MODIFIED) Handle Bulk Delete Button (Shows) - แก้ไข N+1 และ Batch
         if (bulkDeleteShowsBtn) {
             bulkDeleteShowsBtn.addEventListener('click', () => {
                 const count = selectedShows.size;
@@ -1292,20 +1324,27 @@
                         console.log(`Starting bulk delete for ${count} shows...`);
                         try {
                             
+                            // (FIX for N+1 Reads and multiple batches)
+                            // 1. สร้าง Batch เดียว
+                            const batch = writeBatch(db);
+                            
                             for (const showId of selectedShows) {
-                                const batch = writeBatch(db);
+                                // 2. เพิ่ม Show ที่จะลบ
                                 batch.delete(doc(getCollectionRef("shows"), showId));
                                 
+                                // 3. ค้นหา Episodes (นี่คือ N+1 query, แต่เราต้องทำ)
                                 const episodesQuery = query(getCollectionRef("episodes"), where("showId", "==", showId));
                                 const episodesSnapshot = await getDocs(episodesQuery);
                                 
+                                // 4. เพิ่ม Episodes ที่จะลบ
                                 episodesSnapshot.forEach(epDoc => {
                                     batch.delete(epDoc.ref);
                                 });
-                                
-                                await batch.commit();
-                                console.log(`Deleted show ${showId} and ${episodesSnapshot.size} episodes.`);
                             }
+                            
+                            // 5. Commit Batch ทั้งหมดในครั้งเดียว
+                            await batch.commit();
+                            console.log(`Deleted ${selectedShows.size} shows and their episodes.`);
                             
                             selectedShows.clear();
                             updateBulkActionUIShows(0);
@@ -1426,6 +1465,7 @@
                 openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบอนิเมะเรื่องนี้? (การดำเนินการนี้จะลบตอนทั้งหมดของอนิเมะเรื่องนี้ด้วย และไม่สามารถย้อนกลับได้)`, 
                     async () => {
                         try {
+                            // (MODIFIED) ใช้ Logic เดียวกับ Bulk Delete (N+1 Reads)
                             const batch = writeBatch(db);
                             batch.delete(doc(getCollectionRef("shows"), currentEditingId));
                             
