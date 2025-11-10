@@ -89,7 +89,9 @@
             where, getDocs, 
             writeBatch,
             orderBy, 
-            initializeFirestore, CACHE_SIZE_UNLIMITED
+            initializeFirestore, CACHE_SIZE_UNLIMITED,
+            // (*** MODIFIED: เพิ่ม deleteField แทน FieldValue เพื่อให้ใช้ลบฟิลด์ได้ ***)
+            deleteField 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         
@@ -1164,12 +1166,14 @@
                         // ถ้ามีการเพิ่มหรือลบตอนใหม่, ให้อัปเดต max episode เสมอ
                         changedShowIds.add(showId);
                     } else if (change.type === 'modified') {
-                        // ถ้ามีการแก้ไข, ให้อัปเดตเฉพาะเมื่อ episodeNumber เปลี่ยนไป
                         // (FIX) ต้องตรวจสอบว่า oldDoc มีอยู่จริงก่อน (ซึ่งควรจะมีใน 'modified')
                         const oldEpNum = change.oldDoc?.data()?.episodeNumber;
                         const newEpNum = change.doc.data()?.episodeNumber;
                         
-                        if (oldEpNum !== newEpNum) {
+                        const oldStatus = change.oldDoc?.data()?.status;
+                        const newStatus = change.doc.data()?.status;
+
+                        if (oldEpNum !== newEpNum || oldStatus !== newStatus) {
                             changedShowIds.add(showId);
                         }
                     }
@@ -1895,17 +1899,23 @@
             });
         }
         
-        // --- MODIFIED: URL to Embed Code Converter Function ---
+        // --- MODIFIED: URL to Embed Code Converter Function (FIXED Invalid URL error) ---
         function convertToEmbedCode(input) {
-            if (!input || input.trim().toLowerCase().startsWith('<iframe')) {
-                return input.trim();
+            if (!input) {
+                return ''; // Handle null/undefined/empty input early
+            }
+            const trimmedInput = input.trim(); 
+
+            if (trimmedInput.toLowerCase().startsWith('<iframe')) {
+                return trimmedInput;
             }
 
-            try {
+            try { 
                 const defaultIframeStart = `<iframe src="`;
                 const defaultIframeEnd = `" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
                 
-                const url = new URL(input.trim());
+                // Use try/catch because new URL() can throw an error if input is not a valid URL
+                const url = new URL(trimmedInput); 
                 const hostname = url.hostname.replace('www.', '');
                 let embedSrc = '';
                 
@@ -1935,12 +1945,13 @@
                 if (embedSrc) {
                     return defaultIframeStart + embedSrc + defaultIframeEnd;
                 } else {
-                    return input.trim(); 
+                    return trimmedInput; 
                 }
 
-            } catch (e) {
+            } catch (e) { 
                 console.error("Invalid URL format or conversion error:", e);
-                return input.trim();
+                // If it fails to parse as a URL, assume it's just meant to be treated as raw embed code or text
+                return trimmedInput;
             }
         }
         // --- END MODIFIED FUNCTION ---
@@ -1981,18 +1992,11 @@
                     embedCode: embedCodeToSave, 
                     showId: episodeShowSelect.value,
                     updatedAt: serverTimestamp()
-                    // (NEW) If episode is being edited (and status was broken), clear status
                 };
                 
-                if (currentEditingId) {
-                    const oldData = allEpisodes.find(ep => ep.id === currentEditingId);
-                    // Clear status if the admin edits the embed code OR clears the status explicitly (though there's no checkbox for it)
-                    if (oldData && oldData.status === 'broken') {
-                        episodeData.status = null; 
-                        console.log("Cleared 'broken' status after edit.");
-                    }
-                }
-
+                // (*** โค้ดที่ถูกแก้ไข/เพิ่มเติม: จัดการล้างสถานะและลบ Reports เมื่อแก้ไขตอน ***)
+                const batch = writeBatch(db); // ใช้ Batch เพื่อทำรายการหลายอย่างพร้อมกัน
+                let originalShowId = episodeData.showId; // ใช้ showId ปัจจุบัน (เผื่อมีการเปลี่ยนเรื่อง)
 
                 if (!episodeData.showId) {
                     console.error("Please select a show.");
@@ -2002,20 +2006,60 @@
                 try {
                     if (currentEditingId) {
                         const docRef = doc(getCollectionRef("episodes"), currentEditingId);
-                        await updateDoc(docRef, episodeData);
+                        const oldData = allEpisodes.find(ep => ep.id === currentEditingId);
+                        
+                        // เก็บ showId เดิมไว้ (เผื่อมีการเปลี่ยน showId)
+                        originalShowId = oldData ? oldData.showId : episodeData.showId;
+
+                        // 1. ตรวจสอบสถานะเดิมและสร้างข้อมูลอัปเดต
+                        // NEW: สร้าง object สำหรับอัปเดต โดยรวมข้อมูลที่มาจากฟอร์มก่อน
+                        const updateData = { ...episodeData };
+
+                        // ตรวจสอบว่าต้องล้างสถานะหรือไม่ (ถ้าเดิมเป็น broken หรือ user_reported)
+                        const wasReportedOrBroken = oldData && 
+                            (oldData.status === 'broken' || oldData.status === 'user_reported');
+
+                        if (wasReportedOrBroken) {
+                            // 1. ลบฟิลด์ status ออกไปอย่างสมบูรณ์ใน updateData
+                            // (FIXED) ใช้ deleteField() แทน FieldValue.delete()
+                            updateData.status = deleteField(); 
+                            console.log(`Cleared status for episode ${currentEditingId} after Admin edit.`);
+                            
+                            // 2. ค้นหาและลบเอกสาร Report ที่เกี่ยวข้องทั้งหมด
+                            const reportsQuery = query(getCollectionRef("reports"), where("episodeId", "==", currentEditingId));
+                            const reportsSnapshot = await getDocs(reportsQuery);
+
+                            reportsSnapshot.forEach(reportDoc => {
+                                batch.delete(reportDoc.ref);
+                            });
+                            console.log(`Deleted ${reportsSnapshot.size} associated reports.`);
+                        } 
+                        
+                        // 3. อัปเดต Episode Document ด้วย updateData
+                        batch.update(docRef, updateData);
+                        
+                        // 4. Commit Batch
+                        await batch.commit();
+
                     } else {
+                        // โค้ดเดิมสำหรับ Add
                         episodeData.createdAt = serverTimestamp();
                         await addDoc(getCollectionRef("episodes"), episodeData);
                     }
                     
+                    // 5. อัปเดต Max Episode (ใช้ showId ที่ถูกแก้ไข และ showId เดิมหากมีการย้ายเรื่อง)
                     await updateMaxEpisodeAndStatus(episodeData.showId); 
+                    if (episodeData.showId !== originalShowId) {
+                         // ถ้ามีการเปลี่ยน showId, ต้องอัปเดต show เดิมด้วย
+                         await updateMaxEpisodeAndStatus(originalShowId);
+                    }
                     
                     if (episodeModal) episodeModal.classList.remove('flex');
                     
                     if (episodeEmbedInput) episodeEmbedInput.value = embedCodeToSave; 
 
                 } catch (error) {
-                    console.error("Error saving episode: ", error);
+                    console.error("Error saving episode and clearing reports: ", error);
                 }
             });
         }
