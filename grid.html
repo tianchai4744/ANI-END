@@ -13,7 +13,6 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             cursor: default;
         }
-        /* (MODIFIED) ปรับแต่งปุ่ม Swiper ให้เห็นชัดบนแบนเนอร์ */
         .swiper-button-next, .swiper-button-prev { 
             color: #ffffff; 
             background-color: rgba(0,0,0,0.3);
@@ -27,18 +26,15 @@
             font-weight: 900;
         }
         
-        /* (NEW) กำหนด cursor pointer ให้กับลิงก์ทั้งหมดเพื่อให้ทำงานถูกต้อง */
         a {
             cursor: pointer; 
         }
 
         .nav-link.active { color: #00b87c; } 
-        /* (MODIFIED) ให้ Grid View แสดงเสมอ */
         #home-view { display: none; } 
         #grid-view-container { display: block; } 
         #mobile-search-bar { display: none; }
         
-        /* (MODIFIED) ชื่อเรื่องแสดงได้ 2 บรรทัด */
         .card-title {
             overflow: hidden;
             text-overflow: ellipsis;
@@ -67,7 +63,6 @@
          background-color: #374151;
      }
      
-     /* (NEW) สไตล์สำหรับป้ายกำกับ "พากย์ไทย" */
      .dub-badge {
         position: absolute;
         top: 8px; 
@@ -85,7 +80,6 @@
         gap: 4px;
      }
 
-     /* (NEW) ป้ายสถานะจบแล้ว (มุมล่างซ้าย) */
      .status-badge-completed {
         position: absolute;
         bottom: 8px; 
@@ -100,7 +94,6 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
      }
      
-     /* (NEW - FIX) เพิ่ม CSS สำหรับป้ายตอนล่าสุดที่หายไป */
      .status-badge-episode {
         position: absolute;
         bottom: 8px; /* มุมล่างขวา */
@@ -115,9 +108,6 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
      }
      
-    /* (REMOVED) Pagination Button Styles removed */
-
-    /* (NEW FIX) Add scroll margin to the title to account for the sticky header */
     #grid-view-title {
         scroll-margin-top: 80px; /* (Header height h-16 is 4rem/64px + padding) */
     }
@@ -133,7 +123,9 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, setLogLevel,
-            limit, orderBy, where, startAfter, getDocs 
+            limit, orderBy, where, startAfter, getDocs,
+            initializeFirestore, CACHE_SIZE_UNLIMITED // (MODIFIED) เพิ่ม
+            // (REMOVED) select ถูกลบออกจากที่นี่
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config ***)
@@ -149,31 +141,30 @@
         
         const appId = firebaseConfig.projectId;
 
-        // Constants for Pagination
+        // (MODIFIED) ปรับปรุง Constants และ State
         const ITEMS_PER_PAGE = 28; // 7 columns * 4 rows
+        // (REMOVED) FIELDS_TO_SELECT ถูกลบออก
         
         let db, auth, userId;
-        let allShows = []; 
-        let allTags = new Set(); 
+        let allShowsForSearch = []; // (MODIFIED) เก็บแค่ title/id สำหรับ Search Dropdown
         let historyItems = []; 
         
         // (MODIFIED) Data loading flags
-        let isShowsLoaded = false;
-        let isHistoryLoaded = false;
+        let isDropdownDataLoaded = false; // Flag สำหรับ Search Dropdown
         let initialLoadDone = false; // Flag to track if initial load logic completed
         
-        // State for Grid View Pagination
-        let currentGridTag = null; 
-        let gridFilteredShows = []; 
-        let currentGridPage = 1; 
-        // (REMOVED) totalGridPages removed
-
+        // (NEW) State for Server-side Pagination
+        let currentQuery = null; // Query ปัจจุบัน (เช่น ค้นหา Tag 'อนิเมะ')
+        let lastVisibleDoc = null; // เอกสารสุดท้ายที่เห็น
+        let isLoading = false; // กำลังโหลด?
+        let hasMore = true; // มีข้อมูลให้โหลดอีกหรือไม่
+        
         // UI Elements
         let gridViewContainer;
         let gridViewTitle;
         let gridViewContent;
-        let loadMoreContainer; // (NEW)
-        let loadMoreBtn; // (NEW)
+        let loadMoreContainer; 
+        let loadMoreBtn; 
         let searchInput;
         let searchDropdown;
         let mobileSearchInput;
@@ -181,8 +172,7 @@
         let desktopNavLinks;
         let mobileNavLinks;
         
-        let initialQueryFromUrl = null;
-        let currentSearchQuery = null; 
+        // (REMOVED) currentSearchQuery, currentGridTag, gridFilteredShows, currentGridPage
 
         // Thai Normalization (KEEP)
         function normalizeThai(text) {
@@ -195,16 +185,28 @@
         async function initializeFirebase() {
             try {
                 const app = initializeApp(firebaseConfig); 
-                db = getFirestore(app);
                 auth = getAuth(app);
                 setLogLevel('Debug'); 
+
+                // (NEW) เปิดใช้งาน Offline Persistence (Caching)
+                try {
+                    db = initializeFirestore(app, {
+                        cacheSizeBytes: CACHE_SIZE_UNLIMITED
+                    });
+                    console.log("Firebase Offline Persistence enabled.");
+                } catch (err) {
+                    if (!db) db = getFirestore(app); // Fallback
+                    console.warn("Could not enable persistence:", err.code);
+                }
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
                         console.log("User Authenticated (Anonymous):", userId);
-                        await setupListeners();
-                        setupHistoryListener();
+                        // (MODIFIED) โหลดข้อมูลสำหรับ Dropdown และ History ก่อน
+                        await loadDropdownData(); 
+                        // (MODIFIED) จากนั้นค่อยตั้งค่า Query ตาม URL
+                        setupQueryAndLoadFromUrl(); 
                     } else {
                         console.log("No user signed in. Attempting sign in...");
                         await signInAnonymously(auth);
@@ -225,120 +227,132 @@
              return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
         }
 
-        async function setupListeners() {
-            // 1. Listener for Shows
-            const showsQuery = query(getCollectionRef("shows"));
-            onSnapshot(showsQuery, (snapshot) => {
-                allShows = [];
-                allTags.clear();
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    allShows.push({ id: doc.id, ...data });
-                    (data.tags || []).forEach(tag => allTags.add(tag));
-                });
+        /**
+         * (NEW) โหลดข้อมูลที่จำเป็นสำหรับ UI (History และ Search Dropdown)
+         * โหลดแค่ครั้งเดียวเมื่อเปิดหน้า
+         */
+        async function loadDropdownData() {
+            if (isDropdownDataLoaded || !userId) return;
+
+            try {
+                // 1. โหลด History (สำหรับสร้างลิงก์)
+                const historyQuery = query(getHistoryCollectionRef(), orderBy("watchedAt", "desc"), limit(50));
+                const historySnapshot = await getDocs(historyQuery);
+                historyItems = historySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log("History loaded for dropdown:", historyItems.length);
+
+                // 2. โหลด Shows (เฉพาะ Title) สำหรับ Search Dropdown
+                // (REMOVED) select("title") ถูกลบออก
+                const showsSearchQuery = query(getCollectionRef("shows"));
+                const showsSnapshot = await getDocs(showsSearchQuery);
+                // (MODIFIED) ดึง title จาก data()
+                allShowsForSearch = showsSnapshot.docs.map(doc => ({ id: doc.id, title: doc.data().title }));
+                console.log("Show titles loaded for search dropdown:", allShowsForSearch.length);
                 
-                console.log("Shows loaded:", allShows.length);
-                isShowsLoaded = true; // (NEW) Set flag
-                attemptInitialLoad(); // (NEW) Call gatekeeper
-                
-            }, (error) => {
-                console.error("Error listening to shows:", error);
-                gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-red-500">ไม่สามารถโหลดข้อมูลอนิเมะได้</p>`;
-            });
-            
-            // 3. Listener for View History (Needed for correct card linking)
-            setupHistoryListener();
-        }
-        
-        function setupHistoryListener() {
-            if (!userId) return;
-            // (MODIFIED) Load 50 items to ensure all cards can check for history
-            const historyQuery = query(getHistoryCollectionRef(), orderBy("watchedAt", "desc"), limit(50));
-            onSnapshot(historyQuery, (snapshot) => {
-                historyItems = [];
-                snapshot.forEach((doc) => {
-                    historyItems.push({ id: doc.id, ...doc.data() });
-                });
-                console.log("History loaded:", historyItems.length);
-                
-                if (!isHistoryLoaded) {
-                    isHistoryLoaded = true; // (NEW) Set flag
-                    attemptInitialLoad(); // (NEW) Call gatekeeper
-                } else {
-                    // (FIXED) This is a History UPDATE. Re-render the current view.
-                    console.log("History updated. Re-rendering current grid view.");
-                    
-                    if (currentSearchQuery) {
-                        // Re-run the search, which will clear and call loadMoreCards
-                        performSearch(currentSearchQuery); 
-                    } else if (currentGridTag) {
-                        // Re-run the tag initialization, which will clear and call loadMoreCards
-                        initializeGridPaging(currentGridTag); 
-                    }
-                }
-                
-            }, (error) => {
-                console.error("Error listening to view history:", error);
-                // If history fails, still try to load.
-                if (!isHistoryLoaded) {
-                    isHistoryLoaded = true; 
-                    attemptInitialLoad();
-                }
-            });
-        }
-        
-        // (NEW) Gatekeeper function to ensure both data sets are ready
-        function attemptInitialLoad() {
-            // Run only if both data sets are loaded AND the initial load hasn't run yet
-            if (isShowsLoaded && isHistoryLoaded && !initialLoadDone) {
-                console.log("Data Gatekeeper: Shows and History are loaded. Proceeding with initial render.");
-                initialLoadDone = true; // Mark as run
-                checkInitialLoad(); // Run the original initial load logic
+                isDropdownDataLoaded = true;
+
+            } catch (error) {
+                console.error("Error loading dropdown data:", error);
             }
         }
+        
+        // (REMOVED) setupListeners, setupHistoryListener, attemptInitialLoad
 
         
-        // (MODIFIED) Check URL parameters on initial load
-        function checkInitialLoad() {
+        /**
+         * (NEW) ตรวจสอบ URL และตั้งค่า Query เริ่มต้น
+         */
+        function setupQueryAndLoadFromUrl() {
+            if (initialLoadDone) return; 
+            initialLoadDone = true;
+
             const urlParams = new URLSearchParams(window.location.search);
             const tagFromUrl = urlParams.get('tag');
             const searchFromUrl = urlParams.get('search'); 
             
+            let tag = null;
+            let search = null;
+            let activeNav = 'home';
+
             if (searchFromUrl) {
-                const query = decodeURIComponent(searchFromUrl);
-                currentSearchQuery = query;
-                performSearch(query);
-                renderDynamicNav('search-results'); 
+                search = decodeURIComponent(searchFromUrl);
+                activeNav = 'search-results'; 
             } else if (tagFromUrl) {
-                currentGridTag = decodeURIComponent(tagFromUrl);
-                initializeGridPaging(currentGridTag); 
-                renderDynamicNav(currentGridTag); 
+                tag = decodeURIComponent(tagFromUrl);
+                activeNav = tag; 
             } else {
-                 // No tag or search specified, default to 'อนิเมะ' 
-                 currentGridTag = 'อนิเมะ';
-                 initializeGridPaging(currentGridTag); 
-                 renderDynamicNav(currentGridTag); 
+                 tag = 'อนิเมะ'; // Default
+                 activeNav = 'อนิเมะ';
             }
+            
+            // ตั้งค่า Nav และเริ่มโหลด
+            renderDynamicNav(activeNav);
+            setupQueryAndLoad(tag, search);
         }
+
+        /**
+         * (NEW) ฟังก์ชันหลักในการตั้งค่า Query และเริ่มโหลด
+         */
+        function setupQueryAndLoad(tag = null, search = null) {
+            console.log(`Setting up query: Tag='${tag}', Search='${search}'`);
+
+            // 1. รีเซ็ตสถานะการแบ่งหน้า
+            gridViewContent.innerHTML = ''; // ล้างเนื้อหาเก่า
+            lastVisibleDoc = null;
+            isLoading = false;
+            hasMore = true;
+            currentQuery = null;
+
+            if (search) {
+                // (NEW) สร้าง Query สำหรับค้นหา (จำกัดที่ "Starts With" title)
+                const normalizedQuery = normalizeThai(search);
+                gridViewTitle.textContent = `ผลการค้นหาสำหรับ "${search}"`;
+                
+                // (MODIFIED FIX) ลบ orderBy("title") ออกเพื่อเลี่ยง Index Error
+                currentQuery = query(getCollectionRef("shows"),
+                    where("title", ">=", normalizedQuery),
+                    where("title", "<=", normalizedQuery + '\uf8ff')
+                );
+            } else {
+                // (NEW) สร้าง Query สำหรับ Tag
+                tag = tag || 'อนิเมะ'; // Default
+                gridViewTitle.textContent = tag;
+                
+                // (MODIFIED FIX) ลบ orderBy("updatedAt", "desc") ออกเพื่อเลี่ยง Index Error
+                currentQuery = query(getCollectionRef("shows"),
+                    where("tags", "array-contains", tag)
+                );
+            }
+            
+            // 2. สั่งโหลดข้อมูลหน้าแรก
+            loadMoreCards();
+            
+            // 3. เลื่อนไปที่ Title
+            if (gridViewTitle) {
+                 gridViewTitle.scrollIntoView({ behavior: 'smooth' });
+            }
+            
+            // 4. อัปเดต Nav (ถ้ามาจาก link click)
+            renderDynamicNav(search ? 'search-results' : tag);
+        }
+
 
         // --- Navigation Rendering (Adjusted for grid.html) ---
         function renderDynamicNav(activePageId) {
             if (!desktopNavLinks || !mobileNavLinks) return;
             
-            // 1. Reset all links to inactive state first (if they exist)
+            // 1. Reset
             document.querySelectorAll('.nav-link').forEach(link => {
                 link.classList.remove('active', 'text-green-500');
                 link.classList.add('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
             });
 
-            // 2. Determine which link to set as active (based on currentGridTag or 'home')
             let targetPageId = activePageId;
             if (activePageId === 'search-results') {
-                // If it's a search result, don't activate any tag link, default to 'home' visually
                 targetPageId = 'home';
             }
             
-            // 3. Set the active link(s)
+            // 3. Set active
             document.querySelectorAll(`.nav-link[data-page="${targetPageId}"]`).forEach(link => {
                 link.classList.add('active', 'text-green-500');
                 link.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
@@ -390,103 +404,111 @@
                 `;
             }
 
-        // (MODIFIED) Pagination Logic - Replaced with "Load More" logic
-        function initializeGridPaging(tag) {
-            currentGridTag = tag;
-            gridViewTitle.textContent = tag;
-            currentSearchQuery = null;
-            
-            gridFilteredShows = allShows
-                .filter(s => (s.tags || []).includes(tag))
-                .sort((a, b) => {
-                    const timeA = a.updatedAt ? a.updatedAt.toMillis() : 0;
-                    const timeB = b.updatedAt ? b.updatedAt.toMillis() : 0;
-                    return timeB - timeA; 
-                });
-
-            // (NEW) Reset page counter and clear content
-            currentGridPage = 1;
-            gridViewContent.innerHTML = '';
-            
-            // (NEW) Scroll to title when changing category
-            if (gridViewTitle) {
-                 gridViewTitle.scrollIntoView({ behavior: 'smooth' });
-            }
-
-            if (gridFilteredShows.length === 0) {
-                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะสำหรับ "${currentGridTag}"</p>`;
-                 loadMoreBtn.classList.add('hidden'); // Hide button if no results
-                 return;
-            }
-
-            // (NEW) Load the first batch
-            loadMoreCards();
-
-            gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
-        }
-
+        // (MODIFIED) Pagination Logic - Replaced with Server-side "Load More"
+        // (REMOVED) initializeGridPaging function
+        
         // (REMOVED) renderPage function
         
-        // (NEW) Load More Cards function
-        function loadMoreCards() {
-            if (!loadMoreBtn) return;
+        /**
+         * (MODIFIED) Load More Cards function (Server-side)
+         */
+        async function loadMoreCards() {
+            if (isLoading || !hasMore || !currentQuery) return;
             
+            isLoading = true;
             loadMoreBtn.disabled = true;
             loadMoreBtn.textContent = 'กำลังโหลด...';
+            loadMoreBtn.classList.remove('hidden'); // แสดงปุ่มเสมอเมื่อเริ่มโหลด
 
-            const startIndex = (currentGridPage - 1) * ITEMS_PER_PAGE;
-            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, gridFilteredShows.length);
-            const showsToRender = gridFilteredShows.slice(startIndex, endIndex);
+            try {
+                // 1. สร้าง Query สำหรับการดึงข้อมูลครั้งนี้
+                let queryToRun = query(currentQuery, limit(ITEMS_PER_PAGE));
+                
+                if (lastVisibleDoc) {
+                    queryToRun = query(currentQuery, startAfter(lastVisibleDoc), limit(ITEMS_PER_PAGE));
+                }
 
-            if (showsToRender.length === 0 && currentGridPage === 1) {
-                // This case is handled by initializeGridPaging/performSearch
-                loadMoreBtn.classList.add('hidden');
-                return;
-            }
+                const snapshot = await getDocs(queryToRun);
+                
+                if (snapshot.empty) {
+                    hasMore = false;
+                    if (gridViewContent.innerHTML === '') { // ถ้าโหลดครั้งแรกแล้วว่าง
+                         gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบอนิเมะที่ตรงเงื่อนไข</p>`;
+                    }
+                    updateLoadMoreButtonState();
+                    return;
+                }
 
-            // Append new cards
-            showsToRender.forEach((show) => {
-                const historyItem = historyItems.find(h => h.showId === show.id);
-                gridViewContent.innerHTML += createContentCard(show, null, historyItem); 
-            });
+                // 2. บันทึกเอกสารสุดท้าย
+                lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
 
-            // Increment page for the *next* click
-            currentGridPage++;
-
-            // Check if there are more cards to load
-            const remaining = gridFilteredShows.length - endIndex;
-            if (remaining > 0) {
-                loadMoreBtn.textContent = `โหลดเพิ่มเติม... (${Math.min(remaining, ITEMS_PER_PAGE)})`;
-                loadMoreBtn.classList.remove('hidden');
-                loadMoreBtn.disabled = false;
-            } else {
-                // No more cards
-                loadMoreBtn.classList.add('hidden');
-                loadMoreBtn.disabled = true;
+                // 3. Render
+                snapshot.forEach((doc) => {
+                    const show = { id: doc.id, ...doc.data() };
+                    const historyItem = historyItems.find(h => h.showId === show.id);
+                    gridViewContent.innerHTML += createContentCard(show, null, historyItem); 
+                });
+                
+                // 4. ตรวจสอบว่ามีอีกหรือไม่
+                if (snapshot.size < ITEMS_PER_PAGE) {
+                    hasMore = false;
+                }
+                
+            } catch (error) {
+                console.error("Error loading more cards:", error);
+                gridViewContent.innerHTML += `<p class="text-center w-full col-span-full text-red-500">เกิดข้อผิดพลาดในการโหลด: ${error.message}</p>`;
+                hasMore = false;
+            } finally {
+                isLoading = false;
+                updateLoadMoreButtonState();
             }
         }
         
-        // (REMOVED) updatePageUrl function (Solves SecurityError)
-        // (REMOVED) renderPaginationControls function
-        // (REMOVED) createPageButton function
+        /**
+         * (NEW) อัปเดตสถานะปุ่ม Load More
+         */
+        function updateLoadMoreButtonState() {
+             if (isLoading) {
+                 loadMoreBtn.textContent = 'กำลังโหลด...';
+                 loadMoreBtn.disabled = true;
+             } else if (hasMore) {
+                 loadMoreBtn.textContent = `โหลดเพิ่มเติม...`;
+                 loadMoreBtn.disabled = false;
+                 loadMoreBtn.classList.remove('hidden');
+             } else {
+                 loadMoreBtn.textContent = 'สิ้นสุดรายการทั้งหมด';
+                 loadMoreBtn.disabled = true;
+                 loadMoreBtn.classList.remove('hidden');
+             }
+        }
 
         // --- Search Logic (Adjusted for Load More) ---
         function updateSearchDropdown(query, dropdownEl) {
+            // (MODIFIED) ใช้ allShowsForSearch ที่โหลดมา
             const normalizedQuery = normalizeThai(query).toLowerCase().trim();
             dropdownEl.innerHTML = '';
             
+            if (!isDropdownDataLoaded) {
+                 dropdownEl.innerHTML = '<a class="block p-3 text-sm text-gray-400">กำลังโหลด...</a>';
+                 dropdownEl.classList.remove('hidden');
+                 return;
+            }
+
             if (normalizedQuery.length < 2) {
                 dropdownEl.classList.add('hidden');
                 return;
             }
-            const results = allShows
+            
+            const results = allShowsForSearch // (MODIFIED)
                 .filter(s => normalizeThai(s.title).toLowerCase().includes(normalizedQuery))
                 .slice(0, 10); 
+                
             if (results.length === 0) {
                 dropdownEl.innerHTML = '<a class="block p-3 text-sm text-gray-400">ไม่พบผลลัพธ์</a>';
                 dropdownEl.classList.remove('hidden');
                 return;
             }
+            
             results.forEach(show => {
                 const item = document.createElement('a');
                 const historyItem = historyItems.find(h => h.showId === show.id);
@@ -501,70 +523,31 @@
             });
             dropdownEl.classList.remove('hidden');
         }
+        
         function handleSearchInput(event) {
             const query = event.target.value;
             const isDesktop = event.target.id === 'search-input';
             const dropdownEl = isDesktop ? searchDropdown : mobileSearchDropdown;
             updateSearchDropdown(query, dropdownEl);
         }
+        
+        /**
+         * (MODIFIED) Search Submit (จะรีเซ็ต Query และโหลดใหม่)
+         */
         function handleSearchSubmit(query) {
              searchDropdown.classList.add('hidden');
              mobileSearchDropdown.classList.add('hidden');
              
-             // (MODIFIED) DO NOT update URL history. Just run the search.
+             if (!query || query.trim().length < 1) return;
              
-             currentGridTag = null; 
-             currentSearchQuery = query;
-             
-             // Run search logic immediately
-             performSearch(query);
-             renderDynamicNav('search-results'); // (FIX) Update nav state on search
+             // (MODIFIED) เรียกฟังก์ชันตั้งค่า Query ใหม่
+             setupQueryAndLoad(null, query);
              
              const mobileSearchBarEl = document.getElementById('mobile-search-bar');
              if (mobileSearchBarEl) mobileSearchBarEl.style.display = 'none'; 
         }
 
-        function performSearch(query) {
-            if (!query) return;
-            
-            gridViewTitle.textContent = `ผลการค้นหาสำหรับ "${query}"`;
-            currentSearchQuery = query;
-            
-            if (allShows.length === 0) {
-                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full text-gray-400">ข้อมูลอนิเมะยังไม่ถูกโหลด. โปรดรอสักครู่...</p>`;
-                 return;
-            }
-            
-            const normalizedQuery = normalizeThai(query).toLowerCase();
-            
-            gridFilteredShows = allShows.filter(s => {
-                const normalizedTitle = normalizeThai(s.title).toLowerCase();
-                const normalizedDesc = normalizeThai(s.description || '').toLowerCase();
-                
-                return normalizedTitle.includes(normalizedQuery) || normalizedDesc.includes(normalizedQuery);
-            });
-            
-            // (MODIFIED) Reset page counter and clear content
-            currentGridPage = 1;
-            gridViewContent.innerHTML = '';
-
-            // (NEW) Scroll to title when searching
-            if (gridViewTitle) {
-                 gridViewTitle.scrollIntoView({ behavior: 'smooth' });
-            }
-
-            if (gridFilteredShows.length === 0) {
-                 gridViewContent.innerHTML = `<p class="text-center w-full col-span-full">ไม่พบผลลัพธ์สำหรับ "${query}"</p>`;
-                 loadMoreBtn.classList.add('hidden');
-                 return;
-            }
-            
-            // (NEW) Load the first batch
-            loadMoreCards();
-            
-            gridViewContent.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4';
-            
-        }
+        // (REMOVED) performSearch function
 
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -572,16 +555,14 @@
             gridViewContainer = document.getElementById('grid-view-container');
             gridViewTitle = document.getElementById('grid-view-title');
             gridViewContent = document.getElementById('grid-view-content');
-            loadMoreContainer = document.getElementById('load-more-container'); // (NEW)
-            loadMoreBtn = document.getElementById('load-more-btn'); // (NEW)
-            // (REMOVED) paginationContainer removed
-
+            loadMoreContainer = document.getElementById('load-more-container'); 
+            loadMoreBtn = document.getElementById('load-more-btn'); 
+            
             searchInput = document.getElementById('search-input');
             searchDropdown = document.getElementById('search-dropdown');
             mobileSearchInput = document.getElementById('mobile-search-input');
             mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
             
-            // (FIX) Re-select elements that were incorrectly referenced globally
             desktopNavLinks = document.getElementById('desktop-nav-links');
             mobileNavLinks = document.getElementById('mobile-nav-links');
 
@@ -593,21 +574,7 @@
             
             initializeFirebase(); 
             
-            // (NEW FIX) Set the active nav state IMMEDIATELY based on the URL.
-            // This stops the "flicker" of the active (green) link.
-            const urlParams = new URLSearchParams(window.location.search);
-            const tagFromUrl = urlParams.get('tag');
-            const searchFromUrl = urlParams.get('search'); 
-
-            let activePageId = 'home'; // Default
-            if (searchFromUrl) {
-                activePageId = 'search-results'; // This will visually default to 'home'
-            } else if (tagFromUrl) {
-                activePageId = tagFromUrl;
-            } else {
-                activePageId = 'อนิเมะ'; // Default grid page
-            }
-            renderDynamicNav(activePageId);
+            // (MODIFIED) การตั้งค่า Nav ย้ายไปใน setupQueryAndLoadFromUrl
             
             if (mobileMenuBtn && mobileMenu) {
                 mobileMenuBtn.addEventListener('click', () => {
@@ -640,47 +607,40 @@
                       mobileSearchDropdown.classList.add('hidden');
                  }
                 
-                // (FIX) Re-add logic to handle soft navigation within grid.html
+                // (MODIFIED) Logic สำหรับ Nav Links (เปลี่ยน Tag)
                 const navLink = e.target.closest('.nav-link');
                 if (navLink) {
                     
                     const pageId = navLink.dataset.page;
                     if (pageId) {
-                        // Prevent the full page reload
                         e.preventDefault(); 
                         
-                        // Close mobile menu if open
                         if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
                             mobileMenu.classList.add('hidden');
                         }
 
-                        // Check if it's a link to the homepage
                         if (pageId === 'home') {
-                            window.location.href = 'index.html'; // Go to index.html
+                            window.location.href = 'index.html'; 
                             return;
                         }
                         
-                        // Check if we are already on this tag
-                        if (pageId === currentGridTag) {
-                            return; // Do nothing if clicking the active tag
-                        }
-
-                        // Handle internal navigation (e.g., อนิเมะ -> อนิเมะจีน)
-                        currentGridTag = pageId;
-                        currentSearchQuery = null; // Clear search
+                        // (MODIFIED) เรียกฟังก์ชันตั้งค่า Query ใหม่
+                        setupQueryAndLoad(pageId, null);
                         
-                        // 1. Re-initialize the grid content for the new tag
-                        initializeGridPaging(currentGridTag); // (MODIFIED) Removed page number
-                        
-                        // 2. Update the active link state
-                        renderDynamicNav(currentGridTag);
-                        
-                        // 3. URL is NOT updated (as per user request)
+                        // (NEW) อัปเดต URL (โดยไม่โหลดหน้าใหม่)
+                        const newUrl = new URL(window.location.href);
+                        newUrl.search = `?tag=${encodeURIComponent(pageId)}`;
+                        window.history.pushState({tag: pageId}, '', newUrl);
                     }
                 }
             });
 
-            // (REMOVED) popstate listener
+            // (NEW) จัดการปุ่ม Back/Fwd ของบราวเซอร์
+            window.addEventListener('popstate', (event) => {
+                 console.log("Popstate triggered");
+                 initialLoadDone = false; // บังคับให้โหลดใหม่ตาม URL
+                 setupQueryAndLoadFromUrl();
+            });
 
             // (NEW) Add Load More button listener
             if (loadMoreBtn) {
@@ -695,12 +655,12 @@
             if (searchInput) searchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(searchInput.value));
             if (mobileSearchInput) mobileSearchInput.addEventListener('keydown', (e) => e.key === 'Enter' && handleSearchSubmit(mobileSearchInput.value));
 
-            // Initial URL check is now done inside initializeFirebase -> setupListeners -> checkInitialLoad
+            // (MODIFIED) การตรวจสอบ URL เริ่มต้น ย้ายไปใน initializeFirebase -> onAuthStateChanged
         });
     </script>
     
     <!-- Header -->
-    <header class="bg-gray-900 sticky top-0 z-50"> <!-- (MODIFIED) Removed /80 and backdrop-blur-md -->
+    <header class="bg-gray-900 sticky top-0 z-50"> 
         <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <!-- 1. LEFT GROUP: Logo + Nav Links (รวมกันเพื่อจัดตำแหน่ง) -->
@@ -733,10 +693,7 @@
                             <!-- Search results injected here -->
                         </div>
                     </div>
-                    <!-- ปุ่ม Admin สำหรับ Desktop -->
-                    <a href="admin.html" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium bg-gray-800 hover:bg-gray-700 transition-colors duration-150">
-                        <i class="ri-settings-4-line mr-1"></i> ระบบจัดการ
-                    </a>
+                    <!-- ปุ่ม Admin สำหรับ Desktop (ถูกลบไปแล้ว) -->
                 </div>
                 
                 <!-- 3. Mobile Menu Button & Search -->
@@ -772,10 +729,7 @@
                 <a href="grid.html?tag=อนิเมะ" data-page="อนิเมะ" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะ</a>
                 <a href="grid.html?tag=อนิเมะจีน" data-page="อนิเมะจีน" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะจีน</a>
                 <a href="grid.html?tag=อนิเมะพากย์ไทย" data-page="อนิเมะพากย์ไทย" class="nav-link block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">อนิเมะพากย์ไทย</a>
-                <!-- ลิงก์ Admin สำหรับ Mobile -->
-                <a href="admin.html" class="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
-                    <i class="ri-settings-4-line mr-1"></i> ระบบจัดการหลังบ้าน
-                </a>
+                <!-- ลิงก์ Admin สำหรับ Mobile (ถูกลบไปแล้ว) -->
             </div>
         </div>
     </header>
