@@ -13,7 +13,6 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             cursor: default;
         }
-        /* (MODIFIED) ปรับแต่งปุ่ม Swiper ให้เห็นชัดบนแบนเนอร์ */
         .swiper-button-next, .swiper-button-prev { 
             color: #ffffff; 
             background-color: rgba(0,0,0,0.3);
@@ -27,7 +26,6 @@
             font-weight: 900;
         }
         
-        /* (NEW) กำหนด cursor pointer ให้กับลิงก์ทั้งหมดเพื่อให้ทำงานถูกต้อง */
         a {
             cursor: pointer; 
         }
@@ -35,7 +33,6 @@
         .nav-link.active { color: #00b87c; } 
         #mobile-search-bar { display: none; }
         
-        /* (MODIFIED) ชื่อเรื่องแสดงได้ 2 บรรทัด */
         .card-title {
             overflow: hidden;
             text-overflow: ellipsis;
@@ -64,7 +61,6 @@
          background-color: #374151;
      }
      
-     /* (MODIFIED) สไตล์สำหรับป้ายอันดับ "Top 10" (อลังการโทนสีแดง) */
      .rank-badge {
         position: absolute;
         top: -4px; 
@@ -72,47 +68,36 @@
         left: initial; 
         width: 42px; 
         height: 55px;
-        
         background: linear-gradient(140deg, #F87171 0%, #DC2626 100%);
-        
         clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 50% 85%, 0% 100%);
-        
         display: flex;
         align-items: center;
         justify-content: center;
         color: white;
         font-weight: 900; 
         font-size: 18px; 
-        
         text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
         box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-        
         z-index: 10;
      }
      
-     /* (NEW) สไตล์สำหรับป้ายกำกับ "พากย์ไทย" */
      .dub-badge {
         position: absolute;
         top: 8px; 
         left: 8px; 
         z-index: 10;
-        
         background-color: #DC2626; 
         color: white;
         padding: 4px 8px;
         border-radius: 4px;
-        
         font-size: 10px;
         font-weight: 700;
-        
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-        
         display: flex;
         align-items: center;
         gap: 4px;
      }
 
-     /* (NEW) ป้ายสถานะจบแล้ว (มุมล่างซ้าย) */
      .status-badge-completed {
         position: absolute;
         bottom: 8px; 
@@ -127,7 +112,6 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
      }
      
-     /* (NEW - FIX) เพิ่ม CSS สำหรับป้ายตอนล่าสุดที่หายไป */
      .status-badge-episode {
         position: absolute;
         bottom: 8px; 
@@ -142,7 +126,6 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
      }
      
-     /* (MODIFIED) History Card Styles */
      .history-card {
         display: flex;
         align-items: center;
@@ -176,7 +159,8 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, onSnapshot, collection, query, setLogLevel,
-            limit, orderBy, where, startAfter, getDocs 
+            limit, orderBy, where, getDocs, 
+            initializeFirestore, CACHE_SIZE_UNLIMITED // (MODIFIED FIX) เปลี่ยน enablePersistence เป็น initializeFirestore และ CACHE_SIZE_UNLIMITED
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // (*** จำลอง Firebase Config ***)
@@ -233,15 +217,38 @@
         async function initializeFirebase() {
             try {
                 const app = initializeApp(firebaseConfig); 
-                db = getFirestore(app);
+                // (MODIFIED) khởi tạo db และ auth ก่อน
                 auth = getAuth(app);
                 setLogLevel('Debug'); 
+
+                // (MODIFIED FIX) เปิดใช้งาน Offline Persistence (Caching) โดยใช้ initializeFirestore
+                try {
+                    // ใช้วิธีนี้แทน enablePersistence(db)
+                    db = initializeFirestore(app, {
+                        cacheSizeBytes: CACHE_SIZE_UNLIMITED
+                    });
+                    console.log("Firebase Offline Persistence enabled via initializeFirestore.");
+                } catch (err) {
+                    if (err.code == 'failed-precondition') {
+                        console.warn("Persistence failed (likely multiple tabs open). Falling back to in-memory cache.");
+                    } else if (err.code == 'unimplemented') {
+                        console.warn("Persistence not supported in this browser. Falling back to in-memory cache.");
+                    } else {
+                        console.error("Error initializing persistence:", err);
+                    }
+                    // หากการเปิด persistence ล้มเหลว ให้ใช้ getFirestore() แบบปกติ (in-memory cache)
+                    if (!db) {
+                        db = getFirestore(app);
+                    }
+                }
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
                         console.log("User Authenticated (Anonymous):", userId);
-                        await setupListeners();
+                        // (MODIFIED) เรียกใช้ฟังก์ชันดึงข้อมูลแบบ getDocs
+                        await setupDataFetch();
+                        // (MODIFIED) History ยังคงใช้ onSnapshot (Real-time)
                         setupHistoryListener();
                     } else {
                         console.log("No user signed in. Attempting sign in...");
@@ -264,17 +271,21 @@
              return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
         }
 
-        async function setupListeners() {
-            // 1. Listener for Shows
-            const showsQuery = query(getCollectionRef("shows"));
-            onSnapshot(showsQuery, (snapshot) => {
+        // (MODIFIED) เปลี่ยนชื่อจาก setupListeners และเปลี่ยนไปใช้ getDocs
+        async function setupDataFetch() {
+            
+            // 1. (MODIFIED) ดึง Shows โดยใช้ getDocs (อ่านครั้งเดียว)
+            try {
+                const showsQuery = query(getCollectionRef("shows"));
+                const snapshot = await getDocs(showsQuery); // <-- MODIFIED
+
                 allShows = [];
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     allShows.push({ id: doc.id, ...data });
                 });
                 
-                console.log("Shows loaded:", allShows.length);
+                console.log("Shows loaded (one-time):", allShows.length);
                 
                 const wasDataLoaded = isDataLoaded;
                 isDataLoaded = true; 
@@ -283,32 +294,36 @@
                     checkInitialSearch();
                 }
                 
-                // (REMOVED) renderDynamicNav('home') call moved to DOMContentLoaded
                 renderSections(); 
                 
-            }, (error) => {
-                console.error("Error listening to shows:", error);
+            } catch (error) {
+                console.error("Error fetching shows:", error);
                 sectionsContainer.innerHTML = `<p class="text-center text-red-500">ไม่สามารถโหลดข้อมูลได้</p>`;
-            });
+            }
 
-            // 2. Listener for Banners
-            const bannerQuery = query(getCollectionRef("banners"), orderBy("updatedAt", "desc"));
-            onSnapshot(bannerQuery, (snapshot) => {
+            // 2. (MODIFIED) ดึง Banners โดยใช้ getDocs (อ่านครั้งเดียว) + limit(10)
+            try {
+                // (NEW) เพิ่ม limit(10) และใช้ getDocs
+                const bannerQuery = query(getCollectionRef("banners"), orderBy("updatedAt", "desc"), limit(10));
+                const snapshot = await getDocs(bannerQuery); // <-- MODIFIED
+
                 allBanners = []; 
                 snapshot.forEach((doc) => {
                     allBanners.push({ id: doc.id, ...doc.data() });
                 });
-                console.log("Banners loaded:", allBanners.length);
+                console.log("Banners loaded (one-time):", allBanners.length);
                 renderHeroSlider(); 
-            }, (error) => {
-                console.error("Error listening to banners:", error);
+
+            } catch (error) {
+                console.error("Error fetching banners:", error);
                 const loadingEl = document.getElementById('hero-loading');
                 if (loadingEl) {
                     loadingEl.innerHTML = '<p class="text-red-500">ไม่สามารถโหลดแบนเนอร์ได้</p>';
                 }
-            });
+            }
         }
         
+        // (UNMODIFIED) History ยังคงใช้ onSnapshot เพื่ออัปเดตแบบ Real-time
         function setupHistoryListener() {
             if (!userId) return;
             const historyQuery = query(
@@ -621,7 +636,6 @@
             const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.lastWatchedEpisodeNumber || 'N/A'}`;
             const thumbnail = history.showThumbnail || 'https://placehold.co/48x64/333/fff?text=Img'; 
             
-            // (NEW LOGIC) ใช้ formatDateTime ที่เพิ่มเข้ามา
             const watchedTimeString = formatDateTime(history.watchedAt);
 
             return `
@@ -631,7 +645,6 @@
                     <div class="flex-grow min-w-0">
                         <h4 class="font-bold text-sm text-white line-clamp-1">${title}</h4>
                         <p class="text-xs text-gray-300 line-clamp-1">${episodeTitle}</p>
-                        <!-- (NEW) แสดงเวลาเข้าชมล่าสุด -->
                         <p class="text-xs text-gray-400 mt-1">เข้าชมล่าสุด: ${watchedTimeString}</p>
                     </div>
                     
@@ -683,7 +696,6 @@
              searchDropdown.classList.add('hidden');
              mobileSearchDropdown.classList.add('hidden');
              
-             // (MODIFIED) Redirect to the grid.html file with search parameter
              window.location.href = `grid.html?search=${encodeURIComponent(query)}`;
         }
         
@@ -695,7 +707,6 @@
             mobileSearchInput = document.getElementById('mobile-search-input');
             mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
             
-            // (FIX) Re-select elements that were incorrectly referenced globally
             desktopNavLinks = document.getElementById('desktop-nav-links');
             mobileNavLinks = document.getElementById('mobile-nav-links');
 
@@ -703,13 +714,10 @@
             const mobileMenu = document.getElementById('mobile-menu');
             const mobileSearchBtn = document.getElementById('mobile-search-button');
             const mobileSearchBar = document.getElementById('mobile-search-bar');
-            // FIX: Removed document assignment here to prevent TypeError
             const mobileCloseSearchBtn = document.getElementById('mobile-close-search'); 
             
             initializeFirebase(); 
             
-            // (NEW FIX) Set the active nav state IMMEDIATELY on load.
-            // This stops the "flicker" of the active (green) link.
             renderDynamicNav('home');
             
             if (mobileMenuBtn && mobileMenu) {
@@ -766,12 +774,11 @@
                 initialQueryFromUrl = decodeURIComponent(searchFromUrl);
             } 
             
-            // (REMOVED) renderDynamicNav('home') call (moved up)
         });
     </script>
     
     <!-- Header -->
-    <header class="bg-gray-900 sticky top-0 z-50"> <!-- (MODIFIED) Removed /80 and backdrop-blur-md -->
+    <header class="bg-gray-900 sticky top-0 z-50"> 
         <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <!-- 1. LEFT GROUP: Logo + Nav Links (รวมกันเพื่อจัดตำแหน่ง) -->
