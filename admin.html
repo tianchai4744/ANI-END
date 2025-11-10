@@ -15,7 +15,7 @@
         .modal { display: none; }
         .modal.flex { display: flex; }
         
-        /* (NEW) Style for Checkboxes in table */
+        /* Style for Checkboxes in table */
         .admin-checkbox {
             width: 1.25rem; /* w-5 */
             height: 1.25rem; /* h-5 */
@@ -29,11 +29,27 @@
             border-color: #2563eb; /* border-blue-600 */
         }
         
-        /* (NEW) Sub-navigation active style */
+        /* Sub-navigation active style */
         .sub-nav-btn.active {
             color: #fff;
             border-color: #2563eb; /* blue-600 */
             font-weight: 700;
+        }
+
+        /* (NEW) Sortable Header Style */
+        .sort-header {
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        .sort-header:hover {
+            color: #fff;
+        }
+        .sort-header.active {
+            color: #2563eb; /* blue-600 */
+        }
+        .sort-icon {
+            font-size: 1rem;
+            line-height: 1;
         }
     </style>
 </head>
@@ -52,8 +68,8 @@
             setLogLevel, 
             where, getDocs, 
             writeBatch,
-            orderBy, // <--- FIX: Added orderBy for Firestore queries
-            initializeFirestore, CACHE_SIZE_UNLIMITED // (MODIFIED) เพิ่ม
+            orderBy, 
+            initializeFirestore, CACHE_SIZE_UNLIMITED
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         
@@ -82,6 +98,11 @@
         let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
         let allListeners = []; // (MODIFIED) Array to store unsubscribe functions
 
+        // (NEW) State for Client-Side Sorting
+        // { field: 'createdAt', direction: 'desc', view: 'show' }
+        let currentSort = { field: 'updatedAt', direction: 'desc', view: 'show' }; 
+
+
         // (NEW) State for Bulk Selection
         let selectedEpisodes = new Set();
         let selectedShows = new Set(); // (NEW) For Shows
@@ -99,6 +120,20 @@
             normalized = normalized.replace(/\u0E4D\u0E32/g, '\u0E33');
             
             return normalized; 
+        }
+        // (END NEW FUNCTION)
+        
+        // (NEW FUNCTION) Helper function to format Firebase Timestamp
+        function formatTimestamp(timestamp) {
+            if (!timestamp || !timestamp.toDate) return '-';
+            const date = timestamp.toDate();
+            // Format: DD/MM/YY HH:MM
+            const d = date.getDate().toString().padStart(2, '0');
+            const m = (date.getMonth() + 1).toString().padStart(2, '0');
+            const y = date.getFullYear().toString().slice(-2);
+            const h = date.getHours().toString().padStart(2, '0');
+            const min = date.getMinutes().toString().padStart(2, '0');
+            return `${d}/${m}/${y} ${h}:${min}`;
         }
         // (END NEW FUNCTION)
         
@@ -340,21 +375,81 @@
         }
         // (END NEW FUNCTION)
         
-        // (FIX) Render Function for Shows Table (ฟังก์ชันนี้หายไป)
+        // (NEW FUNCTION) Client-Side Sorting Handler
+        function handleSort(view, field) {
+            // If clicking the same column, reverse direction
+            if (currentSort.field === field && currentSort.view === view) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                // Otherwise, set new column and default to descending (latest/highest first)
+                currentSort.field = field;
+                currentSort.direction = 'desc'; 
+                currentSort.view = view;
+            }
+            // Re-render the appropriate table
+            if (view === 'show') {
+                renderShowTable();
+            } else if (view === 'episode') {
+                renderEpisodeTable();
+            }
+        }
+
+        // (NEW FUNCTION) Comparison function for sorting data arrays
+        function compareValues(a, b, field, direction) {
+            let valA = a[field];
+            let valB = b[field];
+
+            // Handle Firebase Timestamps: convert to milliseconds for comparison
+            if (valA && valA.toMillis) valA = valA.toMillis();
+            if (valB && valB.toMillis) valB = valB.toMillis();
+            
+            // Handle null/undefined values by treating them as lowest/highest based on direction
+            if (valA === undefined || valA === null) valA = direction === 'asc' ? -Infinity : Infinity;
+            if (valB === undefined || valB === null) valB = direction === 'asc' ? -Infinity : Infinity;
+
+
+            let comparison = 0;
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                // Case-insensitive string comparison (using normalized Thai)
+                comparison = normalizeThai(valA).toLowerCase().localeCompare(normalizeThai(valB).toLowerCase());
+            } else {
+                // Numeric comparison (for episodeNumber, viewCount, timestamps)
+                if (valA > valB) {
+                    comparison = 1;
+                } else if (valA < valB) {
+                    comparison = -1;
+                }
+            }
+
+            return direction === 'desc' ? (comparison * -1) : comparison;
+        }
+
+
+        // (FIX) Render Function for Shows Table (เพิ่มการจัดเรียง)
         function renderShowTable() {
             if (!showTableBody) return;
             
             // 1. (FIX) ใช้ normalizeThai สำหรับการค้นหา
             const searchQuery = showSearchInput ? normalizeThai(showSearchInput.value).toLowerCase() : '';
             
-            const filteredShows = shows.filter(show => 
+            let filteredShows = shows.filter(show => 
                 // (FIX) ใช้ normalizeThai กับชื่อเรื่อง
                 normalizeThai(show.title).toLowerCase().includes(searchQuery)
             );
+            
+            // 2. (NEW) Client-Side Sorting
+            if (currentSort.view === 'show') {
+                filteredShows.sort((a, b) => compareValues(a, b, currentSort.field, currentSort.direction));
+            }
+
 
             let tableHtml = '';
             selectedShows.clear(); 
             updateBulkActionUIShows(filteredShows.length);
+            
+            // 3. (NEW) Update Table Headers for visual sorting
+            updateSortHeaders('show');
+
 
             let hasShows = false;
             filteredShows.forEach((show) => {
@@ -369,8 +464,11 @@
                         </td>
                         <td class="py-3 px-4">${show.title}</td>
                         <td class="py-3 px-4 text-sm">${(show.tags || []).join(', ')}</td>
-                        <!-- (FIX) เพิ่มคอลัมน์ View Count (ที่เพิ่มใน request ก่อนหน้า) -->
                         <td class="py-3 px-4 text-center">${show.viewCount || 0}</td>
+                        <!-- (NEW) Created At -->
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(show.createdAt)}</td>
+                        <!-- (NEW) Updated At -->
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(show.updatedAt)}</td>
                         <td class="py-3 px-4">
                             <button class="text-green-400 hover:text-green-300 edit-show-btn" data-id="${show.id}">แก้ไข</button>
                         </td>
@@ -387,7 +485,7 @@
             }
         }
 
-        // (MODIFIED) Render Function for Episodes Table (รองรับสถานะ "ถูกรายงาน")
+        // (MODIFIED) Render Function for Episodes Table (เพิ่มการจัดเรียง)
         function renderEpisodeTable() {
             if (!episodeTableBody) return;
             
@@ -395,7 +493,7 @@
             const searchQuery = episodeSearchInput ? normalizeThai(episodeSearchInput.value).toLowerCase() : '';
 
             // NEW LOGIC: Filter out confirmed broken episodes (status === 'broken')
-            const filteredEpisodes = allEpisodes.filter(ep => {
+            let filteredEpisodes = allEpisodes.filter(ep => {
                 // (NEW) ตรรกะการกรอง: ซ่อนรายการที่ได้รับการยืนยันว่าเสียจริง (status: broken)
                 if (ep.status === 'broken') return false; 
                 
@@ -404,10 +502,19 @@
                 const epTitle = normalizeThai(ep.title).toLowerCase();
                 return epTitle.includes(searchQuery) || showTitle.includes(searchQuery);
             });
+            
+            // 2. (NEW) Client-Side Sorting
+            if (currentSort.view === 'episode') {
+                filteredEpisodes.sort((a, b) => compareValues(a, b, currentSort.field, currentSort.direction));
+            }
+
 
             let tableHtml = '';
             selectedEpisodes.clear();
             updateBulkActionUIEpisodes(filteredEpisodes.length);
+            
+            // 3. (NEW) Update Table Headers for visual sorting
+            updateSortHeaders('episode');
 
             let hasEpisodes = false;
             filteredEpisodes.forEach((data) => {
@@ -438,6 +545,10 @@
                             ${statusBadge}
                         </td>
                         <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
+                        <!-- (NEW) Created At -->
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(data.createdAt)}</td>
+                        <!-- (NEW) Updated At -->
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(data.updatedAt)}</td>
                         <td class="py-3 px-4">
                             <button class="text-green-400 hover:text-green-300 edit-episode-btn" data-id="${data.id}">แก้ไข</button>
                         </td>
@@ -454,7 +565,33 @@
             }
         }
         
-        // (NEW FUNCTION) Render Function for Tags Table
+        // (NEW FUNCTION) Update UI headers with sort icons
+        function updateSortHeaders(view) {
+             const headers = document.querySelectorAll(`[data-sort-field][data-sort-view="${view}"]`);
+             headers.forEach(header => {
+                 const field = header.dataset.sortField;
+                 
+                 // Remove existing icons and classes
+                 header.classList.remove('active');
+                 const icon = header.querySelector('.sort-icon');
+                 if (icon) icon.remove();
+                 
+                 // Add active class and icon if this is the current sort field
+                 if (currentSort.view === view && currentSort.field === field) {
+                     header.classList.add('active');
+                     const iconHtml = document.createElement('i');
+                     iconHtml.classList.add('sort-icon', 'ml-1', 'ri-arrow-down-s-line');
+                     
+                     if (currentSort.direction === 'asc') {
+                          iconHtml.classList.remove('ri-arrow-down-s-line');
+                          iconHtml.classList.add('ri-arrow-up-s-line');
+                     }
+                     header.appendChild(iconHtml);
+                 }
+             });
+        }
+        
+        // (NEW FUNCTION) Render Function for Tags Table (ไม่จำเป็นต้องมีการจัดเรียงซับซ้อน)
         function renderTagTable() {
             if (!tagTableBody) return;
             
@@ -470,17 +607,22 @@
             if (filteredTags.length === 0) {
                  tableHtml = `
                     <tr>
-                        <td colspan="3" class="py-6 px-4 text-center text-gray-400">
+                        <td colspan="4" class="py-6 px-4 text-center text-gray-400">
                             ไม่พบ Tag ที่ตรงกับการค้นหา
                         </td>
                     </tr>
                 `;
             } else {
+                // (NEW) Sort Tags by name (always ascending for this view)
+                filteredTags.sort((a, b) => compareValues(a, b, 'name', 'asc'));
+
                 filteredTags.forEach((tag) => {
                     tableHtml += `
                         <tr class="border-b border-gray-700 hover:bg-gray-700">
                             <td class="py-3 px-4">${tag.name}</td>
                             <td class="py-3 px-4 text-sm">${tag.id}</td>
+                            <!-- (NEW) Created At -->
+                            <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(tag.createdAt)}</td>
                             <td class="py-3 px-4">
                                 <button class="text-green-400 hover:text-green-300 edit-tag-btn" data-id="${tag.id}">แก้ไข</button>
                             </td>
@@ -734,6 +876,7 @@
             renderEpisodeTable();
             renderReportTable();
             renderDashboard();
+            renderTagTable(); // NEW: Render tag table
             updateReportBadge();
         }
 
@@ -912,6 +1055,12 @@
             } else if (viewId === 'episode') {
                 if (episodeListView) episodeListView.classList.remove('hidden');
                 if (showEpisodeListBtn) showEpisodeListBtn.classList.add('bg-gray-900', 'text-white');
+                // (NEW) Set default sort for episode view if not set
+                if (currentSort.view !== 'episode') {
+                    currentSort = { field: 'updatedAt', direction: 'desc', view: 'episode' };
+                }
+                renderEpisodeTable();
+
             } else if (viewId === 'show') {
                 if (showListView) showListView.classList.remove('hidden');
                 if (showShowListBtn) showShowListBtn.classList.add('bg-gray-900', 'text-white');
@@ -926,6 +1075,12 @@
                     }
                 }
                 switchSubView(initialSubViewId);
+                // (NEW) Set default sort for show view if not set
+                if (currentSort.view !== 'show') {
+                     currentSort = { field: 'updatedAt', direction: 'desc', view: 'show' };
+                }
+                renderShowTable();
+                
                 // NEW: Update hash for consistency
                 window.location.hash = `show/${initialSubViewId}`;
 
@@ -957,7 +1112,7 @@
 
             // Reset button styles
             document.querySelectorAll('.sub-nav-btn').forEach(btn => {
-                btn.classList.remove('text-white', 'border-blue-500', 'font-bold');
+                btn.classList.remove('active', 'text-white', 'border-blue-500', 'font-bold');
                 btn.classList.add('text-gray-400', 'hover:text-white', 'border-transparent', 'hover:border-gray-500', 'font-medium');
             });
             
@@ -1506,6 +1661,16 @@
                     }
                 }
             });
+            // (NEW) Add listener for sorting by header click
+            showTableBody.closest('table').querySelectorAll('.sort-header[data-sort-view="show"]').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    // Prevent propagation if clicking inside the header but not the header itself (e.g., table icon)
+                    if (e.target.closest('.sort-header') !== header) return; 
+                    
+                    const field = header.dataset.sortField;
+                    handleSort('show', field);
+                });
+            });
         }
         
         // --- MODIFIED: URL to Embed Code Converter Function ---
@@ -1674,6 +1839,16 @@
                         console.error("Error fetching episode for edit:", error);
                     }
                 }
+            });
+            // (NEW) Add listener for sorting by header click
+            episodeTableBody.closest('table').querySelectorAll('.sort-header[data-sort-view="episode"]').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    // Prevent propagation if clicking inside the header but not the header itself (e.g., table icon)
+                    if (e.target.closest('.sort-header') !== header) return; 
+                    
+                    const field = header.dataset.sortField;
+                    handleSort('episode', field);
+                });
             });
         }
 
@@ -2150,16 +2325,28 @@
                             </div>
                         </div>
                         <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
-                            <table class="w-full table-fixed min-w-[768px]">
+                            <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-width for new columns -->
                                 <thead class="bg-gray-900">
                                     <tr>
                                         <th class="w-16 py-3 px-4 text-center">
                                             <input type="checkbox" id="show-select-all" class="admin-checkbox">
                                         </th>
-                                        <th class="w-32 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ปก</th>
-                                        <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อเรื่อง</th>
-                                        <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
-                                        <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase">ยอดเข้าชม</th>
+                                        <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ปก</th>
+                                        <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="title" data-sort-view="show">
+                                            ชื่อเรื่อง
+                                        </th>
+                                        <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
+                                        <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="viewCount" data-sort-view="show">
+                                            ยอดชม
+                                        </th>
+                                        <!-- (NEW) Created At Header -->
+                                        <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="show">
+                                            วันที่สร้าง
+                                        </th>
+                                        <!-- (NEW) Updated At Header -->
+                                        <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="updatedAt" data-sort-view="show">
+                                            วันที่อัปเดต
+                                        </th>
                                         <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
                                     </tr>
                                 </thead>
@@ -2186,8 +2373,10 @@
                             <table class="w-full table-fixed min-w-[768px]">
                                 <thead class="bg-gray-900">
                                     <tr>
-                                        <th class="w-1/2 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อ Tag</th>
+                                        <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อ Tag</th>
                                         <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tag ID</th>
+                                        <!-- (NEW) Created At Header for Tags -->
+                                        <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">วันที่สร้าง</th>
                                         <th class="w-32 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
                                     </tr>
                                 </thead>
@@ -2215,15 +2404,27 @@
                     </div>
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
                         <!-- (MODIFIED) Added table-fixed and th widths -->
-                        <table class="w-full table-fixed min-w-[768px]">
+                        <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-width for new columns -->
                             <thead class="bg-gray-900">
                                 <tr>
                                     <th class="w-16 py-3 px-4 text-center">
                                         <input type="checkbox" id="episode-select-all" class="admin-checkbox">
                                     </th>
-                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ตอนที่</th>
-                                    <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อตอน</th>
-                                    <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th>
+                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="episodeNumber" data-sort-view="episode">
+                                        ตอนที่
+                                    </th>
+                                    <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="title" data-sort-view="episode">
+                                        ชื่อตอน
+                                    </th>
+                                    <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th>
+                                    <!-- (NEW) Created At Header -->
+                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="episode">
+                                        วันที่สร้าง
+                                    </th>
+                                    <!-- (NEW) Updated At Header -->
+                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="updatedAt" data-sort-view="episode">
+                                        วันที่อัปเดต
+                                    </th>
                                     <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
                                 </tr>
                             </thead>
