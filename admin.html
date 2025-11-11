@@ -69,6 +69,17 @@
         .draggable-row:active {
             cursor: grabbing;
         }
+
+        /* (NEW STYLE) Style for click-to-edit row (Show List) */
+        .clickable-show-title {
+            cursor: pointer;
+            color: #2563eb; /* Blue-600 */
+            font-weight: 600;
+        }
+        .clickable-show-title:hover {
+            text-decoration: underline;
+        }
+
     </style>
 </head>
 <body class="text-gray-100">
@@ -121,13 +132,16 @@
         let currentEditingId = null; // ID ของรายการที่กำลังแก้ไข
         let allListeners = []; // (MODIFIED) Array to store unsubscribe functions
         let bannerDragulaInstance = null; // (NEW) Dragula instance
+        
+        // (NEW) Store ID of the show currently being viewed in the detail panel
+        let currentShowDetailId = null; 
 
-        // (MODIFIED) State for Client-Side Sorting - Default to Banner view
-        let currentSort = { field: 'orderIndex', direction: 'asc', view: 'banner' }; 
+        // (MODIFIED) State for Client-Side Sorting - Default to UpdatedAt DESC for show view
+        let currentSort = { field: 'updatedAt', direction: 'desc', view: 'show' }; 
 
 
         // (NEW) State for Bulk Selection
-        let selectedEpisodes = new Set();
+        // (MODIFIED) Remove episode-related bulk actions
         let selectedShows = new Set(); // (NEW) For Shows
         
         let currentConfirmCallback = null;
@@ -175,26 +189,33 @@
         
         // (NEW) Views
         const dashboardView = document.getElementById('dashboard-view'); // NEW
-        const episodeListView = document.getElementById('episode-list-view');
+        // const episodeListView = document.getElementById('episode-list-view'); // REMOVED
         const showListView = document.getElementById('show-list-view');
         const bannerListView = document.getElementById('banner-list-view'); 
         const reportListView = document.getElementById('report-list-view'); 
         
-        const episodeTableBody = document.getElementById('episode-table-body');
         const showTableBody = document.getElementById('show-table-body');
         const bannerTableBody = document.getElementById('banner-table-body'); 
         const reportTableBody = document.getElementById('report-table-body'); 
         const tagTableBody = document.getElementById('tag-table-body'); 
         
         const showDashboardBtn = document.getElementById('show-dashboard-btn'); // NEW
-        const showEpisodeListBtn = document.getElementById('show-episode-list-btn');
+        // const showEpisodeListBtn = document.getElementById('show-episode-list-btn'); // REMOVED
         const showShowListBtn = document.getElementById('show-show-list-btn');
         const showBannerListBtn = document.getElementById('show-banner-list-btn');
         const showReportListBtn = document.getElementById('show-report-list-btn'); 
         
+        // (NEW) Show/Episode Unified Panel Elements
+        const showListPanel = document.getElementById('show-list-panel'); 
+        const showDetailPanel = document.getElementById('show-detail-panel');
+        const episodeListForShowContainer = document.getElementById('episode-list-for-show-container');
+        const showDetailTitle = document.getElementById('show-detail-title'); 
+        const showDetailThumbnail = document.getElementById('show-detail-thumbnail');
+        const backToShowListBtn = document.getElementById('back-to-show-list-btn');
+
+
         // (NEW) Search Inputs
         let showSearchInput;
-        let episodeSearchInput;
         let reportSearchInput; 
         let tagSearchInput; 
 
@@ -207,7 +228,7 @@
         const episodeEmbedInput = document.getElementById('episode-embed-code');
         const episodeShowSelect = document.getElementById('episode-show-select');
         const closeEpisodeModalBtn = document.getElementById('close-episode-modal');
-        const addEpisodeBtn = document.getElementById('add-episode-btn');
+        const addEpisodeBtn = document.getElementById('add-episode-btn'); // Not used directly, but listener remains
         const deleteEpisodeBtn = document.getElementById('delete-episode-btn');
 
         // Modal: Show
@@ -222,6 +243,11 @@
         const closeShowModalBtn = document.getElementById('close-show-modal');
         const addShowBtn = document.getElementById('add-show-btn');
         const deleteShowBtn = document.getElementById('delete-show-btn');
+        // (NEW) Edit Show button inside detail panel
+        const editShowInDetailBtn = document.getElementById('edit-show-in-detail-btn');
+        // (NEW) Add Episode button inside detail panel
+        const addEpisodeInDetailBtn = document.getElementById('add-episode-in-detail-btn');
+
 
         // Modal: Banner
         const bannerModal = document.getElementById('banner-modal');
@@ -243,12 +269,6 @@
         const addTagBtn = document.getElementById('add-tag-btn');
         const deleteTagBtn = document.getElementById('delete-tag-btn');
 
-
-        // (NEW) Bulk Action UI Elements (Episodes)
-        const bulkActionBarEpisodes = document.getElementById('bulk-action-bar-episodes');
-        const selectedEpisodesCount = document.getElementById('selected-episodes-count');
-        const bulkDeleteEpisodesBtn = document.getElementById('bulk-delete-episodes-btn');
-        const episodeSelectAll = document.getElementById('episode-select-all');
 
         // (NEW) Bulk Action UI Elements (Shows)
         const bulkActionBarShows = document.getElementById('bulk-action-bar-shows');
@@ -423,14 +443,13 @@
             }
             // Re-render the appropriate table
             if (view === 'show') {
-                renderShowTable();
-            } else if (view === 'episode') {
-                renderEpisodeTable();
+                renderShowListPanel();
             } else if (view === 'banner') { 
                 renderBannerTable();
             } else if (view === 'report') {
                 renderReportTable();
             }
+            // NOTE: Episode sorting is now handled within the detail panel, so no global episode view call is needed.
         }
 
         // (NEW FUNCTION) Comparison function for sorting data arrays
@@ -458,6 +477,14 @@
                 } else if (valA < valB) {
                     comparison = -1;
                 }
+            }
+            
+            // (FIXED) STABLE SORT TIE-BREAKER: ใช้ Document ID เพื่อให้ลำดับคงที่เมื่อค่าหลักเท่ากัน
+            // ทิศทางการจัดเรียง ID จะเป็นไปในทิศทางเดียวกับทิศทางหลัก (direction)
+            if (comparison === 0) {
+                 let idComparison = a.id.localeCompare(b.id);
+                 // ถ้าทิศทางหลักเป็น DESC (updatedAt) ให้กลับทิศทาง ID เป็น DESC ด้วย
+                 return direction === 'desc' ? (idComparison * -1) : idComparison;
             }
 
             return direction === 'desc' ? (comparison * -1) : comparison;
@@ -498,6 +525,18 @@
              }
         }
         // (END NEW FUNCTION)
+        
+        /**
+         * (NEW FUNCTION) Renders the main show list panel (used by default and when returning from detail)
+         */
+        function renderShowListPanel() {
+            if (!showListPanel || !showDetailPanel) return;
+            
+            showDetailPanel.classList.add('hidden');
+            showListPanel.classList.remove('hidden');
+            
+            renderShowTable(); // Renders the actual list table
+        }
 
 
         // (FIX) Render Function for Shows Table (เพิ่มการจัดเรียง)
@@ -529,24 +568,33 @@
             let hasShows = false;
             filteredShows.forEach((show) => {
                 hasShows = true;
+                
+                // Find max episode number for display
+                const maxEp = shows.find(s => s.id === show.id)?.latestEpisodeNumber || 0;
+                
                 tableHtml += `
                     <tr class="border-b border-gray-700 hover:bg-gray-700">
                         <td class="py-3 px-4 text-center">
                             <input type="checkbox" class="admin-checkbox show-row-checkbox" data-id="${show.id}">
                         </td>
                         <td class="py-3 px-4">
-                            <img src="${show.thumbnailUrl || 'https://placehold.co/100x60/333/fff?text=No+Img'}" alt="thumb" class="w-24 h-14 object-cover rounded">
+                            <!-- WRAP THUMBNAIL IN CLICKABLE SPAN -->
+                            <span class="clickable-show-title block cursor-pointer" data-id="${show.id}">
+                                <img src="${show.thumbnailUrl || 'https://placehold.co/100x60/333/fff?text=No+Img'}" alt="thumb" class="w-24 h-14 object-cover rounded">
+                            </span>
                         </td>
-                        <td class="py-3 px-4">${show.title}</td>
+                        <td class="py-3 px-4">
+                            <!-- Clickable Title to open Detail Panel -->
+                            <span class="clickable-show-title" data-id="${show.id}">${show.title}</span>
+                        </td>
                         <td class="py-3 px-4 text-sm">${(show.tags || []).join(', ')}</td>
+                        <td class="py-3 px-4 text-center">${maxEp}</td> <!-- Display max episode number -->
                         <td class="py-3 px-4 text-center">${show.viewCount || 0}</td>
                         <!-- (NEW) Created At -->
                         <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(show.createdAt)}</td>
                         <!-- (NEW) Updated At -->
                         <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(show.updatedAt)}</td>
-                        <td class="py-3 px-4">
-                            <button class="text-green-400 hover:text-green-300 edit-show-btn" data-id="${show.id}">แก้ไข</button>
-                        </td>
+                        <!-- REMOVED THE LAST TD/BUTTON -->
                     </tr>
                 `;
             });
@@ -559,87 +607,113 @@
                 showSelectAll.disabled = !hasShows;
             }
         }
-
-        // (MODIFIED) Render Function for Episodes Table (เพิ่มการจัดเรียง)
-        function renderEpisodeTable() {
-            if (!episodeTableBody) return;
+        
+        /**
+         * (NEW FUNCTION) Switches to and renders the Show Detail Panel
+         */
+        async function openShowDetailView(showId) {
+            if (!showListPanel || !showDetailPanel || !showId) return;
             
-            // 1. (FIX) ใช้ normalizeThai สำหรับการค้นหา
-            const searchQuery = episodeSearchInput ? normalizeThai(episodeSearchInput.value).toLowerCase() : '';
-
-            // NEW LOGIC: Filter out confirmed broken episodes (status === 'broken')
-            let filteredEpisodes = allEpisodes.filter(ep => {
-                // (NEW) ตรรกะการกรอง: ซ่อนรายการที่ได้รับการยืนยันว่าเสียจริง (status: broken)
-                if (ep.status === 'broken') return false; 
-                
-                const show = shows.find(s => s.id === ep.showId);
-                const showTitle = show ? normalizeThai(show.title).toLowerCase() : '';
-                const epTitle = normalizeThai(ep.title).toLowerCase();
-                return epTitle.includes(searchQuery) || showTitle.includes(searchQuery);
-            });
-            
-            // 2. (NEW) Client-Side Sorting
-            if (currentSort.view === 'episode') {
-                filteredEpisodes.sort((a, b) => compareValues(a, b, currentSort.field, currentSort.direction));
+            // 1. Get Show Data
+            const show = shows.find(s => s.id === showId);
+            if (!show) {
+                console.error(`Show ID ${showId} not found.`);
+                return;
             }
-
-
-            let tableHtml = '';
-            selectedEpisodes.clear();
-            updateBulkActionUIEpisodes(filteredEpisodes.length);
             
-            // 3. (NEW) Update Table Headers for visual sorting
-            updateSortHeaders('episode');
-
-            let hasEpisodes = false;
-            filteredEpisodes.forEach((data) => {
-                hasEpisodes = true;
-                const show = shows.find(s => s.id === data.showId); 
-                
-                let statusBadge = '';
-                let rowClass = 'border-b border-gray-700 hover:bg-gray-700'; 
-                
-                // NEW LOGIC: Status is only 'ถูกรายงาน' since 'เสีย' items are filtered out
-                // Check if there is ANY report document associated with this episode ID
-                const isReported = reportCountMap.get(data.id) > 0; 
-                
-                if (isReported) {
-                    // Show "ถูกรายงาน"
-                    statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-blue-600 px-2 py-0.5 rounded-full">ถูกรายงาน</span>';
-                    rowClass = 'border-b border-blue-900/50 bg-blue-900/20 hover:bg-blue-900/30';
-                }
-                
-                tableHtml += `
-                    <tr class="${rowClass}">
-                        <td class="py-3 px-4 text-center">
-                            <input type="checkbox" class="admin-checkbox episode-row-checkbox" data-id="${data.id}">
-                        </td>
-                        <td class="py-3 px-4 text-sm">${data.episodeNumber || '-'}</td>
-                        <td class="py-3 px-4">${data.title} ${statusBadge}</td>
-                        <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
-                        <!-- (NEW) Created At -->
-                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(data.createdAt)}</td>
-                        <!-- (NEW) Updated At -->
-                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(data.updatedAt)}</td>
-                        <td class="py-3 px-4">
-                            <button class="text-green-400 hover:text-green-300 edit-episode-btn" data-id="${data.id}">แก้ไข</button>
-                        </td>
-                    </tr>
-                `;
-            });
+            currentShowDetailId = showId;
             
-            episodeTableBody.innerHTML = tableHtml;
+            // 2. Hide List and Show Detail Panel
+            showListPanel.classList.add('hidden');
+            showDetailPanel.classList.remove('hidden');
+            
+            // 3. Render Show Overview
+            showDetailTitle.textContent = show.title;
+            showDetailThumbnail.src = show.thumbnailUrl || 'https://placehold.co/100x150/333/fff?text=No+Img';
+            
+            // Update button data for editing
+            editShowInDetailBtn.dataset.id = showId;
+            addEpisodeInDetailBtn.dataset.showId = showId;
 
-            if (episodeSelectAll) {
-                episodeSelectAll.checked = false;
-                episodeSelectAll.indeterminate = false;
-                episodeSelectAll.disabled = !hasEpisodes;
-            }
+            // 4. Render Episode List for this specific show
+            renderEpisodeListForShow(showId);
         }
         
         /**
-         * (MODIFIED) Render Function for Banners Table (เพิ่มการจัดเรียง/Dragula)
+         * (NEW FUNCTION) Renders the episodes for the currently selected show in the detail panel
          */
+        function renderEpisodeListForShow(showId) {
+             if (!episodeListForShowContainer) return;
+
+             // 1. Filter episodes for the current show
+             let episodesForShow = allEpisodes.filter(ep => ep.showId === showId);
+             
+             // 2. Sort by episode number (always ascending for this list)
+             episodesForShow.sort((a, b) => compareValues(a, b, 'episodeNumber', 'asc'));
+
+             // 3. Get Show Data to check for reports
+             const show = shows.find(s => s.id === showId);
+             
+             let tableHtml = `
+                 <table class="w-full table-fixed min-w-[700px]">
+                    <thead class="bg-gray-700">
+                        <tr>
+                            <th class="w-20 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ตอนที่</th>
+                            <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อตอน</th>
+                            <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">สถานะ</th>
+                            <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700">
+             `;
+
+             if (episodesForShow.length === 0) {
+                 tableHtml += `
+                    <tr>
+                        <td colspan="4" class="py-6 px-4 text-center text-gray-400">
+                            ยังไม่มีตอนสำหรับอนิเมะเรื่องนี้
+                        </td>
+                    </tr>
+                 `;
+             } else {
+                 episodesForShow.forEach((data) => {
+                     let statusBadge = '';
+                     let rowClass = 'border-b border-gray-700 hover:bg-gray-700';
+                     const reportCount = reportCountMap.get(data.id) || 0;
+                     const isReported = reportCount > 0;
+                     const isConfirmedBroken = data.status === 'broken';
+
+                     if (isConfirmedBroken) {
+                         statusBadge = `<span class="ml-2 text-xs font-medium text-white bg-red-600 px-2 py-0.5 rounded-full">เสีย</span>`;
+                         rowClass = 'border-b border-red-900/50 bg-red-900/20 hover:bg-red-900/30';
+                     } else if (isReported) {
+                         statusBadge = `<span class="ml-2 text-xs font-medium text-white bg-blue-600 px-2 py-0.5 rounded-full">${reportCount} รายงาน</span>`;
+                         rowClass = 'border-b border-blue-900/50 bg-blue-900/20 hover:bg-blue-900/30';
+                     }
+                     
+                     tableHtml += `
+                         <tr class="${rowClass}">
+                             <td class="py-3 px-4 text-sm">${data.episodeNumber || '-'}</td>
+                             <td class="py-3 px-4">${data.title} ${statusBadge}</td>
+                             <td class="py-3 px-4 text-sm whitespace-nowrap">${isConfirmedBroken ? 'ต้องแก้ไข' : isReported ? 'รอตรวจสอบ' : 'ปกติ'}</td>
+                             <td class="py-3 px-4">
+                                 <button class="text-green-400 hover:text-green-300 edit-episode-btn" data-id="${data.id}">แก้ไข</button>
+                             </td>
+                         </tr>
+                     `;
+                 });
+             }
+             
+             tableHtml += `
+                    </tbody>
+                 </table>
+             `;
+             
+             episodeListForShowContainer.innerHTML = tableHtml;
+        }
+
+
+        // (MODIFIED) Render Function for Banners Table (เพิ่มการจัดเรียง/Dragula)
         function renderBannerTable() {
             if (!bannerTableBody) return;
             
@@ -1124,11 +1198,15 @@
 
         // (NEW FUNCTION) Comprehensive render function to ensure all views are updated after ANY data change
         function renderAllViews() {
-            renderShowTable();
-            renderEpisodeTable();
-            renderBannerTable(); // (MODIFIED) Call renderBannerTable
-            renderReportTable();
-            renderDashboard();
+            renderShowTable(); // Always render show table (list view)
+            renderBannerTable(); // Render banner table
+            renderReportTable(); // Render report table
+            renderDashboard(); // Render dashboard
+
+            // (NEW LOGIC) If currently in detail view, refresh episodes list
+            if (currentShowDetailId && showDetailPanel && !showDetailPanel.classList.contains('hidden')) {
+                renderEpisodeListForShow(currentShowDetailId);
+            }
             renderTagTable(); 
             updateReportBadge();
         }
@@ -1279,13 +1357,13 @@
          */
         function switchView(viewId) {
             if (dashboardView) dashboardView.classList.add('hidden'); // NEW
-            if (episodeListView) episodeListView.classList.add('hidden');
+            // if (episodeListView) episodeListView.classList.add('hidden'); // REMOVED
             if (showListView) showListView.classList.add('hidden');
             if (bannerListView) bannerListView.classList.add('hidden'); 
             if (reportListView) reportListView.classList.add('hidden'); 
 
             if (showDashboardBtn) showDashboardBtn.classList.remove('bg-gray-900', 'text-white'); // NEW
-            if (showEpisodeListBtn) showEpisodeListBtn.classList.remove('bg-gray-900', 'text-white');
+            // if (showEpisodeListBtn) showEpisodeListBtn.classList.remove('bg-gray-900', 'text-white'); // REMOVED
             if (showShowListBtn) showShowListBtn.classList.remove('bg-gray-900', 'text-white');
             if (showBannerListBtn) showBannerListBtn.classList.remove('bg-gray-900', 'text-white'); 
             if (showReportListBtn) showReportListBtn.classList.remove('bg-gray-900', 'text-white'); 
@@ -1294,15 +1372,6 @@
                  if (dashboardView) dashboardView.classList.remove('hidden');
                  if (showDashboardBtn) showDashboardBtn.classList.add('bg-gray-900', 'text-white');
                  renderDashboard();
-            } else if (viewId === 'episode') {
-                if (episodeListView) episodeListView.classList.remove('hidden');
-                if (showEpisodeListBtn) showEpisodeListBtn.classList.add('bg-gray-900', 'text-white');
-                
-                // (MODIFIED) Set default sort for episode view: CreatedAt DESC
-                if (currentSort.view !== 'episode') {
-                    currentSort = { field: 'createdAt', direction: 'desc', view: 'episode' };
-                }
-                renderEpisodeTable();
 
             } else if (viewId === 'show') {
                 if (showListView) showListView.classList.remove('hidden');
@@ -1317,12 +1386,17 @@
                         initialSubViewId = sub;
                     }
                 }
+                
+                // (NEW LOGIC) ถ้ามีการเปลี่ยนแท็บ ให้กลับไปหน้า Show List เสมอ
+                currentShowDetailId = null;
+                renderShowListPanel(); 
+
                 switchSubView(initialSubViewId);
                 
-                // (MODIFIED) Set default sort for show view: CreatedAt DESC
-                if (currentSort.view !== 'show') {
-                     currentSort = { field: 'createdAt', direction: 'desc', view: 'show' };
-                }
+                // (MODIFIED) Set default sort for show view: UpdatedAt DESC
+                // บังคับให้ตั้งค่าเป็น updatedAt/desc เสมอเมื่อเข้า view นี้
+                currentSort = { field: 'updatedAt', direction: 'desc', view: 'show' };
+                
                 renderShowTable();
                 
                 // NEW: Update hash for consistency
@@ -1381,7 +1455,11 @@
                 animeListWrapper.classList.remove('hidden');
                 subNavShows.classList.add('active', 'text-white', 'border-blue-500', 'font-bold');
                 subNavShows.classList.remove('text-gray-400', 'hover:text-white', 'border-transparent', 'hover:border-gray-500', 'font-medium');
-                // Ensure bulk action bar for shows is managed here (as it controls the whole list)
+                
+                // (NEW LOGIC) Ensure only the list panel is visible upon tab change
+                renderShowListPanel(); 
+                
+                // Manage bulk action bar visibility
                 if (selectedShows.size > 0) {
                      bulkActionBarShows.classList.remove('hidden');
                 } else {
@@ -1398,7 +1476,7 @@
         }
 
         if (showDashboardBtn) showDashboardBtn.addEventListener('click', () => switchView('dashboard')); // NEW
-        if (showEpisodeListBtn) showEpisodeListBtn.addEventListener('click', () => switchView('episode'));
+        // if (showEpisodeListBtn) showEpisodeListBtn.addEventListener('click', () => switchView('episode')); // REMOVED
         if (showShowListBtn) showShowListBtn.addEventListener('click', () => switchView('show'));
         if (showBannerListBtn) showBannerListBtn.addEventListener('click', () => switchView('banner')); 
         if (showReportListBtn) showReportListBtn.addEventListener('click', () => switchView('report')); 
@@ -1532,36 +1610,6 @@
             currentConfirmCallback = null;
         }
 
-        // (NEW) Update UI based on selection (Episodes)
-        // (MODIFIED) Pass totalRows to avoid querying DOM
-        function updateBulkActionUIEpisodes(totalRows) {
-            if (!bulkActionBarEpisodes || !selectedEpisodesCount || !episodeSelectAll) return;
-
-            const selectedCount = selectedEpisodes.size;
-            
-            if (selectedCount > 0) {
-                bulkActionBarEpisodes.classList.remove('hidden');
-                selectedEpisodesCount.textContent = `เลือก ${selectedCount} รายการ`;
-            } else {
-                bulkActionBarEpisodes.classList.add('hidden');
-            }
-            
-            // Update "Select All" checkbox state
-            if (totalRows === 0) {
-                 episodeSelectAll.checked = false;
-                 episodeSelectAll.indeterminate = false;
-            } else if (selectedCount === 0) {
-                episodeSelectAll.checked = false;
-                episodeSelectAll.indeterminate = false;
-            } else if (selectedCount === totalRows) {
-                episodeSelectAll.checked = true;
-                episodeSelectAll.indeterminate = false;
-            } else {
-                episodeSelectAll.checked = false;
-                episodeSelectAll.indeterminate = true;
-            }
-        }
-        
         // (NEW) Update UI based on selection (Shows)
         // (MODIFIED) Pass totalRows to avoid querying DOM
         function updateBulkActionUIShows(totalRows) {
@@ -1571,7 +1619,8 @@
             
             // NEW: Check if the user is on the Anime List sub-view before showing the bar
             const animeListWrapper = document.getElementById('anime-list-wrapper');
-            const isAnimeListActive = animeListWrapper && !animeListWrapper.classList.contains('hidden');
+            // Show action bar only if list panel is active AND anime list is active
+            const isAnimeListActive = animeListWrapper && !animeListWrapper.classList.contains('hidden') && showListPanel && !showListPanel.classList.contains('hidden'); 
 
             if (selectedCount > 0 && isAnimeListActive) {
                 bulkActionBarShows.classList.remove('hidden');
@@ -1597,26 +1646,6 @@
         }
 
 
-        // (NEW) Handle "Select All" (Episodes)
-        if (episodeSelectAll) {
-            episodeSelectAll.addEventListener('change', (e) => {
-                const isChecked = e.target.checked;
-                // (MODIFIED) Select only visible rows
-                const rowCheckboxes = document.querySelectorAll('.episode-row-checkbox');
-                
-                rowCheckboxes.forEach(checkbox => {
-                    checkbox.checked = isChecked;
-                    const id = checkbox.dataset.id;
-                    if (isChecked) {
-                        selectedEpisodes.add(id);
-                    } else {
-                        selectedEpisodes.delete(id);
-                    }
-                });
-                
-                updateBulkActionUIEpisodes(rowCheckboxes.length);
-            });
-        }
         
         // (NEW) Handle "Select All" (Shows)
         if (showSelectAll) {
@@ -1639,22 +1668,6 @@
             });
         }
         
-        // (NEW) Handle single row selection (using event delegation) (Episodes)
-        if (episodeTableBody) {
-            episodeTableBody.addEventListener('change', (e) => {
-                if (e.target.classList.contains('episode-row-checkbox')) {
-                    const id = e.target.dataset.id;
-                    if (e.target.checked) {
-                        selectedEpisodes.add(id);
-                    } else {
-                        selectedEpisodes.delete(id);
-                    }
-                    const totalRows = document.querySelectorAll('.episode-row-checkbox').length;
-                    updateBulkActionUIEpisodes(totalRows);
-                }
-            });
-        }
-        
         // (NEW) Handle single row selection (using event delegation) (Shows)
         if (showTableBody) {
             showTableBody.addEventListener('change', (e) => {
@@ -1669,60 +1682,19 @@
                     updateBulkActionUIShows(totalRows);
                 }
             });
+            
+            // (NEW LOGIC) Handle click on title to open detail view (Unified)
+            showTableBody.addEventListener('click', async (e) => {
+                const targetTitle = e.target.closest('.clickable-show-title');
+                if (targetTitle) {
+                    const showId = targetTitle.dataset.id;
+                    openShowDetailView(showId);
+                    e.preventDefault(); // Prevent default link/button action
+                }
+            });
+
         }
         
-        // (NEW) Handle Bulk Delete Button (Episodes)
-        if (bulkDeleteEpisodesBtn) {
-            bulkDeleteEpisodesBtn.addEventListener('click', () => {
-                const count = selectedEpisodes.size;
-                if (count === 0) return;
-                
-                openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบ ${count} ตอนที่เลือก? (การดำเนินการนี้ไม่สามารถย้อนกลับได้)`, 
-                    async () => {
-                        console.log(`Starting bulk delete for ${count} episodes...`);
-                        try {
-                            // 1. Find all affected show IDs *before* deleting
-                            const affectedShowIds = new Set();
-                            const docsToGet = [];
-                            selectedEpisodes.forEach(id => {
-                                // (FIX) Find from local array instead of re-fetching
-                                const ep = allEpisodes.find(e => e.id === id);
-                                if (ep) {
-                                    affectedShowIds.add(ep.showId);
-                                }
-                            });
-                            
-                            // 2. Create a batch delete
-                            const batch = writeBatch(db);
-                            selectedEpisodes.forEach(id => {
-                                batch.delete(doc(getCollectionRef("episodes"), id));
-                            });
-                            
-                            // 3. Commit the batch
-                            await batch.commit();
-                            
-                            // 4. Update max episode status for all affected shows
-                            console.log("Bulk delete successful. Updating status for shows:", affectedShowIds);
-                            affectedShowIds.forEach(showId => {
-                                if (showId) {
-                                    updateMaxEpisodeAndStatus(showId);
-                                }
-                            });
-                            
-                            // 5. Clear selection and hide bar
-                            // (Snapshot will auto-refresh the list)
-                            selectedEpisodes.clear();
-                            updateBulkActionUIEpisodes(0);
-                            
-                        } catch (error) {
-                            console.error("Error during bulk delete:", error);
-                        } finally {
-                            closeConfirmModal();
-                        }
-                    }
-                );
-            });
-        }
         
         // (MODIFIED) Handle Bulk Delete Button (Shows) - แก้ไข N+1 และ Batch
         if (bulkDeleteShowsBtn) {
@@ -1850,6 +1822,8 @@
                 };
 
                 try {
+                    let savedShowId = currentEditingId;
+                    
                     if (currentEditingId) {
                         const docRef = doc(getCollectionRef("shows"), currentEditingId);
                         await updateDoc(docRef, showData);
@@ -1859,10 +1833,21 @@
                         showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
                         showData.latestEpisodeNumber = 0; 
                         
-                        await addDoc(getCollectionRef("shows"), showData);
+                        const newDocRef = await addDoc(getCollectionRef("shows"), showData);
+                        savedShowId = newDocRef.id;
                     }
                     if (showForm) showForm.reset();
                     if (showModal) showModal.classList.remove('flex');
+                    
+                    // (NEW LOGIC) After saving/editing, if the detail panel was open, refresh it
+                    if (savedShowId === currentShowDetailId) {
+                         // Find the updated show data locally or re-fetch (local should be fine due to snapshot)
+                         const updatedShow = shows.find(s => s.id === savedShowId);
+                         if (updatedShow) {
+                              openShowDetailView(savedShowId); 
+                         }
+                    }
+
                 } catch (error) {
                     console.error("Error saving show: ", error);
                 }
@@ -1892,6 +1877,13 @@
                             console.log(`Deleted show ${currentEditingId} and ${episodesSnapshot.size} episodes.`);
                             
                             if (showModal) showModal.classList.remove('flex');
+                            
+                            // (NEW LOGIC) If the detail panel was open for this show, return to list view
+                            if (currentEditingId === currentShowDetailId) {
+                                currentShowDetailId = null;
+                                renderShowListPanel();
+                            }
+                            
                         } catch (error) {
                             console.error("Error during bulk show delete:", error);
                         } finally {
@@ -1903,20 +1895,18 @@
         }
 
         if (showTableBody) {
+            // (REMOVED: Old edit-show-modal-btn listener as the button is now removed)
+            
+            // (NEW LOGIC) Handle click on title to open detail view (Unified)
             showTableBody.addEventListener('click', async (e) => {
-                if (e.target.classList.contains('edit-show-btn')) {
-                    const showId = e.target.dataset.id;
-                    try {
-                        const docRef = doc(getCollectionRef("shows"), showId);
-                        const docSnap = await getDoc(docRef);
-                        if (docSnap.exists()) {
-                            openShowModal('edit', docSnap.data(), showId);
-                        }
-                    } catch (error) {
-                        console.error("Error fetching show for edit:", error);
-                    }
+                const targetTitle = e.target.closest('.clickable-show-title');
+                if (targetTitle) {
+                    const showId = targetTitle.dataset.id;
+                    openShowDetailView(showId);
+                    e.preventDefault(); // Prevent default link/button action
                 }
             });
+
             // (NEW) Add listener for sorting by header click
             showTableBody.closest('table').querySelectorAll('.sort-header[data-sort-view="show"]').forEach(header => {
                 header.addEventListener('click', (e) => {
@@ -1929,6 +1919,76 @@
             });
         }
         
+        // (NEW LOGIC) Detail Panel Buttons
+        if(editShowInDetailBtn) {
+             editShowInDetailBtn.addEventListener('click', async () => {
+                 const showId = editShowInDetailBtn.dataset.id;
+                 if (!showId) return;
+                 const showData = shows.find(s => s.id === showId);
+                 if (showData) {
+                      openShowModal('edit', showData, showId);
+                 }
+             });
+        }
+        if(addEpisodeInDetailBtn) {
+             addEpisodeInDetailBtn.addEventListener('click', () => {
+                 const showId = addEpisodeInDetailBtn.dataset.showId;
+                 if (!showId) return;
+                 
+                 // 1. Open Episode Modal in 'add' mode
+                 openEpisodeModal('add');
+                 
+                 // 2. Pre-select the current show
+                 if (episodeShowSelect) {
+                     episodeShowSelect.value = showId;
+                     episodeShowSelect.disabled = true; // Prevent changing the show
+                 }
+                 
+                 // 3. Suggest next episode number
+                 const episodesForShow = allEpisodes.filter(ep => ep.showId === showId);
+                 let maxEpNum = 0;
+                 episodesForShow.forEach(ep => {
+                     if ((ep.episodeNumber || 0) > maxEpNum) {
+                          maxEpNum = ep.episodeNumber;
+                     }
+                 });
+                 const nextEpNum = maxEpNum + 1;
+                 if (episodeNumberInput) episodeNumberInput.value = nextEpNum;
+                 if (episodeTitleInput) episodeTitleInput.value = `ตอนที่ ${nextEpNum}`;
+             });
+        }
+        if (backToShowListBtn) {
+             backToShowListBtn.addEventListener('click', () => {
+                 currentShowDetailId = null;
+                 renderShowListPanel();
+                 // Update hash URL
+                 window.location.hash = 'show/anime-list';
+             });
+        }
+        
+        // (NEW LOGIC) Episode Table inside detail panel listener
+        if(episodeListForShowContainer) {
+            episodeListForShowContainer.addEventListener('click', async (e) => {
+                 const target = e.target.closest('.edit-episode-btn');
+                 if (target) {
+                    const episodeId = target.dataset.id;
+                    try {
+                        const docRef = doc(getCollectionRef("episodes"), episodeId);
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                            openEpisodeModal('edit', docSnap.data(), episodeId);
+                            if (episodeShowSelect) {
+                                 episodeShowSelect.disabled = true; // Disable show selection in edit mode
+                            }
+                        }
+                    } catch (error) {
+                        console.error("Error fetching episode for edit:", error);
+                    }
+                 }
+            });
+        }
+
+
         // --- MODIFIED: URL to Embed Code Converter Function (FIXED Invalid URL error) ---
         function convertToEmbedCode(input) {
             if (!input) {
@@ -2004,12 +2064,85 @@
                 if (episodeShowSelect) episodeShowSelect.value = episodeData.showId || '';
                 if (deleteEpisodeBtn) deleteEpisodeBtn.classList.remove('hidden');
             }
+            // (NEW LOGIC) If editing, allow show selection if not in unified view
+            if (episodeShowSelect) {
+                 if (mode === 'edit' && !currentShowDetailId) {
+                      episodeShowSelect.disabled = false;
+                 } else if (mode === 'edit' && currentShowDetailId) {
+                      // Already set in detail logic, keep disabled
+                      episodeShowSelect.disabled = true;
+                 } else if (mode === 'add' && !currentShowDetailId) {
+                      // Default add from main nav, enable selection
+                      episodeShowSelect.disabled = false;
+                 }
+            }
+
+
             if (episodeModal) episodeModal.classList.add('flex');
         }
-        if (addEpisodeBtn) addEpisodeBtn.addEventListener('click', () => openEpisodeModal('add'));
-        if (closeEpisodeModalBtn) closeEpisodeModalBtn.addEventListener('click', () => episodeModal.classList.remove('flex'));
+        // if (addEpisodeBtn) addEpisodeBtn.addEventListener('click', () => openEpisodeModal('add')); // NO LONGER USED
+        if (closeEpisodeModalBtn) closeEpisodeModalBtn.addEventListener('click', () => {
+             // Re-enable select when closing modal
+             if (episodeShowSelect) episodeShowSelect.disabled = false;
+             episodeModal.classList.remove('flex');
+        });
         
         if (episodeForm) {
+            showForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                let tagsArray = [];
+                document.querySelectorAll('.show-tag-option:checked').forEach(checkbox => {
+                    tagsArray.push(checkbox.value);
+                });
+                if (tagsArray.length === 0) {
+                    tagsArray.push('อนิเมะ');
+                }
+                
+                const isCompletedByAdmin = showCompletedCheckbox.checked; 
+                
+                const showData = {
+                    title: showTitleInput.value,
+                    description: showDescInput.value,
+                    thumbnailUrl: showThumbnailInput.value,
+                    viewCount: parseInt(showViewCountInput.value, 10) || 0, 
+                    isCompleted: isCompletedByAdmin, 
+                    tags: tagsArray,
+                    updatedAt: serverTimestamp()
+                };
+
+                try {
+                    let savedShowId = currentEditingId;
+                    
+                    if (currentEditingId) {
+                        const docRef = doc(getCollectionRef("shows"), currentEditingId);
+                        await updateDoc(docRef, showData);
+                        await updateMaxEpisodeAndStatus(currentEditingId); 
+                    } else {
+                        showData.createdAt = serverTimestamp();
+                        showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
+                        showData.latestEpisodeNumber = 0; 
+                        
+                        const newDocRef = await addDoc(getCollectionRef("shows"), showData);
+                        savedShowId = newDocRef.id;
+                    }
+                    if (showForm) showForm.reset();
+                    if (showModal) showModal.classList.remove('flex');
+                    
+                    // (NEW LOGIC) After saving/editing, if the detail panel was open, refresh it
+                    if (savedShowId === currentShowDetailId) {
+                         // Find the updated show data locally or re-fetch (local should be fine due to snapshot)
+                         const updatedShow = shows.find(s => s.id === savedShowId);
+                         if (updatedShow) {
+                              openShowDetailView(savedShowId); 
+                         }
+                    }
+
+                } catch (error) {
+                    console.error("Error saving show: ", error);
+                }
+            });
+
             episodeForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
@@ -2087,6 +2220,9 @@
                     if (episodeModal) episodeModal.classList.remove('flex');
                     
                     if (episodeEmbedInput) episodeEmbedInput.value = embedCodeToSave; 
+                    
+                    // Re-enable select
+                    if (episodeShowSelect) episodeShowSelect.disabled = false;
 
                 } catch (error) {
                     console.error("Error saving episode and clearing reports: ", error);
@@ -2111,6 +2247,8 @@
                             }
 
                             if (episodeModal) episodeModal.classList.remove('flex');
+                             // Re-enable select
+                            if (episodeShowSelect) episodeShowSelect.disabled = false;
                         } catch (error) {
                             console.error("Error deleting episode: ", error);
                         } finally {
@@ -2121,33 +2259,7 @@
             });
         }
         
-        if (episodeTableBody) {
-            episodeTableBody.addEventListener('click', async (e) => {
-                if (e.target.classList.contains('edit-episode-btn')) {
-                    const episodeId = e.target.dataset.id;
-                    try {
-                        const docRef = doc(getCollectionRef("episodes"), episodeId);
-                        const docSnap = await getDoc(docRef);
-                        if (docSnap.exists()) {
-                            openEpisodeModal('edit', docSnap.data(), episodeId);
-                        }
-                    } catch (error) {
-                        console.error("Error fetching episode for edit:", error);
-                    }
-                }
-            });
-            // (NEW) Add listener for sorting by header click
-            episodeTableBody.closest('table').querySelectorAll('.sort-header[data-sort-view="episode"]').forEach(header => {
-                header.addEventListener('click', (e) => {
-                    // Prevent propagation if clicking inside the header but not the header itself (e.g., table icon)
-                    if (e.target.closest('.sort-header') !== header) return; 
-                    
-                    const field = header.dataset.sortField;
-                    handleSort('episode', field);
-                });
-            });
-        }
-
+        
         // --- Banner Modal Logic (MODIFIED) ---
         function openBannerModal(mode, bannerData = {}, bannerId = null) {
             currentEditingId = bannerId;
@@ -2349,16 +2461,12 @@
         document.addEventListener('DOMContentLoaded', () => {
             // (NEW) Get search inputs
             showSearchInput = document.getElementById('show-search-input');
-            episodeSearchInput = document.getElementById('episode-search-input');
             reportSearchInput = document.getElementById('report-search-input'); 
             tagSearchInput = document.getElementById('tag-search-input'); // NEW
 
             // (NEW) Add search listeners
             if (showSearchInput) {
                 showSearchInput.addEventListener('input', renderShowTable);
-            }
-            if (episodeSearchInput) {
-                episodeSearchInput.addEventListener('input', renderEpisodeTable);
             }
             if (reportSearchInput) { // (NEW FIX 2) Add listener for report search
                 reportSearchInput.addEventListener('input', renderReportTable);
@@ -2367,6 +2475,10 @@
                 tagSearchInput.addEventListener('input', renderTagTable);
             }
             
+            // (NEW LOGIC) Episode modal no longer needs auto-fill for the show selection
+            // But we keep the logic for episode number/title based on manual input
+            
+            // Re-connect Episode number/title auto-fill logic
             if (episodeNumberInput && episodeTitleInput) {
                 episodeNumberInput.addEventListener('input', () => {
                     const epNumber = episodeNumberInput.value;
@@ -2377,7 +2489,7 @@
                     }
                 });
             }
-            
+
             // --- Hash Logic (Handles default view and sub-view for 'show') ---
             let initialViewId = 'dashboard'; // NEW: Default to Dashboard
             let initialSubViewId = 'anime-list';
@@ -2391,7 +2503,7 @@
                     if (['anime-list', 'tag-list'].includes(sub)) {
                         initialSubViewId = sub;
                     }
-                } else if (['dashboard', 'episode', 'banner', 'report'].includes(hash)) { // NEW: Added dashboard
+                } else if (['dashboard', 'banner', 'report'].includes(hash)) { // REMOVED 'episode'
                     initialViewId = hash;
                 } else if (hash === 'tag') { // Legacy support for old #tag hash
                     initialViewId = 'show';
@@ -2492,11 +2604,7 @@
                         <i class="ri-play-list-line"></i>
                         <span>อนิเมะ (Anime)</span>
                     </button>
-                    <!-- 3. Episode Button -->
-                    <button id="show-episode-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 font-medium flex-shrink-0">
-                        <i class="ri-movie-2-line"></i>
-                        <span>ตอน (Episodes)</span>
-                    </button>
+                    <!-- 3. Episode Button (REMOVED: Now handled inside Show) -->
                     <!-- 4. Report Button -->
                     <button id="show-report-list-btn" class="relative flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 font-medium flex-shrink-0">
                         <i class="ri-flag-line"></i>
@@ -2512,18 +2620,6 @@
 
         <!-- (MODIFIED) Main Content Area (Sidebar Removed) -->
         <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 relative">
-            
-            <!-- (NEW) Bulk Action Bar (Episodes) -->
-            <!-- This bar is sticky and will appear *under* the header when items are selected -->
-            <div id="bulk-action-bar-episodes" class="hidden sticky top-[125px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <span id="selected-episodes-count" class="font-bold text-white">เลือก 0 รายการ</span>
-                </div>
-                <button id="bulk-delete-episodes-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center space-x-2">
-                    <i class="ri-delete-bin-line"></i>
-                    <span>ลบรายการที่เลือก</span>
-                </button>
-            </div>
             
             <!-- (NEW) Bulk Action Bar (Shows) -->
             <div id="bulk-action-bar-shows" class="hidden sticky top-[125px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
@@ -2554,7 +2650,7 @@
                             <p id="stat-shows" class="text-3xl font-extrabold text-white mt-1">0</p>
                         </div>
 
-                        <!-- Stat Card 2: Total Episodes -->
+                        <!-- Stat Card 2: Total Episodes (Still show total count) -->
                         <div class="bg-gray-800 p-6 rounded-lg shadow-xl border-l-4 border-green-500">
                             <div class="flex items-center justify-between">
                                 <p class="text-sm font-medium text-gray-400 uppercase">จำนวนตอนทั้งหมด</p>
@@ -2600,7 +2696,7 @@
                     </div>
 
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden overflow-x-auto">
-                        <table class="w-full table-fixed min-w-[900px]"> <!-- (MODIFIED) Increased min-width for new column -->
+                        <table class="w-full table-fixed min-w-[900px]"> <!-- (MODIFIED) Increased min-w for new column -->
                             <thead class="bg-gray-900">
                                 <tr>
                                     <!-- (MODIFIED) Sort by Order Index (Default for manual order) -->
@@ -2644,47 +2740,88 @@
                     
                     <!-- 2.1 Anime List Content (Original Show List) -->
                     <div id="anime-list-wrapper" class="">
-                        <!-- Header with Search/Add Show button -->
-                        <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
-                            <div class="flex items-center space-x-4 ml-auto"> <!-- Added ml-auto to push items to the right -->
-                                <!-- (NEW) Show Search Input -->
-                                <input type="text" id="show-search-input" placeholder="ค้นหาอนิเมะ..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <button id="add-show-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
-                                    <i class="ri-add-line"></i>
-                                    <span>เพิ่มเรื่อง</span>
-                                </button>
+                        
+                        <!-- === 2.1.1 Show List Panel (Default View) === -->
+                        <div id="show-list-panel">
+                            <!-- Header with Search/Add Show button -->
+                            <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                                <div class="flex items-center space-x-4 ml-auto"> <!-- Added ml-auto to push items to the right -->
+                                    <!-- (NEW) Show Search Input -->
+                                    <input type="text" id="show-search-input" placeholder="ค้นหาอนิเมะ..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <button id="add-show-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
+                                        <i class="ri-add-line"></i>
+                                        <span>เพิ่มเรื่อง</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
+                                <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-w for new columns -->
+                                    <thead class="bg-gray-900">
+                                        <tr>
+                                            <th class="w-16 py-3 px-4 text-center">
+                                                <input type="checkbox" id="show-select-all" class="admin-checkbox">
+                                            </th>
+                                            <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ปก</th>
+                                            <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="title" data-sort-view="show">
+                                                ชื่อเรื่อง
+                                            </th>
+                                            <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
+                                            <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase">ตอนล่าสุด</th> <!-- MODIFIED TEXT -->
+                                            <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="viewCount" data-sort-view="show">
+                                                ยอดชม
+                                            </th>
+                                            <!-- (NEW) Created At Header -->
+                                            <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="show">
+                                                วันที่สร้าง
+                                            </th>
+                                            <!-- (NEW) Updated At Header -->
+                                            <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="updatedAt" data-sort-view="show">
+                                                วันที่อัปเดต
+                                            </th>
+                                            <!-- REMOVED THE LAST COLUMN: จัดการ -->
+                                        </tr>
+                                    </thead>
+                                    <tbody id="show-table-body" class="divide-y divide-gray-700">
+                                        <!-- Data injected by JS -->
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                        <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
-                            <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-w for new columns -->
-                                <thead class="bg-gray-900">
-                                    <tr>
-                                        <th class="w-16 py-3 px-4 text-center">
-                                            <input type="checkbox" id="show-select-all" class="admin-checkbox">
-                                        </th>
-                                        <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ปก</th>
-                                        <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="title" data-sort-view="show">
-                                            ชื่อเรื่อง
-                                        </th>
-                                        <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
-                                        <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="viewCount" data-sort-view="show">
-                                            ยอดชม
-                                        </th>
-                                        <!-- (NEW) Created At Header -->
-                                        <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="show">
-                                            วันที่สร้าง
-                                        </th>
-                                        <!-- (NEW) Updated At Header -->
-                                        <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="updatedAt" data-sort-view="show">
-                                            วันที่อัปเดต
-                                        </th>
-                                        <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="show-table-body" class="divide-y divide-gray-700">
-                                    <!-- Data injected by JS -->
-                                </tbody>
-                            </table>
+
+                        <!-- === 2.1.2 Show Detail Panel (Unified View) === -->
+                        <div id="show-detail-panel" class="hidden">
+                            <button id="back-to-show-list-btn" class="mb-4 text-gray-400 hover:text-white flex items-center">
+                                <i class="ri-arrow-left-line mr-2"></i> กลับไปรายการอนิเมะ
+                            </button>
+
+                            <!-- Show Header and Overview -->
+                            <div class="bg-gray-800 p-6 rounded-lg shadow-xl mb-6 flex items-start space-x-6">
+                                <img id="show-detail-thumbnail" src="https://placehold.co/100x150/333/fff?text=No+Img" alt="Thumbnail" class="w-24 h-36 object-cover rounded-lg flex-shrink-0">
+                                <div class="flex-1">
+                                    <h2 id="show-detail-title" class="text-3xl font-bold text-white mb-2">ชื่ออนิเมะ</h2>
+                                    <p class="text-sm text-gray-400 mb-4">คลิก "แก้ไขรายละเอียด" เพื่อดู/ปรับปรุงข้อมูลเรื่อง Tags และรูปปก</p>
+                                    <button id="edit-show-in-detail-btn" data-id="" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 text-sm">
+                                        <i class="ri-pencil-line"></i>
+                                        <span>แก้ไขรายละเอียด</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Episode Management Section -->
+                            <h3 class="text-2xl font-bold text-white mb-4 mt-8">รายการตอน (Episodes)</h3>
+                            <div class="flex justify-end mb-4">
+                                <button id="add-episode-in-detail-btn" data-show-id="" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                                    <i class="ri-add-line"></i>
+                                    <span>เพิ่มตอนใหม่</span>
+                                </button>
+                            </div>
+                            
+                            <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
+                                <div id="episode-list-for-show-container" class="min-w-full">
+                                    <!-- Episodes Table for the current show will be injected here -->
+                                    <p class="p-6 text-center text-gray-400">กำลังโหลดรายการตอน...</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -2716,53 +2853,6 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                </div>
-
-                <!-- 3. Episode List View -->
-                <div id="episode-list-view" class="hidden">
-                    <!-- (MODIFIED) Header with Search -->
-                    <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
-                        <h2 class="text-3xl font-bold text-white">รายการตอน</h2>
-                        <div class="flex items-center space-x-4">
-                            <!-- (NEW) Episode Search Input -->
-                            <input type="text" id="episode-search-input" placeholder="ค้นหาตอน หรือ ชื่อเรื่อง..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
-                            <button id="add-episode-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
-                                <i class="ri-add-line"></i>
-                                <span>เพิ่มตอน</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
-                        <!-- (MODIFIED) Added table-fixed and th widths -->
-                        <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-w for new columns -->
-                            <thead class="bg-gray-900">
-                                <tr>
-                                    <th class="w-16 py-3 px-4 text-center">
-                                        <input type="checkbox" id="episode-select-all" class="admin-checkbox">
-                                    </th>
-                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="episodeNumber" data-sort-view="episode">
-                                        ตอนที่
-                                    </th>
-                                    <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="title" data-sort-view="episode">
-                                        ชื่อตอน <!-- *** MODIFIED: w-1/3 -> w-1/4 *** -->
-                                    </th>
-                                    <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th> <!-- *** MODIFIED: w-64 -> w-1/4 *** -->
-                                    <!-- (NEW) Created At Header -->
-                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="episode">
-                                        วันที่สร้าง
-                                    </th>
-                                    <!-- (NEW) Updated At Header -->
-                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="updatedAt" data-sort-view="episode">
-                                        วันที่อัปเดต
-                                    </th>
-                                    <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
-                                </tr>
-                            </thead>
-                            <tbody id="episode-table-body" class="divide-y divide-gray-700">
-                                <!-- Data injected by JS -->
-                            </tbody>
-                        </table>
                     </div>
                 </div>
 
@@ -2803,6 +2893,7 @@
 
 
     <!-- Modal for Adding/Editing Episode -->
+    <!-- This modal is now used only for the actual form submission, triggered from the unified detail panel -->
     <div id="episode-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <form id="episode-form">
@@ -2815,6 +2906,7 @@
                 <div class="p-6 space-y-4">
                     <div>
                         <label for="episode-show-select" class="block text-sm font-medium text-gray-300 mb-1">เรื่อง *</label>
+                        <!-- NOTE: This select will be disabled/pre-filled when adding from detail view -->
                         <select id="episode-show-select" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" required>
                             <option value="">-- เลือกเรื่อง --</option>
                             <!-- Options injected by JS -->
