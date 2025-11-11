@@ -418,7 +418,7 @@
                 // Otherwise, set new column and default to descending (latest/highest first)
                 currentSort.field = field;
                 // (MODIFIED) Banners should default to 'asc' for orderIndex
-                currentSort.direction = 'desc'; 
+                currentSort.direction = (view === 'banner' && field === 'orderIndex') ? 'asc' : 'desc'; 
                 currentSort.view = view;
             }
             // Re-render the appropriate table
@@ -428,6 +428,8 @@
                 renderEpisodeTable();
             } else if (view === 'banner') { 
                 renderBannerTable();
+            } else if (view === 'report') {
+                renderReportTable();
             }
         }
 
@@ -613,10 +615,7 @@
                             <input type="checkbox" class="admin-checkbox episode-row-checkbox" data-id="${data.id}">
                         </td>
                         <td class="py-3 px-4 text-sm">${data.episodeNumber || '-'}</td>
-                        <td class="py-3 px-4">
-                            ${data.title}
-                            ${statusBadge}
-                        </td>
+                        <td class="py-3 px-4">${data.title} ${statusBadge}</td>
                         <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
                         <!-- (NEW) Created At -->
                         <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(data.createdAt)}</td>
@@ -874,41 +873,58 @@
 
             let tableHtml = '';
             
-            // 1. สร้าง "To-Do" list map จากรายการที่ต้องตรวจสอบ/ดำเนินการ
+            // (NEW) 1. สร้าง Map เพื่อเก็บเวลาแจ้งปัญหาที่เก่าที่สุดของแต่ละตอน
+            const earliestReportTimeMap = new Map();
+            allReports.forEach(report => {
+                const episodeId = report.episodeId;
+                const reportTime = report.createdAt ? report.createdAt.toMillis() : 0;
+                if (reportTime === 0) return;
+
+                const existingTime = earliestReportTimeMap.get(episodeId) || Infinity;
+                if (reportTime < existingTime) {
+                    earliestReportTimeMap.set(episodeId, reportTime);
+                }
+            });
+
+            // 2. สร้าง "To-Do" list map
             const todoMap = new Map();
-            
-            // NEW LOGIC: รายการที่ต้องแสดงใน Reports View คือ:
-            // A. Episodes ที่มี status: 'broken' (เสียจริงจากการตรวจสอบ)
             
             allEpisodes.forEach((episode) => {
                 if (episode.status === 'broken') { // Only confirmed broken are actionable now
-                    const reportCount = reportCountMap.get(episode.id) || 1; // นับอย่างน้อย 1 ครั้ง
+                    const reportCount = reportCountMap.get(episode.id) || 1; 
+                    
+                    // (MODIFIED) หาเวลาที่เก่าที่สุด (ถ้าไม่มี ให้ใช้เวลาอัปเดตตอนแทน)
+                    const earliestReportTime = earliestReportTimeMap.get(episode.id) || (episode.updatedAt ? episode.updatedAt.toMillis() : 0);
+                    
                     todoMap.set(episode.id, {
                         episode: episode, 
                         reportCount: reportCount, 
                         hasReportDoc: reportCountMap.get(episode.id) > 0,
-                        // NEW FIX: Store reportId if it exists for easy deletion later
-                        reportId: allReports.find(r => r.episodeId === episode.id)?.id || null
+                        reportId: allReports.find(r => r.episodeId === episode.id)?.id || null,
+                        sortTimestamp: earliestReportTime // (MODIFIED) เก็บ timestamp สำหรับจัดเรียง
                     });
                 }
             });
             
-            // 2. เพิ่ม Orphaned Reports (รายงานที่ Episode ถูกลบไปแล้ว)
+            // 3. เพิ่ม Orphaned Reports
             allReports.forEach(report => {
                 const episodeExists = allEpisodes.some(ep => ep.id === report.episodeId);
-                // ตรวจสอบว่าไม่ใช่ Episode ที่มีอยู่ และยังไม่มีใน todoMap
                 if (!episodeExists && !todoMap.has(report.episodeId)) {
+                    
+                    const reportTime = report.createdAt ? report.createdAt.toMillis() : 0; // (MODIFIED)
+                    
                     todoMap.set(report.episodeId, {
                         episode: null, 
                         reportCount: reportCountMap.get(report.episodeId) || 1,
                         hasReportDoc: true,
-                        reportId: report.id // ต้องมี reportId เพื่อลบ
+                        reportId: report.id,
+                        sortTimestamp: reportTime // (MODIFIED) เก็บ timestamp สำหรับจัดเรียง
                     });
                 }
             });
 
             
-            // 3. กรองรายการตามคำค้นหา
+            // 4. กรองรายการตามคำค้นหา (เหมือนเดิม)
             const filteredTodoItems = Array.from(todoMap.values()).filter(item => {
                 if (!searchQuery) return true;
                 
@@ -920,7 +936,7 @@
             });
             
             
-            // 4. ตรวจสอบว่า "To-Do" list ว่างหรือไม่
+            // 5. ตรวจสอบว่า "To-Do" list ว่างหรือไม่ (เหมือนเดิม)
             if (filteredTodoItems.length === 0) {
                 tableHtml = `
                     <tr>
@@ -931,9 +947,20 @@
                     </tr>
                 `;
             } else {
-                // 5. Render "To-Do" list ที่กรองแล้ว (เรียงตามจำนวนรายงานมากสุด)
-                filteredTodoItems.sort((a, b) => b.reportCount - a.reportCount);
+                // (MODIFIED) 6. จัดเรียงตาม currentSort ที่ตั้งค่าไว้
+                if (currentSort.view === 'report' && currentSort.field === 'createdAt') {
+                    // เรียงตาม timestamp (น้อยไปมาก หรือ มากไปน้อย)
+                    filteredTodoItems.sort((a, b) => {
+                        const timeA = a.sortTimestamp || 0;
+                        const timeB = b.sortTimestamp || 0;
+                        return currentSort.direction === 'asc' ? (timeA - timeB) : (timeB - timeA);
+                    });
+                } else {
+                    // (Fallback) ถ้าไม่ได้เรียงตามเวลา ให้เรียงตามจำนวนรายงาน (มากไปน้อย)
+                    filteredTodoItems.sort((a, b) => b.reportCount - a.reportCount);
+                }
 
+                // 7. Render "To-Do" list (เหมือนเดิม)
                 filteredTodoItems.forEach((item) => {
                     const { episode, reportCount, hasReportDoc } = item;
                     
@@ -943,11 +970,11 @@
                     const showTitle = show ? show.title : 'N/A';
                     
                     const isConfirmedBroken = episode && episode.status === 'broken';
-                    
-                    // NEW FIX: Use the stored reportId or find the first one for action buttons
                     const reportId = item.reportId || allReports.find(r => r.episodeId === episodeId)?.id || ''; 
 
-                    // NEW BADGE LOGIC for Reports View
+                    // (NEW) Determine which timestamp to display (the earliest report time)
+                    const displayTime = item.sortTimestamp ? formatTimestamp({ toDate: () => new Date(item.sortTimestamp) }) : '-';
+
                     let statusBadge = '';
                     if (isConfirmedBroken) {
                         statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-red-600 px-2 py-0.5 rounded-full">เสีย</span>';
@@ -955,14 +982,12 @@
                         statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-gray-500 px-2 py-0.5 rounded-full">รายงานค้าง</span>';
                     }
 
-
                     let reportBadgeClass = 'bg-gray-700 text-gray-300';
                     if (reportCount >= 3) reportBadgeClass = 'bg-red-600';
                     else if (reportCount === 2) reportBadgeClass = 'bg-yellow-600';
 
                     tableHtml += `
                         <tr class="border-b border-gray-700 hover:bg-gray-700">
-                            <!-- Report Count -->
                             <td class="py-3 px-4 text-center">
                                 <span class="text-sm font-bold text-white px-2 py-1 rounded ${reportBadgeClass}">
                                     ${reportCount}
@@ -971,11 +996,11 @@
                             <td class="py-3 px-4">
                                 ${episodeTitle}
                                 ${statusBadge}
+                                <p class="text-xs text-gray-400 mt-1">แจ้งครั้งแรก: ${displayTime}</p>
                             </td>
                             <td class="py-3 px-4">${showTitle}</td>
                             <td class="py-3 px-4 space-x-2 whitespace-nowrap">
                                 
-                                <!-- 2. Edit Episode (สำหรับรายการที่ยังมี Episode อยู่) -->
                                 ${episode ? `
                                 <button class="text-xs text-green-400 hover:text-green-300 bg-gray-900 px-2 py-1 rounded goto-episode-btn" 
                                         data-episode-id="${episodeId}" data-report-id="${reportId || ''}"> 
@@ -983,21 +1008,18 @@
                                 </button>
                                 ` : ''}
                                 
-                                <!-- 3. Resolve (สำหรับรายการที่มี Report Doc หรือ Orphaned Report) -->
                                 ${hasReportDoc ? `
                                 <button class="text-xs text-blue-400 hover:text-blue-300 bg-gray-900 px-2 py-1 rounded resolve-report-btn" data-report-id="${reportId}">
                                     <i class="ri-check-line"></i> แก้ไขแล้ว (ลบรายงาน)
                                 </button>
                                 ` : ''}
                                 
-                                <!-- 4. Clear Status (สำหรับรายการที่เสียจริง แต่ไม่มี Report Doc) -->
                                 ${isConfirmedBroken && !hasReportDoc ? `
                                 <button class="text-xs text-yellow-400 hover:text-yellow-300 bg-gray-900 px-2 py-1 rounded clear-broken-btn" data-episode-id="${episodeId}">
                                     <i class="ri-check-line"></i> ล้างสถานะ 'เสีย'
                                 </button>
                                 ` : ''}
                                 
-                                <!-- 5. Resolve Orphaned Report (เฉพาะรายการที่ Episode ถูกลบ) -->
                                 ${!episode && hasReportDoc ? `
                                 <button class="text-xs text-red-400 hover:text-red-300 bg-gray-900 px-2 py-1 rounded resolve-report-btn" data-report-id="${reportId}">
                                     <i class="ri-delete-bin-line"></i> ลบรายงานค้าง
@@ -1275,9 +1297,10 @@
             } else if (viewId === 'episode') {
                 if (episodeListView) episodeListView.classList.remove('hidden');
                 if (showEpisodeListBtn) showEpisodeListBtn.classList.add('bg-gray-900', 'text-white');
-                // (NEW) Set default sort for episode view if not set
+                
+                // (MODIFIED) Set default sort for episode view: CreatedAt DESC
                 if (currentSort.view !== 'episode') {
-                    currentSort = { field: 'updatedAt', direction: 'desc', view: 'episode' };
+                    currentSort = { field: 'createdAt', direction: 'desc', view: 'episode' };
                 }
                 renderEpisodeTable();
 
@@ -1295,9 +1318,10 @@
                     }
                 }
                 switchSubView(initialSubViewId);
-                // (NEW) Set default sort for show view if not set
+                
+                // (MODIFIED) Set default sort for show view: CreatedAt DESC
                 if (currentSort.view !== 'show') {
-                     currentSort = { field: 'updatedAt', direction: 'desc', view: 'show' };
+                     currentSort = { field: 'createdAt', direction: 'desc', view: 'show' };
                 }
                 renderShowTable();
                 
@@ -1316,6 +1340,12 @@
             } else if (viewId === 'report') { 
                 if (reportListView) reportListView.classList.remove('hidden');
                 if (showReportListBtn) showReportListBtn.classList.add('bg-gray-900', 'text-white');
+                
+                // (NEW) Set default sort for report view: CreatedAt ASC (เก่าที่สุดก่อน)
+                if (currentSort.view !== 'report') {
+                    currentSort = { field: 'createdAt', direction: 'asc', view: 'report' };
+                }
+                renderReportTable();
             }
             
             // อัปเดต URL hash สำหรับมุมมองหลักที่ไม่ใช่ 'show'
@@ -2626,7 +2656,7 @@
                             </div>
                         </div>
                         <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
-                            <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-width for new columns -->
+                            <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-w for new columns -->
                                 <thead class="bg-gray-900">
                                     <tr>
                                         <th class="w-16 py-3 px-4 text-center">
@@ -2705,7 +2735,7 @@
                     </div>
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
                         <!-- (MODIFIED) Added table-fixed and th widths -->
-                        <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-width for new columns -->
+                        <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-w for new columns -->
                             <thead class="bg-gray-900">
                                 <tr>
                                     <th class="w-16 py-3 px-4 text-center">
@@ -2714,10 +2744,10 @@
                                     <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="episodeNumber" data-sort-view="episode">
                                         ตอนที่
                                     </th>
-                                    <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="title" data-sort-view="episode">
+                                    <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="title" data-sort-view="episode">
                                         ชื่อตอน
                                     </th>
-                                    <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th>
+                                    <th class="w-64 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th>
                                     <!-- (NEW) Created At Header -->
                                     <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="episode">
                                         วันที่สร้าง
@@ -2753,7 +2783,9 @@
                                     <!-- NEW: Report Count Header -->
                                     <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase">รายงาน (ครั้ง)</th>
                                     
-                                    <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อตอน (ที่ถูกรายงาน)</th>
+                                    <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="report">
+                                        ชื่อตอน (ที่ถูกรายงาน)
+                                    </th>
                                     <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">เรื่อง</th>
                                     <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
                                 </tr>
