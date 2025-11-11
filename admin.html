@@ -6,7 +6,6 @@
     <title>ANI-END Admin Panel</title> 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
-    <!-- (NEW) Dragula CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.2/dragula.min.css" />
     <style>
         body { 
@@ -84,7 +83,6 @@
 </head>
 <body class="text-gray-100">
 
-    <!-- (NEW) Dragula JS Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.2/dragula.min.js"></script>
     
     <script type="module">
@@ -160,19 +158,18 @@
         }
         // (END NEW FUNCTION)
         
-        // (NEW FUNCTION) Helper function to format Firebase Timestamp
+        // (MODIFIED) Function to format Firebase Timestamp (Now only shows DD/MM/YY)
         function formatTimestamp(timestamp) {
             if (!timestamp || !timestamp.toDate) return '-';
             const date = timestamp.toDate();
-            // Format: DD/MM/YY HH:MM
+            // Format: DD/MM/YY
             const d = date.getDate().toString().padStart(2, '0');
             const m = (date.getMonth() + 1).toString().padStart(2, '0');
             const y = date.getFullYear().toString().slice(-2);
-            const h = date.getHours().toString().padStart(2, '0');
-            const min = date.getMinutes().toString().padStart(2, '0');
-            return `${d}/${m}/${y} ${h}:${min}`;
+            // REMOVED TIME COMPONENT
+            return `${d}/${m}/${y}`;
         }
-        // (END NEW FUNCTION)
+        // (END MODIFIED FUNCTION)
         
         // (FIX) เพิ่มฟังก์ชัน getCollectionRef ที่หายไปกลับเข้ามา
         function getCollectionRef(collectionName) {
@@ -376,7 +373,10 @@
             });
         }
 
-        // (NEW FUNCTION: ดึงตอนสูงสุดเพื่ออัปเดต Show)
+        /**
+         * (MODIFIED/NEW) ดึงตอนสูงสุดเพื่ออัปเดต Show และ Update Timestamp แยกกัน
+         * ฟังก์ชันนี้ถูกเรียกเมื่อมีการเปลี่ยนแปลงใน Episode (เพิ่ม/แก้ไข/ลบ)
+         */
         async function updateMaxEpisodeAndStatus(showId) {
             try {
                 const episodesQuery = query(getCollectionRef("episodes"), where("showId", "==", showId));
@@ -395,31 +395,27 @@
                 const showRef = doc(getCollectionRef("shows"), showId);
                 const showSnap = await getDoc(showRef);
                 
-                // (FIX) Check if show exists before reading data
                 if (!showSnap.exists()) {
                     console.warn(`Show ${showId} not found, skipping status update.`);
                     return;
                 }
                 
                 const showData = showSnap.data();
-                
-                // (MODIFIED) isCompleted จะเป็น true ถ้า isCompleted ที่บันทึกไว้ใน Firestore เป็น true
                 const isCompleted = showData.isCompleted === true;
                 
-                // อัปเดต Show document ด้วย Max Episode ล่าสุด (ใช้ฟิลด์: latestEpisodeNumber)
+                // อัปเดต Show document ด้วย Max Episode ล่าสุด และ update latestEpisodeUpdateAt
                 await updateDoc(showRef, {
                     latestEpisodeNumber: maxEpisode, // อัปเดตตอนสูงสุดเสมอ
                     isCompleted: isCompleted, // ใช้สถานะจบที่ผู้ดูแลระบบกำหนด
-                    updatedAt: serverTimestamp() // อัปเดตวันที่ด้วย
+                    latestEpisodeUpdateAt: serverTimestamp() // อัปเดตเวลาเนื้อหาล่าสุด
                 });
 
                 console.log(`Show ${showId} updated: Max Episode ${maxEpisode}, Completed: ${isCompleted}`);
 
-            } catch (error) { // (FIXED) Added curly braces
+            } catch (error) { 
                 console.error("Error updating max episode:", error);
             }
         }
-        // (END NEW FUNCTION)
         
         // (MODIFIED) Client-Side Sorting Handler
         function handleSort(view, field) {
@@ -483,7 +479,7 @@
             // ทิศทางการจัดเรียง ID จะเป็นไปในทิศทางเดียวกับทิศทางหลัก (direction)
             if (comparison === 0) {
                  let idComparison = a.id.localeCompare(b.id);
-                 // ถ้าทิศทางหลักเป็น DESC (updatedAt) ให้กลับทิศทาง ID เป็น DESC ด้วย
+                 // ถ้าทิศทางหลักเป็น DESC (latestEpisodeUpdateAt) ให้กลับทิศทาง ID เป็น DESC ด้วย
                  return direction === 'desc' ? (idComparison * -1) : idComparison;
             }
 
@@ -553,6 +549,7 @@
             
             // 2. (NEW) Client-Side Sorting
             if (currentSort.view === 'show') {
+                // (MODIFIED) ใช้ currentSort.field ซึ่งถูกตั้งค่าเป็น latestEpisodeUpdateAt เป็นค่าเริ่มต้น
                 filteredShows.sort((a, b) => compareValues(a, b, currentSort.field, currentSort.direction));
             }
 
@@ -572,30 +569,28 @@
                 // Find max episode number for display
                 const maxEp = shows.find(s => s.id === show.id)?.latestEpisodeNumber || 0;
                 
+                // Get separate update times
+                const detailUpdate = shows.find(s => s.id === show.id)?.updatedAt;
+                const contentUpdate = shows.find(s => s.id === show.id)?.latestEpisodeUpdateAt;
+                
                 tableHtml += `
                     <tr class="border-b border-gray-700 hover:bg-gray-700">
                         <td class="py-3 px-4 text-center">
                             <input type="checkbox" class="admin-checkbox show-row-checkbox" data-id="${show.id}">
                         </td>
                         <td class="py-3 px-4">
-                            <!-- WRAP THUMBNAIL IN CLICKABLE SPAN -->
                             <span class="clickable-show-title block cursor-pointer" data-id="${show.id}">
                                 <img src="${show.thumbnailUrl || 'https://placehold.co/100x60/333/fff?text=No+Img'}" alt="thumb" class="w-24 h-14 object-cover rounded">
                             </span>
                         </td>
                         <td class="py-3 px-4">
-                            <!-- Clickable Title to open Detail Panel -->
                             <span class="clickable-show-title" data-id="${show.id}">${show.title}</span>
                         </td>
                         <td class="py-3 px-4 text-sm">${(show.tags || []).join(', ')}</td>
-                        <td class="py-3 px-4 text-center">${maxEp}</td> <!-- Display max episode number -->
-                        <td class="py-3 px-4 text-center">${show.viewCount || 0}</td>
-                        <!-- (NEW) Created At -->
+                        <td class="py-3 px-4 text-center">${maxEp}</td> <td class="py-3 px-4 text-center">${show.viewCount || 0}</td>
                         <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(show.createdAt)}</td>
-                        <!-- (NEW) Updated At -->
-                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(show.updatedAt)}</td>
-                        <!-- REMOVED THE LAST TD/BUTTON -->
-                    </tr>
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(detailUpdate)}</td>
+                        </tr>
                 `;
             });
             
@@ -777,15 +772,12 @@
                         data-id="${data.id}"
                         data-order-index="${data.orderIndex || 0}"
                     >
-                        <!-- (NEW) Order Index -->
                         <td class="py-3 px-4 text-center font-bold">${data.orderIndex || 0}</td> 
                         <td class="py-3 px-4">
                             <img src="${data.bannerImageUrl || 'https://placehold.co/150x50/333/fff?text=No+Img'}" alt="banner" class="w-36 h-12 object-cover rounded">
                         </td>
                         <td class="py-3 px-4">${show ? show.title : 'N/A'}</td>
-                        <!-- (NEW) Created At -->
                         <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(data.createdAt)}</td>
-                        <!-- (NEW) Updated At -->
                         <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(data.updatedAt)}</td>
                         <td class="py-3 px-4">
                             <button class="text-green-400 hover:text-green-300 edit-banner-btn" data-id="${data.id}">แก้ไข</button>
@@ -924,7 +916,6 @@
                         <tr class="border-b border-gray-700 hover:bg-gray-700">
                             <td class="py-3 px-4">${tag.name}</td>
                             <td class="py-3 px-4 text-sm">${tag.id}</td>
-                            <!-- (NEW) Created At -->
                             <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(tag.createdAt)}</td>
                             <td class="py-3 px-4">
                                 <button class="text-green-400 hover:text-green-300 edit-tag-btn" data-id="${tag.id}">แก้ไข</button>
@@ -1393,9 +1384,9 @@
 
                 switchSubView(initialSubViewId);
                 
-                // (MODIFIED) Set default sort for show view: UpdatedAt DESC
-                // บังคับให้ตั้งค่าเป็น updatedAt/desc เสมอเมื่อเข้า view นี้
-                currentSort = { field: 'updatedAt', direction: 'desc', view: 'show' };
+                // (MODIFIED) Set default sort for show view: latestEpisodeUpdateAt DESC
+                // บังคับให้ตั้งค่าเป็น latestEpisodeUpdateAt/desc เสมอเมื่อเข้า view นี้
+                currentSort = { field: 'latestEpisodeUpdateAt', direction: 'desc', view: 'show' };
                 
                 renderShowTable();
                 
@@ -1704,7 +1695,6 @@
                 
                 openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบ ${count} อนิเมะที่เลือก? (การดำเนินการนี้จะลบตอนทั้งหมดของอนิเมะเหล่านี้ด้วย และไม่สามารถย้อนกลับได้)`, 
                     async () => {
-                        console.log(`Starting bulk delete for ${count} shows...`);
                         try {
                             
                             // (FIX for N+1 Reads and multiple batches)
@@ -1818,7 +1808,7 @@
                     viewCount: parseInt(showViewCountInput.value, 10) || 0, 
                     isCompleted: isCompletedByAdmin, 
                     tags: tagsArray,
-                    updatedAt: serverTimestamp()
+                    updatedAt: serverTimestamp() // อัปเดตเฉพาะ updatedAt (รายละเอียด Show)
                 };
 
                 try {
@@ -1827,11 +1817,14 @@
                     if (currentEditingId) {
                         const docRef = doc(getCollectionRef("shows"), currentEditingId);
                         await updateDoc(docRef, showData);
-                        await updateMaxEpisodeAndStatus(currentEditingId); 
+                        // (NOTE) ไม่เรียก updateMaxEpisodeAndStatus ที่นี่ เพื่อแยก UpdatedAt ออกจาก LatestEpisodeUpdateAt
+                        
                     } else {
                         showData.createdAt = serverTimestamp();
                         showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
                         showData.latestEpisodeNumber = 0; 
+                        // (NEW) กำหนดค่าเริ่มต้นสำหรับฟิลด์ใหม่
+                        showData.latestEpisodeUpdateAt = serverTimestamp(); 
                         
                         const newDocRef = await addDoc(getCollectionRef("shows"), showData);
                         savedShowId = newDocRef.id;
@@ -2108,7 +2101,7 @@
                     viewCount: parseInt(showViewCountInput.value, 10) || 0, 
                     isCompleted: isCompletedByAdmin, 
                     tags: tagsArray,
-                    updatedAt: serverTimestamp()
+                    updatedAt: serverTimestamp() // อัปเดตเฉพาะ updatedAt (รายละเอียด Show)
                 };
 
                 try {
@@ -2117,11 +2110,14 @@
                     if (currentEditingId) {
                         const docRef = doc(getCollectionRef("shows"), currentEditingId);
                         await updateDoc(docRef, showData);
-                        await updateMaxEpisodeAndStatus(currentEditingId); 
+                        // (NOTE) ไม่เรียก updateMaxEpisodeAndStatus ที่นี่ เพื่อแยก UpdatedAt ออกจาก LatestEpisodeUpdateAt
+                        
                     } else {
                         showData.createdAt = serverTimestamp();
                         showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
                         showData.latestEpisodeNumber = 0; 
+                        // (NEW) กำหนดค่าเริ่มต้นสำหรับฟิลด์ใหม่
+                        showData.latestEpisodeUpdateAt = serverTimestamp(); 
                         
                         const newDocRef = await addDoc(getCollectionRef("shows"), showData);
                         savedShowId = newDocRef.id;
@@ -2154,7 +2150,7 @@
                     episodeNumber: parseInt(episodeNumberInput.value, 10) || 0,
                     embedCode: embedCodeToSave, 
                     showId: episodeShowSelect.value,
-                    updatedAt: serverTimestamp()
+                    // (NOTE) ไม่อัปเดต updatedAt ใน Episode Document เพื่อประหยัด Write
                 };
                 
                 // (*** โค้ดที่ถูกแก้ไข/เพิ่มเติม: จัดการล้างสถานะและลบ Reports เมื่อแก้ไขตอน ***)
@@ -2177,6 +2173,8 @@
                         // 1. ตรวจสอบสถานะเดิมและสร้างข้อมูลอัปเดต
                         // NEW: สร้าง object สำหรับอัปเดต โดยรวมข้อมูลที่มาจากฟอร์มก่อน
                         const updateData = { ...episodeData };
+                        // (NEW) เพิ่ม updatedAt ใน episode document เพื่อใช้เป็น tie-breaker ในกรณีที่ show documents มีค่า latestEpisodeUpdateAt เท่ากัน
+                        updateData.updatedAt = serverTimestamp(); 
 
                         // ตรวจสอบว่าต้องล้างสถานะหรือไม่ (ถ้าเดิมเป็น broken หรือ user_reported)
                         const wasReportedOrBroken = oldData && 
@@ -2207,10 +2205,11 @@
                     } else {
                         // โค้ดเดิมสำหรับ Add
                         episodeData.createdAt = serverTimestamp();
+                        episodeData.updatedAt = serverTimestamp(); // กำหนด updatedAt สำหรับตอนใหม่
                         await addDoc(getCollectionRef("episodes"), episodeData);
                     }
                     
-                    // 5. อัปเดต Max Episode (ใช้ showId ที่ถูกแก้ไข และ showId เดิมหากมีการย้ายเรื่อง)
+                    // 5. อัปเดต Max Episode (เรียกใช้เพื่ออัปเดต latestEpisodeUpdateAt ใน Show Document)
                     await updateMaxEpisodeAndStatus(episodeData.showId); 
                     if (episodeData.showId !== originalShowId) {
                          // ถ้ามีการเปลี่ยน showId, ต้องอัปเดต show เดิมด้วย
@@ -2310,25 +2309,6 @@
                 } catch (error) {
                     console.error("Error saving banner: ", error);
                 }
-            });
-        }
-
-        if (deleteBannerBtn) {
-            deleteBannerBtn.addEventListener('click', async () => {
-                if (!currentEditingId) return;
-                
-                openConfirmModal(`คุณแน่ใจหรือไม่ว่าต้องการลบแบนเนอร์นี้?`,
-                    async () => {
-                        try {
-                            await deleteDoc(doc(getCollectionRef("banners"), currentEditingId));
-                            if (bannerModal) bannerModal.classList.remove('flex');
-                        } catch (error) {
-                            console.error("Error deleting banner: ", error);
-                        } finally {
-                            closeConfirmModal();
-                        }
-                    }
-                );
             });
         }
 
@@ -2540,12 +2520,10 @@
 
     </script>
 
-    <!-- Loading Indicator -->
     <div id="loading-indicator" class="flex items-center justify-center min-h-screen">
         <p class="text-2xl text-gray-400">กำลังโหลดแผงควบคุม...</p>
     </div>
 
-    <!-- Login View -->
     <div id="login-view" class="hidden flex items-center justify-center min-h-screen">
         <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-sm">
             <h2 class="text-3xl font-bold text-white text-center mb-6">Admin Login</h2>
@@ -2567,14 +2545,10 @@
     </div>
 
 
-    <!-- Main Admin Content -->
     <div id="main-content" class="hidden">
 
-        <!-- Admin Header -->
         <header class="bg-gray-800 shadow-md sticky top-0 z-40">
-            <!-- (MODIFIED) Row 1: Title and Logout -->
             <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-                <!-- (MODIFIED) Logo link -->
                 <a href="admin.html" class="text-2xl font-bold text-white">ANI-END Admin Panel</a>
                 <button id="logout-button" class="text-gray-300 hover:text-white text-sm font-medium">
                     <i class="ri-logout-box-r-line mr-1"></i>
@@ -2582,34 +2556,25 @@
                 </button>
             </div>
             
-            <!-- (NEW) Row 2: Navigation -->
             <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-                <!-- (MOVED) Horizontal Navigation -->
-                <!-- (NEW) Added border-t border-gray-700/50 for separation -->
                 <nav class="flex flex-row space-x-2 pt-2 pb-3 border-t border-gray-700/50 overflow-x-auto">
                     
-                    <!-- 0. Dashboard Button (NEW) -->
                     <button id="show-dashboard-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
                         <i class="ri-dashboard-line"></i>
                         <span>Dashboard</span>
                     </button>
                     
-                    <!-- 1. Banner Button -->
                     <button id="show-banner-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
                         <i class="ri-image-line"></i>
                         <span>แบนเนอร์ (Banner)</span>
                     </button>
-                    <!-- 2. Show Button -->
                     <button id="show-show-list-btn" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white font-medium flex-shrink-0">
                         <i class="ri-play-list-line"></i>
                         <span>อนิเมะ (Anime)</span>
                     </button>
-                    <!-- 3. Episode Button (REMOVED: Now handled inside Show) -->
-                    <!-- 4. Report Button -->
                     <button id="show-report-list-btn" class="relative flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 font-medium flex-shrink-0">
                         <i class="ri-flag-line"></i>
                         <span>รายงาน (Reports)</span>
-                        <!-- (NEW) Notification Badge (เหมือนในรูปภาพ) -->
                         <span id="report-count-badge" class="hidden absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-gray-800">
                             0
                         </span>
@@ -2618,10 +2583,8 @@
             </div>
         </header>
 
-        <!-- (MODIFIED) Main Content Area (Sidebar Removed) -->
         <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 relative">
             
-            <!-- (NEW) Bulk Action Bar (Shows) -->
             <div id="bulk-action-bar-shows" class="hidden sticky top-[125px] z-30 bg-gray-900 border border-gray-700 rounded-lg shadow-lg mb-6 p-4 flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     <span id="selected-shows-count" class="font-bold text-white">เลือก 0 รายการ</span>
@@ -2633,15 +2596,12 @@
             </div>
 
 
-            <!-- Main Content Area -->
             <main class="flex-1">
                 
-                <!-- (NEW) 0. Dashboard View -->
                 <div id="dashboard-view" class="hidden">
                     <h2 class="text-3xl font-bold text-white mb-6">ภาพรวมระบบ (Dashboard)</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         
-                        <!-- Stat Card 1: Total Shows -->
                         <div class="bg-gray-800 p-6 rounded-lg shadow-xl border-l-4 border-blue-500">
                             <div class="flex items-center justify-between">
                                 <p class="text-sm font-medium text-gray-400 uppercase">จำนวนอนิเมะทั้งหมด</p>
@@ -2650,7 +2610,6 @@
                             <p id="stat-shows" class="text-3xl font-extrabold text-white mt-1">0</p>
                         </div>
 
-                        <!-- Stat Card 2: Total Episodes (Still show total count) -->
                         <div class="bg-gray-800 p-6 rounded-lg shadow-xl border-l-4 border-green-500">
                             <div class="flex items-center justify-between">
                                 <p class="text-sm font-medium text-gray-400 uppercase">จำนวนตอนทั้งหมด</p>
@@ -2659,7 +2618,6 @@
                             <p id="stat-episodes" class="text-3xl font-extrabold text-white mt-1">0</p>
                         </div>
 
-                        <!-- Stat Card 3: Total View Count -->
                         <div class="bg-gray-800 p-6 rounded-lg shadow-xl border-l-4 border-yellow-500">
                             <div class="flex items-center justify-between">
                                 <p class="text-sm font-medium text-gray-400 uppercase">ยอดเข้าชมรวม</p>
@@ -2668,7 +2626,6 @@
                             <p id="stat-views" class="text-3xl font-extrabold text-white mt-1">0</p>
                         </div>
 
-                        <!-- Stat Card 4: Pending Reports -->
                         <div class="bg-gray-800 p-6 rounded-lg shadow-xl border-l-4 border-red-500">
                             <div class="flex items-center justify-between">
                                 <p class="text-sm font-medium text-gray-400 uppercase">รายงานปัญหาที่ค้างอยู่</p>
@@ -2680,7 +2637,6 @@
                     </div>
                 </div>
 
-                <!-- 1. Banner List View (MODIFIED: Added sorting headers) -->
                 <div id="banner-list-view" class="hidden">
                     <div class="flex justify-between items-center mb-6">
                         <h2 class="text-3xl font-bold text-white">รายการแบนเนอร์ (Banner)</h2>
@@ -2690,29 +2646,23 @@
                         </button>
                     </div>
                     
-                    <!-- (NEW) Drag Status Message -->
                     <div id="drag-status-message" class="hidden bg-blue-800/80 border border-blue-700 text-white p-3 rounded-lg mb-4 text-sm font-medium flex items-center">
                          <i class="ri-drag-move-line mr-2 text-xl"></i> คุณกำลังอยู่ในโหมดจัดเรียงลำดับแบนเนอร์ (Drag & Drop)
                     </div>
 
                     <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden overflow-x-auto">
-                        <table class="w-full table-fixed min-w-[900px]"> <!-- (MODIFIED) Increased min-w for new column -->
-                            <thead class="bg-gray-900">
+                        <table class="w-full table-fixed min-w-[900px]"> <thead class="bg-gray-900">
                                 <tr>
-                                    <!-- (MODIFIED) Sort by Order Index (Default for manual order) -->
                                     <th class="w-20 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="orderIndex" data-sort-view="banner">
                                         ลำดับ
                                     </th>
                                     <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">รูปแบนเนอร์</th>
-                                    <!-- Sort by Show Title -->
                                     <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="showTitle" data-sort-view="banner">
                                         เรื่องที่ลิงก์
                                     </th>
-                                    <!-- Sort by Created At -->
                                     <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="banner">
                                         วันที่สร้าง
                                     </th>
-                                    <!-- Sort by Updated At -->
                                     <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="updatedAt" data-sort-view="banner">
                                         วันที่อัปเดต
                                     </th>
@@ -2720,15 +2670,12 @@
                                 </tr>
                             </thead>
                             <tbody id="banner-table-body" class="divide-y divide-gray-700">
-                                <!-- Data injected by JS -->
-                            </tbody>
+                                </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- (MODIFIED) 2. Show List View (Includes Anime List and Tag List as tabs) -->
                 <div id="show-list-view" class="hidden">
-                    <!-- New Sub-Navigation/Tabs -->
                     <div class="flex space-x-6 border-b border-gray-700 mb-6">
                         <button id="sub-nav-show-list" data-target="anime-list" class="sub-nav-btn pb-2 text-2xl font-bold text-white border-b-2 border-blue-500 transition-colors duration-150">
                             รายการอนิเมะ
@@ -2738,16 +2685,11 @@
                         </button>
                     </div>
                     
-                    <!-- 2.1 Anime List Content (Original Show List) -->
                     <div id="anime-list-wrapper" class="">
                         
-                        <!-- === 2.1.1 Show List Panel (Default View) === -->
                         <div id="show-list-panel">
-                            <!-- Header with Search/Add Show button -->
                             <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
-                                <div class="flex items-center space-x-4 ml-auto"> <!-- Added ml-auto to push items to the right -->
-                                    <!-- (NEW) Show Search Input -->
-                                    <input type="text" id="show-search-input" placeholder="ค้นหาอนิเมะ..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <div class="flex items-center space-x-4 ml-auto"> <input type="text" id="show-search-input" placeholder="ค้นหาอนิเมะ..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                     <button id="add-show-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
                                         <i class="ri-add-line"></i>
                                         <span>เพิ่มเรื่อง</span>
@@ -2755,8 +2697,7 @@
                                 </div>
                             </div>
                             <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
-                                <table class="w-full table-fixed min-w-[1000px]"> <!-- (MODIFIED) Increased min-w for new columns -->
-                                    <thead class="bg-gray-900">
+                                <table class="w-full table-fixed min-w-[1000px]"> <thead class="bg-gray-900">
                                         <tr>
                                             <th class="w-16 py-3 px-4 text-center">
                                                 <input type="checkbox" id="show-select-all" class="admin-checkbox">
@@ -2766,35 +2707,28 @@
                                                 ชื่อเรื่อง
                                             </th>
                                             <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
-                                            <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase">ตอนล่าสุด</th> <!-- MODIFIED TEXT -->
-                                            <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="viewCount" data-sort-view="show">
+                                            <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase">ตอนล่าสุด</th> <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="viewCount" data-sort-view="show">
                                                 ยอดชม
                                             </th>
-                                            <!-- (NEW) Created At Header -->
                                             <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="show">
                                                 วันที่สร้าง
                                             </th>
-                                            <!-- (NEW) Updated At Header -->
                                             <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="updatedAt" data-sort-view="show">
-                                                วันที่อัปเดต
+                                                แก้ไขล่าสุด
                                             </th>
-                                            <!-- REMOVED THE LAST COLUMN: จัดการ -->
-                                        </tr>
+                                            </tr>
                                     </thead>
                                     <tbody id="show-table-body" class="divide-y divide-gray-700">
-                                        <!-- Data injected by JS -->
-                                    </tbody>
+                                        </tbody>
                                 </table>
                             </div>
                         </div>
 
-                        <!-- === 2.1.2 Show Detail Panel (Unified View) === -->
                         <div id="show-detail-panel" class="hidden">
                             <button id="back-to-show-list-btn" class="mb-4 text-gray-400 hover:text-white flex items-center">
                                 <i class="ri-arrow-left-line mr-2"></i> กลับไปรายการอนิเมะ
                             </button>
 
-                            <!-- Show Header and Overview -->
                             <div class="bg-gray-800 p-6 rounded-lg shadow-xl mb-6 flex items-start space-x-6">
                                 <img id="show-detail-thumbnail" src="https://placehold.co/100x150/333/fff?text=No+Img" alt="Thumbnail" class="w-24 h-36 object-cover rounded-lg flex-shrink-0">
                                 <div class="flex-1">
@@ -2807,7 +2741,6 @@
                                 </div>
                             </div>
 
-                            <!-- Episode Management Section -->
                             <h3 class="text-2xl font-bold text-white mb-4 mt-8">รายการตอน (Episodes)</h3>
                             <div class="flex justify-end mb-4">
                                 <button id="add-episode-in-detail-btn" data-show-id="" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
@@ -2818,19 +2751,15 @@
                             
                             <div class="bg-gray-800 rounded-lg shadow-lg overflow-x-auto">
                                 <div id="episode-list-for-show-container" class="min-w-full">
-                                    <!-- Episodes Table for the current show will be injected here -->
                                     <p class="p-6 text-center text-gray-400">กำลังโหลดรายการตอน...</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 2.2 Tags List Content (Original Tag List) -->
                     <div id="tag-list-wrapper" class="hidden">
                         <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
-                            <div class="flex items-center space-x-4 ml-auto"> <!-- Added ml-auto to push items to the right -->
-                                <!-- Tag Search Input -->
-                                <input type="text" id="tag-search-input" placeholder="ค้นหา Tag..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <div class="flex items-center space-x-4 ml-auto"> <input type="text" id="tag-search-input" placeholder="ค้นหา Tag..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                 <button id="add-tag-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
                                     <i class="ri-add-line"></i>
                                     <span>เพิ่ม Tag</span>
@@ -2843,22 +2772,18 @@
                                     <tr>
                                         <th class="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">ชื่อ Tag</th>
                                         <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tag ID</th>
-                                        <!-- (NEW) Created At Header for Tags -->
                                         <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">วันที่สร้าง</th>
                                         <th class="w-32 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">จัดการ</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tag-table-body" class="divide-y divide-gray-700">
-                                    <!-- Data injected by JS -->
-                                </tbody>
+                                    </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
 
-                <!-- 4. Report List View (MODIFIED: Added Report Count Column) -->
                 <div id="report-list-view" class="hidden">
-                    <!-- (NEW FIX 2) Header with Search Input for Reports -->
                     <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
                         <h2 class="text-3xl font-bold text-white">รายการแจ้งปัญหา (Reports)</h2>
                         <div class="flex items-center space-x-4">
@@ -2870,7 +2795,6 @@
                         <table class="w-full table-fixed min-w-[768px]">
                             <thead class="bg-gray-900">
                                 <tr>
-                                    <!-- NEW: Report Count Header -->
                                     <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase">รายงาน (ครั้ง)</th>
                                     
                                     <th class="w-auto py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="report">
@@ -2881,8 +2805,7 @@
                                 </tr>
                             </thead>
                             <tbody id="report-table-body" class="divide-y divide-gray-700">
-                                <!-- Data injected by JS -->
-                            </tbody>
+                                </tbody>
                         </table>
                     </div>
                 </div>
@@ -2892,8 +2815,6 @@
     </div>
 
 
-    <!-- Modal for Adding/Editing Episode -->
-    <!-- This modal is now used only for the actual form submission, triggered from the unified detail panel -->
     <div id="episode-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <form id="episode-form">
@@ -2906,11 +2827,9 @@
                 <div class="p-6 space-y-4">
                     <div>
                         <label for="episode-show-select" class="block text-sm font-medium text-gray-300 mb-1">เรื่อง *</label>
-                        <!-- NOTE: This select will be disabled/pre-filled when adding from detail view -->
                         <select id="episode-show-select" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" required>
                             <option value="">-- เลือกเรื่อง --</option>
-                            <!-- Options injected by JS -->
-                        </select>
+                            </select>
                     </div>
                     <div>
                         <label for="episode-number" class="block text-sm font-medium text-gray-300 mb-1">ตอนที่ (Episode Number) *</label>
@@ -2939,7 +2858,6 @@
         </div>
     </div>
 
-    <!-- Modal for Adding/Editing Show -->
     <div id="show-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <form id="show-form">
@@ -2963,28 +2881,23 @@
                         <input type="url" id="show-thumbnail" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                     </div>
                     
-                    <!-- (NEW) View Count Input -->
                     <div>
                         <label for="show-view-count" class="block text-sm font-medium text-gray-300 mb-1">ยอดเข้าชม (View Count)</label>
                         <input type="number" id="show-view-count" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="0">
                     </div>
                     
-                    <!-- (MODIFIED/NEW) Checkbox สำหรับสถานะจบ -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">สถานะ</label>
                         <div class="flex items-center space-x-2">
-                             <!-- Checkbox ตรงตามภาพที่แนบมา -->
-                            <input type="checkbox" id="show-completed-checkbox" class="h-5 w-5 bg-gray-700 border-gray-600 rounded text-green-500 focus:ring-green-500">
+                             <input type="checkbox" id="show-completed-checkbox" class="h-5 w-5 bg-gray-700 border-gray-600 rounded text-green-500 focus:ring-green-500">
                             <label for="show-completed-checkbox" class="text-gray-200">จบแล้ว (Completed)</label>
                         </div>
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">Tags</label>
-                        <!-- (MODIFIED) Container for dynamically generated tag checkboxes -->
                         <div id="show-tag-checkbox-container" class="flex flex-wrap gap-x-6 gap-y-2 mt-2">
-                            <!-- Tags injected by renderShowModalTags() -->
-                        </div>
+                            </div>
                         <p class="text-xs text-gray-400 mt-2">หากต้องการเพิ่ม/แก้ไข Tag โปรดไปที่เมนู "อนิเมะ" > "จัดการ Tags"</p>
                     </div>
 
@@ -3001,7 +2914,6 @@
         </div>
     </div>
 
-    <!-- (NEW) Modal for Adding/Editing Banner -->
     <div id="banner-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <form id="banner-form">
@@ -3012,7 +2924,6 @@
                     </button>
                 </div>
                 <div class="p-6 space-y-4">
-                    <!-- (NEW) Order Index Input -->
                     <div>
                         <label for="banner-order-index" class="block text-sm font-medium text-gray-300 mb-1">ลำดับการแสดง (Order Index) *</label>
                         <input type="number" id="banner-order-index" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500" value="0" required>
@@ -3023,8 +2934,7 @@
                         <label for="banner-show-select" class="block text-sm font-medium text-gray-300 mb-1">เรื่อง (Show) *</label>
                         <select id="banner-show-select" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500" required>
                             <option value="">-- เลือกเรื่องที่จะลิงก์ --</option>
-                            <!-- Options injected by JS from shows -->
-                        </select>
+                            </select>
                     </div>
                     <div>
                         <label for="banner-image-url" class="block text-sm font-medium text-gray-300 mb-1">URL รูปแบนเนอร์ (ขนาด 10:3) *</label>
@@ -3043,7 +2953,6 @@
         </div>
     </div>
     
-    <!-- (NEW) Modal for Adding/Editing Tag -->
     <div id="tag-modal" class="modal fixed inset-0 z-50 bg-black/70 backdrop-blur-sm items-center justify-center p-4">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <form id="tag-form">
@@ -3071,7 +2980,6 @@
         </div>
     </div>
     
-    <!-- (NEW) Confirmation Modal (For All Deletes) -->
     <div id="confirm-modal" class="modal fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
         <div class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-sm">
             <div class="p-6">
