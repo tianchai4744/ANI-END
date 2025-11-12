@@ -195,16 +195,9 @@
                     });
                     console.log("Firebase Offline Persistence enabled.");
                 } catch (err) {
-                    if (err.code == 'failed-precondition') {
-                        console.warn("Persistence failed (likely multiple tabs open). Falling back to in-memory cache.");
-                    } else if (err.code == 'unimplemented') {
-                        console.warn("Persistence not supported in this browser. Falling back to in-memory cache.");
-                    } else {
-                        console.error("Error initializing persistence:", err);
-                    }
                     if (!db) db = getFirestore(app); // Fallback
+                    console.warn("Could not enable persistence:", err.code);
                 }
-
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
@@ -249,6 +242,7 @@
                 console.log("History loaded for dropdown:", historyItems.length);
 
                 // 2. โหลด Shows (เฉพาะ Title) สำหรับ Search Dropdown
+                // (REMOVED) select("title") ถูกลบออก
                 const showsSearchQuery = query(getCollectionRef("shows"));
                 const showsSnapshot = await getDocs(showsSearchQuery);
                 // (MODIFIED) ดึง title จาก data()
@@ -297,7 +291,7 @@
         }
 
         /**
-         * (MODIFIED) ฟังก์ชันหลักในการตั้งค่า Query และเริ่มโหลด (Fixes Indexing issue)
+         * (NEW) ฟังก์ชันหลักในการตั้งค่า Query และเริ่มโหลด
          */
         function setupQueryAndLoad(tag = null, search = null) {
             console.log(`Setting up query: Tag='${tag}', Search='${search}'`);
@@ -310,23 +304,27 @@
             currentQuery = null;
 
             if (search) {
-                // Query สำหรับค้นหา (Starts With) - ต้องมี orderBy("title") เพื่อรองรับเงื่อนไข Range
+                // (NEW) สร้าง Query สำหรับค้นหา (จำกัดที่ "Starts With" title)
                 const normalizedQuery = normalizeThai(search);
                 gridViewTitle.textContent = `ผลการค้นหาสำหรับ "${search}"`;
                 
+                // (MODIFIED FIX) ลบ orderBy("title") ออกเพื่อเลี่ยง Index Error
+                // (NEW FIX) เพิ่ม orderBy("latestEpisodeUpdateAt", "desc") สำหรับการค้นหาด้วย Title
                 currentQuery = query(getCollectionRef("shows"),
                     where("title", ">=", normalizedQuery),
                     where("title", "<=", normalizedQuery + '\uf8ff'),
-                    orderBy("title") // *** ต้องจัดเรียงตามฟิลด์ที่ใช้เงื่อนไข Range ***
+                    orderBy("latestEpisodeUpdateAt", "desc") // <-- FIX: ใช้ orderBy นี้สำหรับการค้นหาด้วย Title
                 );
             } else {
-                // (MODIFIED FIX) Query สำหรับ Tag - ลบ orderBy("latestEpisodeUpdateAt", "desc") เพื่อหลีกเลี่ยง Composite Index Error
+                // (NEW) สร้าง Query สำหรับ Tag
                 tag = tag || 'อนิเมะ'; // Default
                 gridViewTitle.textContent = tag;
                 
+                // (MODIFIED FIX) เพิ่ม orderBy("latestEpisodeUpdateAt", "desc") กลับเข้าไป
+                // NOTE: การเพิ่ม orderBy นี้จะต้องใช้ Composite Index ใน Firebase Console
                 currentQuery = query(getCollectionRef("shows"),
-                    where("tags", "array-contains", tag)
-                    // *** ลบ orderBy ที่ทำให้เกิด Composite Index Error (จะไปจัดเรียงฝั่ง Client แทน) ***
+                    where("tags", "array-contains", tag),
+                    orderBy("latestEpisodeUpdateAt", "desc") // <-- FIX: ใช้ orderBy นี้
                 );
             }
             
@@ -410,8 +408,13 @@
                 `;
             }
 
+        // (MODIFIED) Pagination Logic - Replaced with Server-side "Load More"
+        // (REMOVED) initializeGridPaging function
+        
+        // (REMOVED) renderPage function
+        
         /**
-         * (MODIFIED) Load More Cards function (พร้อมการจัดเรียงฝั่ง Client)
+         * (MODIFIED) Load More Cards function (Server-side)
          */
         async function loadMoreCards() {
             if (isLoading || !hasMore || !currentQuery) return;
@@ -440,48 +443,24 @@
                     return;
                 }
 
-                // 2. บันทึกเอกสารสุดท้าย (สำหรับ Pagination ครั้งถัดไป)
+                // 2. บันทึกเอกสารสุดท้าย
                 lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
 
-                // 3. รวบรวมข้อมูล
-                const newItems = [];
+                // 3. Render
                 snapshot.forEach((doc) => {
-                    newItems.push({ id: doc.id, ...doc.data() });
-                });
-                
-                // 4. (NEW CLIENT-SIDE SORTING) จัดเรียงฝั่งไคลเอนต์ตามเงื่อนไขที่ต้องการ (Tag Query)
-                // ตรวจสอบว่า Query ปัจจุบันเป็น Tag Query หรือไม่ โดยดูจาก URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const isTagQuery = urlParams.has('tag') && !urlParams.has('search');
-
-                if (isTagQuery) {
-                    // จัดเรียงตาม latestEpisodeUpdateAt (มากไปน้อย) ใน JavaScript แทน
-                    newItems.sort((a, b) => {
-                        // ใช้ toMillis() เพื่อเปรียบเทียบ Timestamp
-                        const timeA = a.latestEpisodeUpdateAt?.toMillis() || a.createdAt?.toMillis() || 0;
-                        const timeB = b.latestEpisodeUpdateAt?.toMillis() || b.createdAt?.toMillis() || 0;
-                        return timeB - timeA; // Descending order (latest first)
-                    });
-                }
-                
-                // 5. Render
-                newItems.forEach((show) => { 
+                    const show = { id: doc.id, ...doc.data() };
                     const historyItem = historyItems.find(h => h.showId === show.id);
                     gridViewContent.innerHTML += createContentCard(show, null, historyItem); 
                 });
                 
-                // 6. ตรวจสอบว่ามีอีกหรือไม่
+                // 4. ตรวจสอบว่ามีอีกหรือไม่
                 if (snapshot.size < ITEMS_PER_PAGE) {
                     hasMore = false;
                 }
                 
             } catch (error) {
                 console.error("Error loading more cards:", error);
-                // (MODIFIED) แสดงข้อความสำหรับผู้ใช้โดยให้คำแนะนำในการติดต่อผู้ดูแลระบบเพื่อสร้าง Index
-                const errorMessage = error.message.includes('requires an index') 
-                                   ? 'เกิดข้อผิดพลาดในการโหลด: Query นี้ต้องการการตั้งค่า Index ใน Firestore Console. กรุณาแจ้งผู้ดูแลระบบเพื่อแก้ไขปัญหา Indexing.'
-                                   : `เกิดข้อผิดพลาดในการโหลด: ${error.message}`;
-                gridViewContent.innerHTML += `<p class="text-center w-full col-span-full text-red-500">${errorMessage}</p>`;
+                gridViewContent.innerHTML += `<p class="text-center w-full col-span-full text-red-500">เกิดข้อผิดพลาดในการโหลด: ${error.message}</p>`;
                 hasMore = false;
             } finally {
                 isLoading = false;
@@ -653,9 +632,17 @@
                         setupQueryAndLoad(pageId, null);
                         
                         // (NEW) อัปเดต URL (โดยไม่โหลดหน้าใหม่)
-                        const newUrl = new URL(window.location.href);
-                        newUrl.search = `?tag=${encodeURIComponent(pageId)}`;
-                        window.history.pushState({tag: pageId}, '', newUrl);
+                        // (FIXED) ใช้การอัปเดต Search Query แบบ Relative URL เพื่อหลีกเลี่ยง SecurityError
+                        const newSearch = `?tag=${encodeURIComponent(pageId)}`;
+                        
+                        // (FIXED) เปลี่ยนจาก history.pushState เป็น history.replaceState เพื่อหลีกเลี่ยง SecurityError ในบางสภาพแวดล้อม
+                        // ถ้าเกิด error ขึ้นมาจริงๆ ให้ใช้ location.replace เพื่อบังคับโหลดหน้าใหม่
+                        try {
+                             window.history.replaceState({tag: pageId}, '', newSearch);
+                        } catch (error) {
+                             console.warn("SecurityError on history.replaceState. Forcing location replace.", error);
+                             window.location.replace(newSearch);
+                        }
                     }
                 }
             });
