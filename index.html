@@ -481,8 +481,9 @@
             // 4. "อนิเมะอัปเดตใหม่" 
             const latestShows = [...allShows]
                 .sort((a, b) => {
-                    const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
-                    const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
+                    // (FIX) เรียงตาม latestEpisodeUpdateAt (เวลาที่มีการเพิ่มตอนใหม่ล่าสุด)
+                    const timeA = a.latestEpisodeUpdateAt ? a.latestEpisodeUpdateAt.toMillis() : 0;
+                    const timeB = b.latestEpisodeUpdateAt ? b.latestEpisodeUpdateAt.toMillis() : 0;
                     return timeB - timeA; 
                 })
                 .slice(0, 20); 
@@ -633,7 +634,8 @@
             const showId = history.showId; 
             const episodeId = history.lastWatchedEpisodeId; 
             const title = history.showTitle;
-            const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.lastWatchedEpisodeNumber || 'N/A'}`;
+            // (FIX) ใช้ latestEpisodeNumber จาก history data
+            const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.latestEpisodeNumber || 'N/A'}`; 
             const thumbnail = history.showThumbnail || 'https://placehold.co/48x64/333/fff?text=Img'; 
             
             const watchedTimeString = formatDateTime(history.watchedAt);
