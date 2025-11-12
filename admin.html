@@ -36,6 +36,11 @@
             border-color: #2563eb; /* blue-600 */
             font-weight: 700;
         }
+        /* Status button active style (NEW) */
+        .status-btn.active {
+            background-color: #2563eb !important; /* blue-600 */
+            color: #fff !important; 
+        }
 
         /* Sortable Header Style */
         .sort-header {
@@ -134,9 +139,11 @@
         // (NEW) Store ID of the show currently being viewed in the detail panel
         let currentShowDetailId = null; 
 
-        // (MODIFIED) State for Client-Side Sorting - Default to latestEpisodeUpdateAt DESC for show view
+        // (MODIFIED) State for Client-Side Sorting - Default to UpdatedAt DESC for show view
         let currentSort = { field: 'latestEpisodeUpdateAt', direction: 'desc', view: 'show' }; 
-
+        
+        // (NEW) State for Published/Draft filter (default to Published)
+        let currentShowStatusFilter = 'published';
 
         // (NEW) State for Bulk Selection
         // (MODIFIED) Remove episode-related bulk actions
@@ -209,6 +216,10 @@
         const showDetailTitle = document.getElementById('show-detail-title'); 
         const showDetailThumbnail = document.getElementById('show-detail-thumbnail');
         const backToShowListBtn = document.getElementById('back-to-show-list-btn');
+        
+        // (NEW) Status Filter Buttons
+        const statusPublishedBtn = document.getElementById('status-published-btn');
+        const statusDraftBtn = document.getElementById('status-draft-btn');
 
 
         // (NEW) Search Inputs
@@ -383,14 +394,12 @@
                 const snapshot = await getDocs(episodesQuery);
                 
                 let maxEpisode = 0;
-                let totalEpisodes = 0; // (NEW) นับจำนวนตอนทั้งหมด
                 
                 snapshot.forEach(doc => {
                     const epNum = doc.data().episodeNumber || 0;
                     if (epNum > maxEpisode) {
                         maxEpisode = epNum;
                     }
-                    totalEpisodes++; // (NEW) นับ
                 });
 
                 // ดึงสถานะที่ผู้ดูแลระบบกำหนดไว้
@@ -408,12 +417,11 @@
                 // อัปเดต Show document ด้วย Max Episode ล่าสุด และ update latestEpisodeUpdateAt
                 await updateDoc(showRef, {
                     latestEpisodeNumber: maxEpisode, // อัปเดตตอนสูงสุดเสมอ
-                    totalEpisodeCount: totalEpisodes, // (NEW) จำนวนตอนทั้งหมด
                     isCompleted: isCompleted, // ใช้สถานะจบที่ผู้ดูแลระบบกำหนด
                     latestEpisodeUpdateAt: serverTimestamp() // อัปเดตเวลาเนื้อหาล่าสุด
                 });
 
-                console.log(`Show ${showId} updated: Max Episode ${maxEpisode}, Total Episodes ${totalEpisodes}, Completed: ${isCompleted}`);
+                console.log(`Show ${showId} updated: Max Episode ${maxEpisode}, Completed: ${isCompleted}`);
 
             } catch (error) { 
                 console.error("Error updating max episode:", error);
@@ -545,10 +553,21 @@
             // 1. (FIX) ใช้ normalizeThai สำหรับการค้นหา
             const searchQuery = showSearchInput ? normalizeThai(showSearchInput.value).toLowerCase() : '';
             
-            let filteredShows = shows.filter(show => 
-                // (FIX) ใช้ normalizeThai กับชื่อเรื่อง
-                normalizeThai(show.title).toLowerCase().includes(searchQuery)
-            );
+            let filteredShows = shows.filter(show => {
+                // 1. Search Filter (Existing logic)
+                const passesSearch = normalizeThai(show.title).toLowerCase().includes(searchQuery);
+                
+                if (!passesSearch) return false;
+                
+                // 2. Status Filter (NEW logic)
+                const showStatus = show.status || 'published'; // Default to published for old data
+
+                if (currentShowStatusFilter === 'all') {
+                    return true;
+                }
+                
+                return showStatus === currentShowStatusFilter;
+            });
             
             // 2. (NEW) Client-Side Sorting
             if (currentSort.view === 'show') {
@@ -569,8 +588,8 @@
             filteredShows.forEach((show) => {
                 hasShows = true;
                 
-                // Find total episode number for display (NEW)
-                const totalEpisodes = shows.find(s => s.id === show.id)?.totalEpisodeCount || 0;
+                // Find max episode number for display
+                const maxEp = shows.find(s => s.id === show.id)?.latestEpisodeNumber || 0;
                 
                 // Get separate update times
                 const detailUpdate = shows.find(s => s.id === show.id)?.updatedAt;
@@ -590,10 +609,9 @@
                             <span class="clickable-show-title" data-id="${show.id}">${show.title}</span>
                         </td>
                         <td class="py-3 px-4 text-sm">${(show.tags || []).join(', ')}</td>
-                        <td class="py-3 px-4 text-center">${totalEpisodes}</td> <!-- (MODIFIED) เปลี่ยนเป็น จำนวนตอน -->
-                        <td class="py-3 px-4 text-center">${show.viewCount || 0}</td>
-                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(show.createdAt)}</td>
-                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(contentUpdate)}</td> <!-- (MODIFIED) เปลี่ยนเป็น latestEpisodeUpdateAt -->
+                        <td class="py-3 px-4 text-center">${maxEp}</td> <td class="py-3 px-4 text-center">${show.viewCount || 0}</td>
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(detailUpdate)}</td>
+                        <td class="py-3 px-4 text-sm whitespace-nowrap">${formatTimestamp(contentUpdate)}</td>
                         </tr>
                 `;
             });
@@ -1267,12 +1285,8 @@
                         
                         const oldStatus = change.oldDoc?.data()?.status;
                         const newStatus = change.doc.data()?.status;
-                        
-                        // (NEW LOGIC) ตรวจสอบว่า embedCode เปลี่ยนหรือไม่ (เพราะการเปลี่ยน embedCode หมายถึงการแก้ไขวิดีโอ)
-                        const oldEmbed = change.oldDoc?.data()?.embedCode;
-                        const newEmbed = change.doc.data()?.embedCode;
 
-                        if (oldEpNum !== newEpNum || oldStatus !== newStatus || oldEmbed !== newEmbed) {
+                        if (oldEpNum !== newEpNum || oldStatus !== newStatus) {
                             changedShowIds.add(showId);
                         }
                     }
@@ -1464,6 +1478,10 @@
                 } else {
                      bulkActionBarShows.classList.add('hidden');
                 }
+                
+                // (NEW) Call default status filter on initial load of this sub-view
+                switchShowStatusView(currentShowStatusFilter);
+
             } else if (subViewId === 'tag-list') {
                 tagListWrapper.classList.remove('hidden');
                 subNavTags.classList.add('active', 'text-white', 'border-blue-500', 'font-bold');
@@ -1473,12 +1491,47 @@
                 bulkActionBarShows.classList.add('hidden');
             }
         }
+        
+        /**
+         * (NEW FUNCTION) สลับมุมมองย่อย (Published/Draft)
+         */
+        function switchShowStatusView(status) {
+            currentShowStatusFilter = status;
+
+            // 1. Update Buttons
+            const publishedBtn = document.getElementById('status-published-btn');
+            const draftBtn = document.getElementById('status-draft-btn');
+
+            if (publishedBtn) {
+                publishedBtn.classList.remove('active');
+                publishedBtn.classList.add('bg-gray-700', 'text-gray-300');
+            }
+            if (draftBtn) {
+                draftBtn.classList.remove('active');
+                draftBtn.classList.add('bg-gray-700', 'text-gray-300');
+            }
+
+            if (status === 'published' && publishedBtn) {
+                publishedBtn.classList.add('active');
+                publishedBtn.classList.remove('bg-gray-700', 'text-gray-300');
+            } else if (status === 'draft' && draftBtn) {
+                draftBtn.classList.add('active');
+                draftBtn.classList.remove('bg-gray-700', 'text-gray-300');
+            }
+            // 2. Re-render Table
+            renderShowTable();
+        }
 
         if (showDashboardBtn) showDashboardBtn.addEventListener('click', () => switchView('dashboard')); // NEW
         // if (showEpisodeListBtn) showEpisodeListBtn.addEventListener('click', () => switchView('episode')); // REMOVED
         if (showShowListBtn) showShowListBtn.addEventListener('click', () => switchView('show'));
         if (showBannerListBtn) showBannerListBtn.addEventListener('click', () => switchView('banner')); 
         if (showReportListBtn) showReportListBtn.addEventListener('click', () => switchView('report')); 
+        
+        // (NEW) Status Filter Listeners
+        if (statusPublishedBtn) statusPublishedBtn.addEventListener('click', () => switchShowStatusView('published'));
+        if (statusDraftBtn) statusDraftBtn.addEventListener('click', () => switchShowStatusView('draft'));
+
 
         
         // (NEW) Event Listeners for Report Actions
@@ -1759,12 +1812,15 @@
         // --- Show (อนิเมะ) Modal Logic ---
         function openShowModal(mode, showData = {}, showId = null) {
             currentEditingId = showId;
+            const showStatusSelect = document.getElementById('show-status-select'); // Get new element
+
             
             if (mode === 'add') {
                 if (showModalTitle) showModalTitle.textContent = "เพิ่มอนิเมะใหม่";
                 if (showForm) showForm.reset();
                 if (showViewCountInput) showViewCountInput.value = 0; 
                 if (showCompletedCheckbox) showCompletedCheckbox.checked = false; 
+                if (showStatusSelect) showStatusSelect.value = 'published'; // Default to published
                 
                 // (MODIFIED) Logic to reset dynamic checkboxes
                 document.querySelectorAll('#show-tag-checkbox-container .show-tag-option').forEach(checkbox => {
@@ -1779,6 +1835,7 @@
                 if (showThumbnailInput) showThumbnailInput.value = showData.thumbnailUrl || '';
                 if (showViewCountInput) showViewCountInput.value = showData.viewCount || 0; 
                 if (showCompletedCheckbox) showCompletedCheckbox.checked = showData.isCompleted === true; 
+                if (showStatusSelect) showStatusSelect.value = showData.status || 'published'; // Load existing status
                 
                 const tags = showData.tags || [];
                 
@@ -1799,6 +1856,8 @@
             showForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
+                const showStatusSelect = document.getElementById('show-status-select');
+                
                 let tagsArray = [];
                 document.querySelectorAll('.show-tag-option:checked').forEach(checkbox => {
                     tagsArray.push(checkbox.value);
@@ -1816,6 +1875,7 @@
                     viewCount: parseInt(showViewCountInput.value, 10) || 0, 
                     isCompleted: isCompletedByAdmin, 
                     tags: tagsArray,
+                    status: showStatusSelect.value || 'published', // NEW: Set status
                     updatedAt: serverTimestamp() // อัปเดตเฉพาะ updatedAt (รายละเอียด Show)
                 };
 
@@ -1831,7 +1891,6 @@
                         showData.createdAt = serverTimestamp();
                         showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
                         showData.latestEpisodeNumber = 0; 
-                        showData.totalEpisodeCount = 0; // (NEW) กำหนดค่าเริ่มต้น
                         // (NEW) กำหนดค่าเริ่มต้นสำหรับฟิลด์ใหม่
                         showData.latestEpisodeUpdateAt = serverTimestamp(); 
                         
@@ -2090,14 +2149,66 @@
         });
         
         if (episodeForm) {
-            // (FIX) ต้องแก้ไข listener ของ showForm ที่ถูกก๊อปมาผิด
-            // ลบโค้ดนี้ออกเพื่อไม่ให้เกิดการเรียกซ้ำ
-            /*
             showForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                // ... (Removed duplicated show form logic)
+                
+                const showStatusSelect = document.getElementById('show-status-select');
+                
+                let tagsArray = [];
+                document.querySelectorAll('.show-tag-option:checked').forEach(checkbox => {
+                    tagsArray.push(checkbox.value);
+                });
+                if (tagsArray.length === 0) {
+                    tagsArray.push('อนิเมะ');
+                }
+                
+                const isCompletedByAdmin = showCompletedCheckbox.checked; 
+                
+                const showData = {
+                    title: showTitleInput.value,
+                    description: showDescInput.value,
+                    thumbnailUrl: showThumbnailInput.value,
+                    viewCount: parseInt(showViewCountInput.value, 10) || 0, 
+                    isCompleted: isCompletedByAdmin, 
+                    tags: tagsArray,
+                    status: showStatusSelect.value || 'published', // NEW: Set status
+                    updatedAt: serverTimestamp() // อัปเดตเฉพาะ updatedAt (รายละเอียด Show)
+                };
+
+                try {
+                    let savedShowId = currentEditingId;
+                    
+                    if (currentEditingId) {
+                        const docRef = doc(getCollectionRef("shows"), currentEditingId);
+                        await updateDoc(docRef, showData);
+                        // (NOTE) ไม่เรียก updateMaxEpisodeAndStatus ที่นี่ เพื่อแยก UpdatedAt ออกจาก LatestEpisodeUpdateAt
+                        
+                    } else {
+                        showData.createdAt = serverTimestamp();
+                        showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
+                        showData.latestEpisodeNumber = 0; 
+                        // (NEW) กำหนดค่าเริ่มต้นสำหรับฟิลด์ใหม่
+                        showData.latestEpisodeUpdateAt = serverTimestamp(); 
+                        
+                        const newDocRef = await addDoc(getCollectionRef("shows"), showData);
+                        savedShowId = newDocRef.id;
+                    }
+                    if (showForm) showForm.reset();
+                    if (showModal) showModal.classList.remove('flex');
+                    
+                    // (NEW LOGIC) After saving/editing, if the detail panel was open, refresh it
+                    if (savedShowId === currentShowDetailId) {
+                         // Find the updated show data locally or re-fetch (local should be fine due to snapshot)
+                         const updatedShow = shows.find(s => s.id === savedShowId);
+                         if (updatedShow) {
+                              openShowDetailView(savedShowId); 
+                         }
+                    }
+
+                } catch (error) {
+                    console.error("Error saving show: ", error);
+                }
             });
-            */
 
             episodeForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -2136,23 +2247,15 @@
                         // (NEW) เพิ่ม updatedAt ใน episode document เพื่อใช้เป็น tie-breaker ในกรณีที่ show documents มีค่า latestEpisodeUpdateAt เท่ากัน
                         updateData.updatedAt = serverTimestamp(); 
 
-                        // (NEW LOGIC) ตรวจสอบว่าโค้ดวิดีโอถูกแก้ไขหรือไม่ หรือสถานะเดิมเคยถูกรายงาน/เสีย
-                        const wasEmbedCodeChanged = oldData && oldData.embedCode !== episodeData.embedCode;
+                        // ตรวจสอบว่าต้องล้างสถานะหรือไม่ (ถ้าเดิมเป็น broken หรือ user_reported)
                         const wasReportedOrBroken = oldData && 
                             (oldData.status === 'broken' || oldData.status === 'user_reported');
 
-                        // (NEW FIX) ถ้ามีการเปลี่ยนโค้ดวิดีโอ หรือถ้าเคยถูกรายงาน/เสียมาก่อน ให้ล้างสถานะทั้งหมดและลบรายงาน
-                        if (wasEmbedCodeChanged || wasReportedOrBroken) {
-                            
-                            if (wasEmbedCodeChanged) {
-                                console.log(`Embed Code changed for ${currentEditingId}. Clearing status and reports.`);
-                            } else if (wasReportedOrBroken) {
-                                console.log(`Episode ${currentEditingId} was reported/broken. Clearing status and reports.`);
-                            }
-
+                        if (wasReportedOrBroken) {
                             // 1. ลบฟิลด์ status ออกไปอย่างสมบูรณ์ใน updateData
                             // (FIXED) ใช้ deleteField() แทน FieldValue.delete()
                             updateData.status = deleteField(); 
+                            console.log(`Cleared status for episode ${currentEditingId} after Admin edit.`);
                             
                             // 2. ค้นหาและลบเอกสาร Report ที่เกี่ยวข้องทั้งหมด
                             const reportsQuery = query(getCollectionRef("reports"), where("episodeId", "==", currentEditingId));
@@ -2228,6 +2331,58 @@
         
         
         // --- Banner Modal Logic (MODIFIED) ---
+        function openBannerModal(mode, bannerData = {}, bannerId = null) {
+            currentEditingId = bannerId;
+            if (mode === 'add') {
+                if (bannerModalTitle) bannerModalTitle.textContent = "เพิ่มแบนเนอร์ (Banner) ใหม่";
+                if (bannerForm) bannerForm.reset();
+                if (deleteBannerBtn) deleteBannerBtn.classList.add('hidden');
+                if (bannerOrderIndexInput) bannerOrderIndexInput.value = 0; // (NEW) Default to 0
+            } else {
+                if (bannerModalTitle) bannerModalTitle.textContent = "แก้ไขแบนเนอร์ (Banner)";
+                if (bannerShowSelect) bannerShowSelect.value = bannerData.showId || '';
+                if (bannerImageUrlInput) bannerImageUrlInput.value = bannerData.bannerImageUrl || '';
+                if (bannerOrderIndexInput) bannerOrderIndexInput.value = bannerData.orderIndex || 0; // (NEW) Load orderIndex
+                if (deleteBannerBtn) deleteBannerBtn.classList.remove('hidden');
+            }
+            if (bannerModal) bannerModal.classList.add('flex');
+        }
+        if (addBannerBtn) addBannerBtn.addEventListener('click', () => openBannerModal('add'));
+        if (closeBannerModalBtn) closeBannerModalBtn.addEventListener('click', () => bannerModal.classList.remove('flex'));
+
+        if (bannerForm) {
+            bannerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                // (MODIFIED) Include orderIndex
+                const bannerData = {
+                    showId: bannerShowSelect.value,
+                    bannerImageUrl: bannerImageUrlInput.value,
+                    orderIndex: parseInt(bannerOrderIndexInput.value, 10) || 0, // (NEW)
+                    updatedAt: serverTimestamp()
+                };
+
+                if (!bannerData.showId || !bannerData.bannerImageUrl) {
+                    console.error("Please select a show and provide an image URL.");
+                    return;
+                }
+
+                try {
+                    if (currentEditingId) {
+                        const docRef = doc(getCollectionRef("banners"), currentEditingId);
+                        await updateDoc(docRef, bannerData);
+                    } else {
+                        bannerData.createdAt = serverTimestamp();
+                        await addDoc(getCollectionRef("banners"), bannerData);
+                    }
+                    if (bannerForm) bannerForm.reset();
+                    if (bannerModal) bannerModal.classList.remove('flex');
+                } catch (error) {
+                    console.error("Error saving banner: ", error);
+                }
+            });
+        }
+        
         if (deleteBannerBtn) {
             deleteBannerBtn.addEventListener('click', async () => {
                 if (!currentEditingId) return;
@@ -2247,7 +2402,33 @@
             });
         }
 
-
+        if (bannerTableBody) {
+            bannerTableBody.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('edit-banner-btn')) {
+                    const bannerId = e.target.dataset.id;
+                    try {
+                        const docRef = doc(getCollectionRef("banners"), bannerId);
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                            openBannerModal('edit', docSnap.data(), bannerId);
+                        }
+                    } catch (error) {
+                        console.error("Error fetching banner for edit:", error);
+                    }
+                }
+            });
+            // (NEW) Add listener for sorting by header click
+            bannerTableBody.closest('table').querySelectorAll('.sort-header[data-sort-view="banner"]').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    // Prevent propagation if clicking inside the header but not the header itself (e.g., table icon)
+                    if (e.target.closest('.sort-header') !== header) return; 
+                    
+                    const field = header.dataset.sortField;
+                    handleSort('banner', field);
+                });
+            });
+        }
+        
         // --- Tag Modal Logic (NEW) ---
         function openTagModal(mode, tagData = {}, tagId = null) {
             currentEditingId = tagId;
@@ -2316,9 +2497,10 @@
                                 showsSnapshot.forEach(showDoc => {
                                     const currentTags = showDoc.data().tags || [];
                                     const newTags = currentTags.filter(t => t !== tagName);
+                                    // (FIX) เพิ่ม updatedAt: serverTimestamp() ที่ถูกลบไปในโค้ดก่อนหน้ากลับมา
                                     batch.update(showDoc.ref, { 
                                         tags: newTags,
-                                        updatedAt: serverTimestamp() // <-- FIX: เพิ่ม updatedAt
+                                        updatedAt: serverTimestamp() 
                                     });
                                 });
                                 await batch.commit();
@@ -2601,6 +2783,16 @@
                         
                         <div id="show-list-panel">
                             <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                                
+                                <div class="flex items-center space-x-2">
+                                    <button id="status-published-btn" class="status-btn bg-blue-600 text-white font-medium py-2 px-4 rounded-lg text-sm flex-shrink-0">
+                                        ฉบับเผยแพร่ (Published)
+                                    </button>
+                                    <button id="status-draft-btn" class="status-btn bg-gray-700 text-gray-300 font-medium hover:bg-gray-600 py-2 px-4 rounded-lg text-sm flex-shrink-0">
+                                        ฉบับร่าง (Draft)
+                                    </button>
+                                </div>
+                                
                                 <div class="flex items-center space-x-4 ml-auto"> <input type="text" id="show-search-input" placeholder="ค้นหาอนิเมะ..." class="bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                     <button id="add-show-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 flex-shrink-0">
                                         <i class="ri-add-line"></i>
@@ -2619,16 +2811,16 @@
                                                 ชื่อเรื่อง
                                             </th>
                                             <th class="w-1/4 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase">Tags</th>
-                                            <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase">จำนวนตอน</th> <!-- (MODIFIED) เปลี่ยนชื่อคอลัมน์ -->
+                                            <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase">จำนวนตอน</th> 
                                             <th class="w-24 py-3 px-4 text-center text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="viewCount" data-sort-view="show">
                                                 ยอดเข้าชม
-                                            </th> <!-- (MODIFIED) เปลี่ยนชื่อคอลัมน์ -->
-                                            <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="createdAt" data-sort-view="show">
-                                                วันที่สร้าง
+                                            </th>
+                                            <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="updatedAt" data-sort-view="show">
+                                                รายละเอียดล่าสุด
                                             </th>
                                             <th class="w-24 py-3 px-4 text-left text-sm font-semibold text-gray-300 uppercase sort-header" data-sort-field="latestEpisodeUpdateAt" data-sort-view="show">
-                                                อัปเดตล่าสุด
-                                            </th> <!-- (MODIFIED) เปลี่ยนชื่อคอลัมน์ และใช้ latestEpisodeUpdateAt สำหรับการจัดเรียง -->
+                                                อัปเดตตอนล่าสุด
+                                            </th>
                                             </tr>
                                     </thead>
                                     <tbody id="show-table-body" class="divide-y divide-gray-700">
@@ -2800,7 +2992,15 @@
                     </div>
                     
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-1">สถานะ</label>
+                        <label for="show-status-select" class="block text-sm font-medium text-gray-300 mb-1">สถานะการเผยแพร่</label>
+                        <select id="show-status-select" class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="published">เผยแพร่ (Published)</option>
+                            <option value="draft">ฉบับร่าง (Draft)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">สถานะจบ</label>
                         <div class="flex items-center space-x-2">
                              <input type="checkbox" id="show-completed-checkbox" class="h-5 w-5 bg-gray-700 border-gray-600 rounded text-green-500 focus:ring-green-500">
                             <label for="show-completed-checkbox" class="text-gray-200">จบแล้ว (Completed)</label>
