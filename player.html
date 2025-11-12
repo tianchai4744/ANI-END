@@ -306,6 +306,30 @@
             }
         }
         
+        /**
+         * (UPDATED FUNCTION) Function to load all shows for client-side search
+         * OPTIMIZATION: Only store the necessary 'title' and 'id' to save memory.
+         */
+        async function loadAllShowsForSearch() {
+             try {
+                const showsQuery = query(getCollectionRef("shows"));
+                const snapshot = await getDocs(showsQuery);
+                allShows = [];
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    // OPTIMIZATION: Only store the necessary 'title' and 'id' to save memory.
+                    allShows.push({ 
+                        id: doc.id, 
+                        title: data.title 
+                    });
+                });
+                console.log("All shows loaded for search (Memory Optimized):", allShows.length);
+             } catch (error) {
+                 console.error("Error loading all shows for search:", error);
+             }
+        }
+
+        
         // (NEW FUNCTION) บันทึกประวัติการเข้าชม
         async function saveToHistory(episode) {
             // ตรวจสอบว่ามีข้อมูลครบถ้วนหรือไม่ (userId, currentShow, episode)
@@ -408,20 +432,8 @@
             }
         }
         
-        // (NEW) Function to load all shows for client-side search
-        async function loadAllShowsForSearch() {
-             try {
-                const showsQuery = query(getCollectionRef("shows"));
-                const snapshot = await getDocs(showsQuery);
-                allShows = [];
-                snapshot.forEach((doc) => {
-                    allShows.push({ id: doc.id, ...doc.data() });
-                });
-                console.log("All shows loaded for search:", allShows.length);
-             } catch (error) {
-                 console.error("Error loading all shows for search:", error);
-             }
-        }
+        // (NEW FUNCTION) Function to load all shows for client-side search
+        /* (REMOVED: Old loadAllShowsForSearch function content) */
         
         // (MODIFIED) Search Logic: Always redirect to grid.html with the query
         function handleSearchSubmit(query) { // (FIX) Removed isDesktop param as it's not used
@@ -899,6 +911,7 @@
          */
         function createRelatedCard(show, history = null) {
             const title = show.title || "N/A";
+            // NOTE: show objects passed here will have full details (thumbnailUrl, tags etc.)
             const isDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
             const dubBadge = isDub ? `<div class="dub-badge">พากย์ไทย</div>` : '';
             
