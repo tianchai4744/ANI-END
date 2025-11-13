@@ -304,28 +304,31 @@
             currentQuery = null;
 
             if (search) {
-                // (NEW) สร้าง Query สำหรับค้นหา (จำกัดที่ "Starts With" title)
+                // (MODIFIED FIX) สร้าง Query สำหรับค้นหา (Search Query)
                 const normalizedQuery = normalizeThai(search);
                 gridViewTitle.textContent = `ผลการค้นหาสำหรับ "${search}"`;
                 
-                // (MODIFIED FIX) ลบ orderBy("title") ออกเพื่อเลี่ยง Index Error
-                // (NEW FIX) เพิ่ม orderBy("latestEpisodeUpdateAt", "desc") สำหรับการค้นหาด้วย Title
+                // *** FIX: ใช้ Composite Index 2: title (Asc) + latestEpisodeUpdateAt (Desc) ***
                 currentQuery = query(getCollectionRef("shows"),
                     where("title", ">=", normalizedQuery),
                     where("title", "<=", normalizedQuery + '\uf8ff'),
-                    orderBy("latestEpisodeUpdateAt", "desc") // <-- FIX: ใช้ orderBy นี้สำหรับการค้นหาด้วย Title
+                    orderBy("title", "asc"), // ต้องใช้ orderBy ตัวแรกที่เป็นฟิลด์เดียวกันกับ where (title)
+                    orderBy("latestEpisodeUpdateAt", "desc") // ใช้ orderBy ตัวที่สองสำหรับการจัดเรียงตามเวลาอัปเดต
                 );
+                // NOTE: การ Query นี้จำเป็นต้องสร้าง Composite Index: 'title' (Asc) + 'latestEpisodeUpdateAt' (Desc)
+                
             } else {
-                // (NEW) สร้าง Query สำหรับ Tag
+                // (MODIFIED FIX) สร้าง Query สำหรับ Tag (Tag Query)
                 tag = tag || 'อนิเมะ'; // Default
                 gridViewTitle.textContent = tag;
                 
-                // (MODIFIED FIX) เพิ่ม orderBy("latestEpisodeUpdateAt", "desc") กลับเข้าไป
-                // NOTE: การเพิ่ม orderBy นี้จะต้องใช้ Composite Index ใน Firebase Console
+                // *** FIX: ใช้ Composite Index 1: tags (Array) + latestEpisodeUpdateAt (Desc) ***
                 currentQuery = query(getCollectionRef("shows"),
                     where("tags", "array-contains", tag),
-                    orderBy("latestEpisodeUpdateAt", "desc") // <-- FIX: ใช้ orderBy นี้
+                    orderBy("latestEpisodeUpdateAt", "desc") // ใช้ orderBy สำหรับการจัดเรียงตามเวลาอัปเดต
                 );
+                // NOTE: การ Query นี้จำเป็นต้องสร้าง Composite Index: 'tags' (Array) + 'latestEpisodeUpdateAt' (Desc)
+
             }
             
             // 2. สั่งโหลดข้อมูลหน้าแรก
@@ -460,7 +463,22 @@
                 
             } catch (error) {
                 console.error("Error loading more cards:", error);
-                gridViewContent.innerHTML += `<p class="text-center w-full col-span-full text-red-500">เกิดข้อผิดพลาดในการโหลด: ${error.message}</p>`;
+                // (MODIFIED) ในกรณีเกิด Composite Index Error
+                if (error.code === 'failed-precondition' && error.message.includes('requires an index')) {
+                    gridViewContent.innerHTML += `
+                        <p class="text-center w-full col-span-full text-red-500 font-bold mt-4">
+                            *** ข้อผิดพลาด: ต้องสร้าง Composite Index ใน Firebase Console ***
+                        </p>
+                        <p class="text-center w-full col-span-full text-red-400 text-sm">
+                            (สำหรับ Tag Query: **tags (Array)**, **latestEpisodeUpdateAt (Descending)**)
+                        </p>
+                        <p class="text-center w-full col-span-full text-red-400 text-sm">
+                            (สำหรับ Search Query: **title (Ascending)**, **latestEpisodeUpdateAt (Descending)**)
+                        </p>
+                        `;
+                } else {
+                    gridViewContent.innerHTML += `<p class="text-center w-full col-span-full text-red-500">เกิดข้อผิดพลาดในการโหลด: ${error.message}</p>`;
+                }
                 hasMore = false;
             } finally {
                 isLoading = false;
@@ -640,8 +658,9 @@
                         try {
                              window.history.replaceState({tag: pageId}, '', newSearch);
                         } catch (error) {
-                             console.warn("SecurityError on history.replaceState. Forcing location replace.", error);
-                             window.location.replace(newSearch);
+                             console.warn("SecurityError on history.replaceState. Forcing location navigation.", error);
+                             // FIX: ใช้ window.location.href แทน window.location.replace เพื่อหลีกเลี่ยง SyntaxError สำหรับ URL สัมพัทธ์
+                             window.location.href = newSearch;
                         }
                     }
                 }
