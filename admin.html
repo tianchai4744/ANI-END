@@ -104,7 +104,6 @@
             writeBatch,
             orderBy, 
             initializeFirestore, CACHE_SIZE_UNLIMITED,
-            // (*** MODIFIED: เพิ่ม deleteField แทน FieldValue เพื่อให้ใช้ลบฟิลด์ได้ ***)
             deleteField 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -182,7 +181,7 @@
         function getCollectionRef(collectionName) {
             return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
         }
-
+        
         // UI Elements
         const loadingIndicator = document.getElementById('loading-indicator');
         const loginView = document.getElementById('login-view');
@@ -193,7 +192,6 @@
         
         // (NEW) Views
         const dashboardView = document.getElementById('dashboard-view'); // NEW
-        // const episodeListView = document.getElementById('episode-list-view'); // REMOVED
         const showListView = document.getElementById('show-list-view');
         const bannerListView = document.getElementById('banner-list-view'); 
         const reportListView = document.getElementById('report-list-view'); 
@@ -204,7 +202,6 @@
         const tagTableBody = document.getElementById('tag-table-body'); 
         
         const showDashboardBtn = document.getElementById('show-dashboard-btn'); // NEW
-        // const showEpisodeListBtn = document.getElementById('show-episode-list-btn'); // REMOVED
         const showShowListBtn = document.getElementById('show-show-list-btn');
         const showBannerListBtn = document.getElementById('show-banner-list-btn');
         const showReportListBtn = document.getElementById('show-report-list-btn'); 
@@ -309,23 +306,27 @@
                     console.warn("Could not enable persistence:", err.code);
                 }
 
+                // (MODIFIED: BYPASS LOGIN) ใช้ signInAnonymously เพื่อเข้าถึงทันที
+                await signInAnonymously(auth);
+
                 onAuthStateChanged(auth, async (user) => {
-                    if (user && user.email) {
-                        // Admin Login
+                    if (user) {
+                        // Admin Login (หรือ Anonymous Sign-in)
                         userId = user.uid;
-                        console.log("Admin Authenticated:", userId, user.email);
+                        console.log("Admin/Anonymous Authenticated:", userId);
                         showMainContent();
-                        await setupListeners(); 
-                        // (NEW) Setup drag and drop after initial data load
+                        
+                        // Call setupDataFetch for initial one-time loads
+                        await setupDataFetch(); 
+                        
+                        // Now only set up REAL-TIME listeners (Shows/Reports/Episodes)
+                        await setupRealtimeListeners(); 
+                        
+                        // Setup drag and drop after initial data load
                         setupBannerDragAndDrop();
-                    } else if (user) {
-                        // Possibly anonymous user from other pages, sign them out
-                        await signOut(auth);
-                        console.log("Anonymous user signed out, showing admin login.");
-                        showLoginView();
                     } else {
-                         // (REMOVED) Token check, as admin should only use Email/Pass
-                         console.log("No admin user. Showing login form.");
+                         // Should not happen after signInAnonymously, but fallback to show login (which will be hidden)
+                         console.log("No user. Showing login form (hidden).");
                          showLoginView();
                     }
                 });
@@ -338,6 +339,7 @@
             }
         }
 
+        // (MODIFIED) showLoginView and showMainContent logic remains, but login form is hidden via CSS/HTML logic below.
         function showLoginView() {
             if (loadingIndicator) loadingIndicator.classList.add('hidden');
             if (mainContent) mainContent.classList.add('hidden');
@@ -350,34 +352,25 @@
             if (loadingIndicator) loadingIndicator.classList.add('hidden');
         }
 
+        // (REMOVED LOGIN FORM LISTENER)
         if (loginForm) {
             loginForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const email = document.getElementById('login-email').value;
-                const password = document.getElementById('login-password').value;
-                if (loginError) loginError.textContent = '';
-                
-                try {
-                    await signInWithEmailAndPassword(auth, email, password);
-                    // onAuthStateChanged จะจัดการซ่อน/แสดงหน้าเอง
-                } catch (error) {
-                    console.error("Login Error:", error.code);
-                    if (loginError) loginError.textContent = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
-                }
+                // This entire block is now functionally disabled by the bypass above.
+                if (loginError) loginError.textContent = "ล็อกอินถูกปิดใช้งานชั่วคราว (Bypass Mode)";
             });
         }
         
         if (logoutButton) {
             logoutButton.addEventListener('click', async () => {
                 try {
-                    // (MODIFIED) 1. Unsubscribe from all listeners
+                    // 1. Unsubscribe from all listeners
                     console.log(`Unsubscribing from ${allListeners.length} listeners.`);
                     allListeners.forEach(unsubscribe => unsubscribe());
-                    allListeners = []; // Clear the array
+                    allListeners = []; 
 
-                    // 2. Sign out
+                    // 2. Sign out (This will return the user to the hidden login view)
                     await signOut(auth);
-                    // onAuthStateChanged จะจัดการซ่อน/แสดงหน้าเอง
                 } catch (error) {
                     console.error("Logout Error:", error);
                 }
@@ -385,16 +378,18 @@
         }
 
         /**
-         * (MODIFIED/NEW) ดึงตอนสูงสุดเพื่ออัปเดต Show และ Update Timestamp แยกกัน
-         * ฟังก์ชันนี้ถูกเรียกเมื่อมีการเปลี่ยนแปลงใน Episode (เพิ่ม/แก้ไข/ลบ)
+         * (NEW FUNCTION - Restored Client-side Max Episode Logic)
+         * ฟังก์ชันนี้จะถูกเรียกเมื่อมีการเปลี่ยนแปลงใน Episode (เพิ่ม/แก้ไข/ลบ) 
+         * และจะทำการ Query ข้อมูลตอนทั้งหมดเพื่อหาตอนสูงสุดและอัปเดต Show document
          */
         async function updateMaxEpisodeAndStatus(showId) {
             try {
                 const episodesQuery = query(getCollectionRef("episodes"), where("showId", "==", showId));
-                const snapshot = await getDocs(episodesQuery);
+                const snapshot = await getDocs(episodesQuery); // <-- Read operation
                 
                 let maxEpisode = 0;
                 
+                // 1. Calculate Max Episode Number
                 snapshot.forEach(doc => {
                     const epNum = doc.data().episodeNumber || 0;
                     if (epNum > maxEpisode) {
@@ -402,9 +397,9 @@
                     }
                 });
 
-                // ดึงสถานะที่ผู้ดูแลระบบกำหนดไว้
+                // 2. Fetch current show status (to preserve isCompleted)
                 const showRef = doc(getCollectionRef("shows"), showId);
-                const showSnap = await getDoc(showRef);
+                const showSnap = await getDoc(showRef); // <-- Read operation
                 
                 if (!showSnap.exists()) {
                     console.warn(`Show ${showId} not found, skipping status update.`);
@@ -414,11 +409,11 @@
                 const showData = showSnap.data();
                 const isCompleted = showData.isCompleted === true;
                 
-                // อัปเดต Show document ด้วย Max Episode ล่าสุด และ update latestEpisodeUpdateAt
-                await updateDoc(showRef, {
-                    latestEpisodeNumber: maxEpisode, // อัปเดตตอนสูงสุดเสมอ
-                    isCompleted: isCompleted, // ใช้สถานะจบที่ผู้ดูแลระบบกำหนด
-                    latestEpisodeUpdateAt: serverTimestamp() // อัปเดตเวลาเนื้อหาล่าสุด
+                // 3. Update Show document
+                await updateDoc(showRef, { // <-- Write operation
+                    latestEpisodeNumber: maxEpisode, 
+                    isCompleted: isCompleted, 
+                    latestEpisodeUpdateAt: serverTimestamp() 
                 });
 
                 console.log(`Show ${showId} updated: Max Episode ${maxEpisode}, Completed: ${isCompleted}`);
@@ -629,7 +624,7 @@
          * (NEW FUNCTION) Switches to and renders the Show Detail Panel
          */
         async function openShowDetailView(showId) {
-            if (!showListPanel || !showDetailPanel || !showId) return;
+            if (!showListPanel || !showDetailPanel) return;
             
             // 1. Get Show Data
             const show = shows.find(s => s.id === showId);
@@ -977,7 +972,8 @@
             const todoMap = new Map();
             
             allEpisodes.forEach((episode) => {
-                if (episode.status === 'broken') { // Only confirmed broken are actionable now
+                // (MODIFIED) รวม 'user_reported' เข้ามาด้วยเพื่อให้ Admin เห็นรายงาน
+                if (episode.status === 'broken' || episode.status === 'user_reported') { 
                     const reportCount = reportCountMap.get(episode.id) || 1; 
                     
                     // (MODIFIED) หาเวลาที่เก่าที่สุด (ถ้าไม่มี ให้ใช้เวลาอัปเดตตอนแทน)
@@ -1057,17 +1053,49 @@
                     const showTitle = show ? show.title : 'N/A';
                     
                     const isConfirmedBroken = episode && episode.status === 'broken';
+                    const isUserReported = episode && episode.status === 'user_reported';
                     const reportId = item.reportId || allReports.find(r => r.episodeId === episodeId)?.id || ''; 
 
                     // (NEW) Determine which timestamp to display (the earliest report time)
                     const displayTime = item.sortTimestamp ? formatTimestamp({ toDate: () => new Date(item.sortTimestamp) }) : '-';
 
                     let statusBadge = '';
+                    let actionButton = '';
+                    
                     if (isConfirmedBroken) {
                         statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-red-600 px-2 py-0.5 rounded-full">เสีย</span>';
+                        actionButton = `
+                            <button class="text-xs text-green-400 hover:text-green-300 bg-gray-900 px-2 py-1 rounded goto-episode-btn" 
+                                    data-episode-id="${episodeId}" data-report-id="${reportId || ''}"> 
+                                <i class="ri-pencil-line"></i> แก้ไขตอน
+                            </button>
+                            <button class="text-xs text-yellow-400 hover:text-yellow-300 bg-gray-900 px-2 py-1 rounded clear-broken-btn" data-episode-id="${episodeId}">
+                                <i class="ri-check-line"></i> ล้างสถานะ 'เสีย'
+                            </button>
+                        `;
+                    } else if (isUserReported) {
+                        statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-blue-600 px-2 py-0.5 rounded-full">รอตรวจสอบ</span>';
+                        actionButton = `
+                            <button class="text-xs text-green-400 hover:text-green-300 bg-gray-900 px-2 py-1 rounded goto-episode-btn" 
+                                    data-episode-id="${episodeId}" data-report-id="${reportId || ''}"> 
+                                <i class="ri-pencil-line"></i> แก้ไขตอน
+                            </button>
+                            <button class="text-xs text-red-400 hover:text-red-300 bg-gray-900 px-2 py-1 rounded mark-broken-btn" data-episode-id="${episodeId}">
+                                <i class="ri-close-line"></i> ยืนยัน 'เสีย'
+                            </button>
+                            <button class="text-xs text-blue-400 hover:text-blue-300 bg-gray-900 px-2 py-1 rounded resolve-report-btn" data-report-id="${reportId}">
+                                <i class="ri-check-line"></i> แก้ไขแล้ว (ลบรายงาน)
+                            </button>
+                        `;
                     } else if (!episode) {
-                        statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-gray-500 px-2 py-0.5 rounded-full">รายงานค้าง</span>';
+                         statusBadge = '<span class="ml-2 text-xs font-medium text-white bg-gray-500 px-2 py-0.5 rounded-full">รายงานค้าง</span>';
+                         actionButton = `
+                            <button class="text-xs text-red-400 hover:text-red-300 bg-gray-900 px-2 py-1 rounded resolve-report-btn" data-report-id="${reportId}">
+                                <i class="ri-delete-bin-line"></i> ลบรายงานค้าง
+                            </button>
+                         `;
                     }
+
 
                     let reportBadgeClass = 'bg-gray-700 text-gray-300';
                     if (reportCount >= 3) reportBadgeClass = 'bg-red-600';
@@ -1087,31 +1115,7 @@
                             </td>
                             <td class="py-3 px-4">${showTitle}</td>
                             <td class="py-3 px-4 space-x-2 whitespace-nowrap">
-                                
-                                ${episode ? `
-                                <button class="text-xs text-green-400 hover:text-green-300 bg-gray-900 px-2 py-1 rounded goto-episode-btn" 
-                                        data-episode-id="${episodeId}" data-report-id="${reportId || ''}"> 
-                                    <i class="ri-pencil-line"></i> แก้ไขตอน
-                                </button>
-                                ` : ''}
-                                
-                                ${hasReportDoc ? `
-                                <button class="text-xs text-blue-400 hover:text-blue-300 bg-gray-900 px-2 py-1 rounded resolve-report-btn" data-report-id="${reportId}">
-                                    <i class="ri-check-line"></i> แก้ไขแล้ว (ลบรายงาน)
-                                </button>
-                                ` : ''}
-                                
-                                ${isConfirmedBroken && !hasReportDoc ? `
-                                <button class="text-xs text-yellow-400 hover:text-yellow-300 bg-gray-900 px-2 py-1 rounded clear-broken-btn" data-episode-id="${episodeId}">
-                                    <i class="ri-check-line"></i> ล้างสถานะ 'เสีย'
-                                </button>
-                                ` : ''}
-                                
-                                ${!episode && hasReportDoc ? `
-                                <button class="text-xs text-red-400 hover:text-red-300 bg-gray-900 px-2 py-1 rounded resolve-report-btn" data-report-id="${reportId}">
-                                    <i class="ri-delete-bin-line"></i> ลบรายงานค้าง
-                                </button>
-                                ` : ''}
+                                ${actionButton}
                             </td>
                         </tr>
                     `;
@@ -1129,9 +1133,9 @@
             // 1. สร้าง To-Do Map ที่สมบูรณ์แบบ (ใช้ตรรกะเดียวกับ renderReportTable)
             const todoMap = new Map();
             
-            // 1. Build map containing only CONFIRMED BROKEN episodes (status === 'broken')
+            // 1. Build map containing only CONFIRMED BROKEN episodes (status === 'broken') AND user_reported
             allEpisodes.forEach((episode) => {
-                if (episode.status === 'broken') {
+                if (episode.status === 'broken' || episode.status === 'user_reported') {
                     todoMap.set(episode.id, { isBrokenOnly: true }); 
                 }
             });
@@ -1185,9 +1189,9 @@
             
             // Calculate pending reports (same logic as badge)
             const todoMap = new Map();
-            // Count confirmed broken episodes
+            // Count confirmed broken episodes and user_reported
             allEpisodes.forEach((episode) => {
-                if (episode.status === 'broken') {
+                if (episode.status === 'broken' || episode.status === 'user_reported') {
                     todoMap.set(episode.id, { isBrokenOnly: true }); 
                 }
             });
@@ -1224,15 +1228,53 @@
             updateReportBadge();
         }
 
+        /**
+         * (MODIFIED/NEW) Function to load all data that does NOT require real-time updates.
+         * This reduces the cost of onSnapshot for non-critical admin data.
+         */
+        async function setupDataFetch() {
+            
+            // 1. Fetch Banners (One-time read)
+            try {
+                const bannerQuery = query(getCollectionRef("banners"));
+                const snapshot = await getDocs(bannerQuery); // <-- MODIFIED to use getDocs
+                allBanners = [];
+                snapshot.forEach((doc) => {
+                    allBanners.push({ id: doc.id, ...doc.data() });
+                });
+                console.log("Banners loaded (one-time):", allBanners.length);
+                renderBannerTable();
+            } catch (error) {
+                console.error("Error fetching banners:", error);
+            }
 
-        async function setupListeners() {
+            // 2. Fetch Tags (One-time read)
+            try {
+                const tagQuery = query(getCollectionRef("tags"), orderBy("name"));
+                const snapshot = await getDocs(tagQuery); // <-- MODIFIED to use getDocs
+                allTags = [];
+                snapshot.forEach((doc) => {
+                    allTags.push({ id: doc.id, ...doc.data() });
+                });
+                console.log("Tags loaded (one-time):", allTags.length);
+                renderShowModalTags();
+                renderTagTable();
+            } catch (error) {
+                console.error("Error fetching tags:", error);
+            }
+        }
+
+
+        /**
+         * (MODIFIED) Function to set up ONLY the real-time listeners.
+         */
+        async function setupRealtimeListeners() {
             // (MODIFIED) Clear any existing listeners before setting new ones
             allListeners.forEach(unsubscribe => unsubscribe());
             allListeners = [];
 
             // 1. Listen to Shows (อนิเมะ)
             const showQuery = query(getCollectionRef("shows"));
-            // (MODIFIED) Store the unsubscribe function
             const unsubShows = onSnapshot(showQuery, (snapshot) => {
                 shows = []; // (MODIFIED) Store in global array
                 
@@ -1261,7 +1303,7 @@
             }, (error) => console.error("Error listening to shows:", error));
             allListeners.push(unsubShows); // (MODIFIED) Add to array
 
-            // 2. Listen to Episodes (ตอน)
+            // 2. Listen to Episodes (ตอน) - Must be real-time for detail panel/report to work.
             const episodeQuery = query(getCollectionRef("episodes"));
             // (MODIFIED) Store the unsubscribe function
             const unsubEpisodes = onSnapshot(episodeQuery, (snapshot) => {
@@ -1269,17 +1311,15 @@
                 
                 const changedShowIds = new Set();
                 
-                // (FIX) แก้ไขตรรกะที่ทำให้เกิด Error
+                // (NEW LOGIC) Identify which shows need an update to Max Episode
                 snapshot.docChanges().forEach((change) => {
-                    // (FIX) ตรวจสอบข้อมูลก่อน
                     const showId = change.doc.data()?.showId;
-                    if (!showId) return; // ถ้าไม่มี showId ก็ข้าม
+                    if (!showId) return;
 
+                    // If any episode is added, removed, or has its number/status modified, the Max Episode status might change.
                     if (change.type === 'added' || change.type === 'removed') {
-                        // ถ้ามีการเพิ่มหรือลบตอนใหม่, ให้อัปเดต max episode เสมอ
                         changedShowIds.add(showId);
                     } else if (change.type === 'modified') {
-                        // (FIX) ต้องตรวจสอบว่า oldDoc มีอยู่จริงก่อน (ซึ่งควรจะมีใน 'modified')
                         const oldEpNum = change.oldDoc?.data()?.episodeNumber;
                         const newEpNum = change.doc.data()?.episodeNumber;
                         
@@ -1292,6 +1332,7 @@
                     }
                 });
 
+                // (NEW LOGIC) Trigger Max Episode Update for affected shows (Re-enabling the client-side heavy logic)
                 if (changedShowIds.size > 0) {
                     console.log("Episode changes detected. Triggering max episode update for:", changedShowIds);
                     changedShowIds.forEach(id => updateMaxEpisodeAndStatus(id));
@@ -1309,22 +1350,7 @@
             }, (error) => console.error("Error listening to episodes:", error));
             allListeners.push(unsubEpisodes); // (MODIFIED) Add to array
 
-            // 3. Listen to Banners
-            const bannerQuery = query(getCollectionRef("banners"));
-            // (MODIFIED) Store the unsubscribe function
-            const unsubBanners = onSnapshot(bannerQuery, (snapshot) => {
-                allBanners = []; // (NEW) Store in global array
-                snapshot.forEach((doc) => {
-                    allBanners.push({ id: doc.id, ...doc.data() });
-                });
-                
-                console.log("Banners loaded:", allBanners.length);
-                renderBannerTable(); // (MODIFIED) Call render function
-
-            }, (error) => console.error("Error listening to banners:", error));
-            allListeners.push(unsubBanners); // (MODIFIED) Add to array
-
-            // 4. Listen to Reports (MODIFIED to calculate report count)
+            // 3. Listen to Reports (MODIFIED to calculate report count) - Must be real-time for badge/report table.
             const reportQuery = query(getCollectionRef("reports"));
             // (MODIFIED) Store the unsubscribe function
             const unsubReports = onSnapshot(reportQuery, (snapshot) => {
@@ -1347,22 +1373,6 @@
 
             }, (error) => console.error("Error listening to reports:", error));
             allListeners.push(unsubReports); // (MODIFIED) Add to array
-            
-            // 5. Listen to Tags (NEW)
-            const tagQuery = query(getCollectionRef("tags"), orderBy("name")); // Sort by name
-            // (MODIFIED) Store the unsubscribe function
-            const unsubTags = onSnapshot(tagQuery, (snapshot) => {
-                allTags = [];
-                snapshot.forEach((doc) => {
-                    allTags.push({ id: doc.id, ...doc.data() });
-                });
-                
-                console.log("Tags loaded:", allTags.length);
-                renderShowModalTags(); // NEW: Re-render tags in Show Modal
-                renderTagTable(); // NEW: Render the Tag List View
-                
-            }, (error) => console.error("Error listening to tags:", error));
-            allListeners.push(unsubTags); // (MODIFIED) Add to array
         }
 
         /**
@@ -1370,13 +1380,11 @@
          */
         function switchView(viewId) {
             if (dashboardView) dashboardView.classList.add('hidden'); // NEW
-            // if (episodeListView) episodeListView.classList.add('hidden'); // REMOVED
             if (showListView) showListView.classList.add('hidden');
             if (bannerListView) bannerListView.classList.add('hidden'); 
             if (reportListView) reportListView.classList.add('hidden'); 
 
             if (showDashboardBtn) showDashboardBtn.classList.remove('bg-gray-900', 'text-white'); // NEW
-            // if (showEpisodeListBtn) showEpisodeListBtn.classList.remove('bg-gray-900', 'text-white'); // REMOVED
             if (showShowListBtn) showShowListBtn.classList.remove('bg-gray-900', 'text-white');
             if (showBannerListBtn) showBannerListBtn.classList.remove('bg-gray-900', 'text-white'); 
             if (showReportListBtn) showReportListBtn.classList.remove('bg-gray-900', 'text-white'); 
@@ -1523,7 +1531,6 @@
         }
 
         if (showDashboardBtn) showDashboardBtn.addEventListener('click', () => switchView('dashboard')); // NEW
-        // if (showEpisodeListBtn) showEpisodeListBtn.addEventListener('click', () => switchView('episode')); // REMOVED
         if (showShowListBtn) showShowListBtn.addEventListener('click', () => switchView('show'));
         if (showBannerListBtn) showBannerListBtn.addEventListener('click', () => switchView('banner')); 
         if (showReportListBtn) showReportListBtn.addEventListener('click', () => switchView('report')); 
@@ -1862,8 +1869,11 @@
                 document.querySelectorAll('.show-tag-option:checked').forEach(checkbox => {
                     tagsArray.push(checkbox.value);
                 });
+                
+                // (MODIFIED) UX Improvement: Add explanation text
                 if (tagsArray.length === 0) {
                     tagsArray.push('อนิเมะ');
+                    console.log("No tags selected. Defaulting to 'อนิเมะ'.");
                 }
                 
                 const isCompletedByAdmin = showCompletedCheckbox.checked; 
@@ -1884,14 +1894,14 @@
                     
                     if (currentEditingId) {
                         const docRef = doc(getCollectionRef("shows"), currentEditingId);
+                        // (MODIFIED) เราสามารถอัปเดต showData ได้โดยตรง
                         await updateDoc(docRef, showData);
-                        // (NOTE) ไม่เรียก updateMaxEpisodeAndStatus ที่นี่ เพื่อแยก UpdatedAt ออกจาก LatestEpisodeUpdateAt
                         
                     } else {
                         showData.createdAt = serverTimestamp();
                         showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
                         showData.latestEpisodeNumber = 0; 
-                        // (NEW) กำหนดค่าเริ่มต้นสำหรับฟิลด์ใหม่
+                        // (NEW) กำหนดค่าเริ่มต้นสำหรับฟิลด์ใหม่ (latestEpisodeUpdateAt)
                         showData.latestEpisodeUpdateAt = serverTimestamp(); 
                         
                         const newDocRef = await addDoc(getCollectionRef("shows"), showData);
@@ -1905,6 +1915,7 @@
                          // Find the updated show data locally or re-fetch (local should be fine due to snapshot)
                          const updatedShow = shows.find(s => s.id === savedShowId);
                          if (updatedShow) {
+                              // We only re-open the detail view, the episode list will refresh when the Show snapshot updates
                               openShowDetailView(savedShowId); 
                          }
                     }
@@ -2149,67 +2160,6 @@
         });
         
         if (episodeForm) {
-            showForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
-                const showStatusSelect = document.getElementById('show-status-select');
-                
-                let tagsArray = [];
-                document.querySelectorAll('.show-tag-option:checked').forEach(checkbox => {
-                    tagsArray.push(checkbox.value);
-                });
-                if (tagsArray.length === 0) {
-                    tagsArray.push('อนิเมะ');
-                }
-                
-                const isCompletedByAdmin = showCompletedCheckbox.checked; 
-                
-                const showData = {
-                    title: showTitleInput.value,
-                    description: showDescInput.value,
-                    thumbnailUrl: showThumbnailInput.value,
-                    viewCount: parseInt(showViewCountInput.value, 10) || 0, 
-                    isCompleted: isCompletedByAdmin, 
-                    tags: tagsArray,
-                    status: showStatusSelect.value || 'published', // NEW: Set status
-                    updatedAt: serverTimestamp() // อัปเดตเฉพาะ updatedAt (รายละเอียด Show)
-                };
-
-                try {
-                    let savedShowId = currentEditingId;
-                    
-                    if (currentEditingId) {
-                        const docRef = doc(getCollectionRef("shows"), currentEditingId);
-                        await updateDoc(docRef, showData);
-                        // (NOTE) ไม่เรียก updateMaxEpisodeAndStatus ที่นี่ เพื่อแยก UpdatedAt ออกจาก LatestEpisodeUpdateAt
-                        
-                    } else {
-                        showData.createdAt = serverTimestamp();
-                        showData.viewCount = parseInt(showViewCountInput.value, 10) || 0; 
-                        showData.latestEpisodeNumber = 0; 
-                        // (NEW) กำหนดค่าเริ่มต้นสำหรับฟิลด์ใหม่
-                        showData.latestEpisodeUpdateAt = serverTimestamp(); 
-                        
-                        const newDocRef = await addDoc(getCollectionRef("shows"), showData);
-                        savedShowId = newDocRef.id;
-                    }
-                    if (showForm) showForm.reset();
-                    if (showModal) showModal.classList.remove('flex');
-                    
-                    // (NEW LOGIC) After saving/editing, if the detail panel was open, refresh it
-                    if (savedShowId === currentShowDetailId) {
-                         // Find the updated show data locally or re-fetch (local should be fine due to snapshot)
-                         const updatedShow = shows.find(s => s.id === savedShowId);
-                         if (updatedShow) {
-                              openShowDetailView(savedShowId); 
-                         }
-                    }
-
-                } catch (error) {
-                    console.error("Error saving show: ", error);
-                }
-            });
-
             episodeForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
@@ -2224,9 +2174,8 @@
                     // (NOTE) ไม่อัปเดต updatedAt ใน Episode Document เพื่อประหยัด Write
                 };
                 
-                // (*** โค้ดที่ถูกแก้ไข/เพิ่มเติม: จัดการล้างสถานะและลบ Reports เมื่อแก้ไขตอน ***)
-                const batch = writeBatch(db); // ใช้ Batch เพื่อทำรายการหลายอย่างพร้อมกัน
-                let originalShowId = episodeData.showId; // ใช้ showId ปัจจุบัน (เผื่อมีการเปลี่ยนเรื่อง)
+                const batch = writeBatch(db); 
+                let originalShowId = episodeData.showId; 
 
                 if (!episodeData.showId) {
                     console.error("Please select a show.");
@@ -2238,26 +2187,18 @@
                         const docRef = doc(getCollectionRef("episodes"), currentEditingId);
                         const oldData = allEpisodes.find(ep => ep.id === currentEditingId);
                         
-                        // เก็บ showId เดิมไว้ (เผื่อมีการเปลี่ยน showId)
                         originalShowId = oldData ? oldData.showId : episodeData.showId;
 
-                        // 1. ตรวจสอบสถานะเดิมและสร้างข้อมูลอัปเดต
-                        // NEW: สร้าง object สำหรับอัปเดต โดยรวมข้อมูลที่มาจากฟอร์มก่อน
                         const updateData = { ...episodeData };
-                        // (NEW) เพิ่ม updatedAt ใน episode document เพื่อใช้เป็น tie-breaker ในกรณีที่ show documents มีค่า latestEpisodeUpdateAt เท่ากัน
                         updateData.updatedAt = serverTimestamp(); 
 
-                        // ตรวจสอบว่าต้องล้างสถานะหรือไม่ (ถ้าเดิมเป็น broken หรือ user_reported)
                         const wasReportedOrBroken = oldData && 
                             (oldData.status === 'broken' || oldData.status === 'user_reported');
 
                         if (wasReportedOrBroken) {
-                            // 1. ลบฟิลด์ status ออกไปอย่างสมบูรณ์ใน updateData
-                            // (FIXED) ใช้ deleteField() แทน FieldValue.delete()
                             updateData.status = deleteField(); 
                             console.log(`Cleared status for episode ${currentEditingId} after Admin edit.`);
                             
-                            // 2. ค้นหาและลบเอกสาร Report ที่เกี่ยวข้องทั้งหมด
                             const reportsQuery = query(getCollectionRef("reports"), where("episodeId", "==", currentEditingId));
                             const reportsSnapshot = await getDocs(reportsQuery);
 
@@ -2267,20 +2208,20 @@
                             console.log(`Deleted ${reportsSnapshot.size} associated reports.`);
                         } 
                         
-                        // 3. อัปเดต Episode Document ด้วย updateData
                         batch.update(docRef, updateData);
                         
-                        // 4. Commit Batch
                         await batch.commit();
 
                     } else {
                         // โค้ดเดิมสำหรับ Add
                         episodeData.createdAt = serverTimestamp();
                         episodeData.updatedAt = serverTimestamp(); // กำหนด updatedAt สำหรับตอนใหม่
-                        await addDoc(getCollectionRef("episodes"), episodeData);
+                        batch.set(doc(getCollectionRef("episodes")), episodeData);
+                        
+                        await batch.commit();
                     }
                     
-                    // 5. อัปเดต Max Episode (เรียกใช้เพื่ออัปเดต latestEpisodeUpdateAt ใน Show Document)
+                    // (NEW LOGIC - RESTORED) Call client-side Max Episode Update after successful write
                     await updateMaxEpisodeAndStatus(episodeData.showId); 
                     if (episodeData.showId !== originalShowId) {
                          // ถ้ามีการเปลี่ยน showId, ต้องอัปเดต show เดิมด้วย
@@ -2308,10 +2249,11 @@
                     async () => {
                         try {
                             const docSnap = await getDoc(doc(getCollectionRef("episodes"), currentEditingId));
-                            const showId = docSnap.data().showId;
+                            const showId = docSnap.data()?.showId; // Store showId before deletion
                             
                             await deleteDoc(doc(getCollectionRef("episodes"), currentEditingId));
                             
+                            // (NEW LOGIC - RESTORED) Call client-side Max Episode Update after successful delete
                             if (showId) {
                                 await updateMaxEpisodeAndStatus(showId);
                             }
@@ -2377,6 +2319,10 @@
                     }
                     if (bannerForm) bannerForm.reset();
                     if (bannerModal) bannerModal.classList.remove('flex');
+                    
+                    // (NEW) Force refresh of Banner data/UI after write
+                    await setupDataFetch();
+                    
                 } catch (error) {
                     console.error("Error saving banner: ", error);
                 }
@@ -2392,6 +2338,10 @@
                         try {
                             await deleteDoc(doc(getCollectionRef("banners"), currentEditingId));
                             if (bannerModal) bannerModal.classList.remove('flex');
+                            
+                            // (NEW) Force refresh of Banner data/UI after delete
+                            await setupDataFetch();
+                            
                         } catch (error) {
                             console.error("Error deleting banner: ", error);
                         } finally {
@@ -2407,10 +2357,19 @@
                 if (e.target.classList.contains('edit-banner-btn')) {
                     const bannerId = e.target.dataset.id;
                     try {
-                        const docRef = doc(getCollectionRef("banners"), bannerId);
-                        const docSnap = await getDoc(docRef);
-                        if (docSnap.exists()) {
-                            openBannerModal('edit', docSnap.data(), bannerId);
+                        // (MODIFIED) Since we use getDocs now, allBanners might not be the latest.
+                        // However, for admin panel convenience, we can trust the current array
+                        // and refresh the table via setupDataFetch.
+                        const bannerData = allBanners.find(b => b.id === bannerId);
+                        if (bannerData) {
+                            openBannerModal('edit', bannerData, bannerId);
+                        } else {
+                            // Fallback to fetch single document if not in local cache
+                            const docRef = doc(getCollectionRef("banners"), bannerId);
+                            const docSnap = await getDoc(docRef);
+                            if (docSnap.exists()) {
+                                openBannerModal('edit', docSnap.data(), bannerId);
+                            }
                         }
                     } catch (error) {
                         console.error("Error fetching banner for edit:", error);
@@ -2469,6 +2428,10 @@
                     }
                     if (tagForm) tagForm.reset();
                     if (tagModal) tagModal.classList.remove('flex');
+                    
+                    // (NEW) Force refresh of Tag data/UI after write
+                    await setupDataFetch(); 
+                    
                 } catch (error) {
                     console.error("Error saving tag: ", error);
                 }
@@ -2509,6 +2472,10 @@
 
 
                             if (tagModal) tagModal.classList.remove('flex');
+                            
+                            // (NEW) Force refresh of Tag data/UI after write
+                            await setupDataFetch(); 
+                            
                         } catch (error) {
                             console.error("Error deleting tag: ", error);
                         } finally {
@@ -2618,9 +2585,12 @@
         <p class="text-2xl text-gray-400">กำลังโหลดแผงควบคุม...</p>
     </div>
 
+    <!-- (MODIFIED: LOGIN VIEW IS HIDDEN AND BYPASSED) -->
     <div id="login-view" class="hidden flex items-center justify-center min-h-screen">
         <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-sm">
-            <h2 class="text-3xl font-bold text-white text-center mb-6">Admin Login</h2>
+            <h2 class="text-3xl font-bold text-white text-center mb-6">Admin Login (Bypassed)</h2>
+            <p class="text-yellow-400 text-sm text-center mb-4">ระบบล็อกอินถูกซ่อนไว้ชั่วคราว. เข้าถึงด้วยสิทธิ์ Anonymous.</p>
+            <!-- Login form structure is kept but functionally disabled via JS -->
             <form id="login-form" class="space-y-4">
                 <div>
                     <label for="login-email" class="block text-sm font-medium text-gray-300 mb-1">Email</label>
@@ -3011,7 +2981,7 @@
                         <label class="block text-sm font-medium text-gray-300 mb-1">Tags</label>
                         <div id="show-tag-checkbox-container" class="flex flex-wrap gap-x-6 gap-y-2 mt-2">
                             </div>
-                        <p class="text-xs text-gray-400 mt-2">หากต้องการเพิ่ม/แก้ไข Tag โปรดไปที่เมนู "อนิเมะ" > "จัดการ Tags"</p>
+                        <p class="text-xs text-yellow-400 mt-2">หากไม่ได้เลือก Tag ใดๆ ระบบจะกำหนด 'อนิเมะ' ให้โดยอัตโนมัติ</p>
                     </div>
 
                 </div>
