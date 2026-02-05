@@ -1,6 +1,6 @@
 import { collection, addDoc, query, where, orderBy, limit, getDocs, serverTimestamp, startAfter } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, appId } from "./config/firebase.js";
-import { formatTimestamp } from "./utils/common.js";
+import { db, appId } from "../config/db-config.js";
+import { formatTimestamp } from "../utils/tools.js";
 
 // ตัวแปรเก็บสถานะปัจจุบัน
 let activeTab = 'episode'; 
