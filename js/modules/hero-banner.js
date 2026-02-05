@@ -2,9 +2,7 @@
 
 let heroSwiperInstance = null;
 
-/**
- * สร้าง Skeleton Loading สำหรับ Hero Banner (แสดงระหว่างรอโหลดข้อมูล)
- */
+// ส่วนแสดงผลโครงร่างรอโหลด (Skeleton)
 export function renderHeroSkeleton(containerId) {
     const container = document.getElementById(containerId);
     if (container) {
@@ -17,21 +15,19 @@ export function renderHeroSkeleton(containerId) {
     }
 }
 
-/**
- * เรนเดอร์ Hero Banner Slider และเริ่มการทำงานของ Swiper
- */
+// ส่วนสร้างสไลด์แบนเนอร์
 export function renderHeroBanner(containerId, banners, historyItems, userId) {
     const heroSwiperContainer = document.getElementById(containerId);
     
     if (!heroSwiperContainer) return;
     
-    // เคลียร์ Swiper ตัวเก่าถ้ามี เพื่อป้องกัน Memory Leak หรือบั๊กซ้อนทับ
+    // 1. Destroy instance เก่าทิ้งก่อนเสมอ เพื่อไม่ให้ทำงานซ้อนทับกัน
     if (heroSwiperInstance) {
         heroSwiperInstance.destroy(true, true);
         heroSwiperInstance = null;
     }
 
-    // สร้างโครงสร้าง HTML พื้นฐานของ Swiper
+    // 2. สร้างโครงสร้าง HTML สำหรับ Swiper
     heroSwiperContainer.innerHTML = `
         <div class="swiper-wrapper"></div>
         <div class="swiper-button-prev hidden md:flex items-center justify-center"></div>
@@ -41,16 +37,16 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
     
     const swiperWrapper = heroSwiperContainer.querySelector('.swiper-wrapper');
     
-    // กรณีไม่มีข้อมูลแบนเนอร์
+    // 3. กรณีโหลดเสร็จแล้วแต่ไม่มีข้อมูลแบนเนอร์
     if (!banners || banners.length === 0) {
         swiperWrapper.innerHTML = '<div class="swiper-slide flex items-center justify-center bg-gray-800 text-gray-500">No Banners</div>';
         return;
     }
     
-    // สร้าง Slide แต่ละแผ่น
+    // 4. วนลูปสร้าง Slide
     let slidesHtml = '';
     banners.forEach(banner => {
-        // เช็คประวัติการดูเพื่อสร้างลิงก์ (Resume Link)
+        // Logic เดิม: เช็คประวัติการดูเพื่อสร้างลิงก์ดูต่อ (Resume)
         const historyItem = userId ? historyItems.find(h => h.showId === banner.showId) : null;
         
         let targetUrl = `pages/player.html?id=${banner.showId}`;
@@ -60,7 +56,6 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
         
         const imgUrl = banner.bannerImageUrl || 'https://placehold.co/1200x400/222/fff?text=No+Banner';
 
-        // โครงสร้าง HTML เดียวกับ index.html เดิม เพื่อให้ CSS ทำงานได้เหมือนเดิมเป๊ะ
         slidesHtml += `
             <a href="${targetUrl}" class="swiper-slide relative block w-full h-full">
                 <img src="${imgUrl}" alt="${banner.title || 'Banner'}" class="w-full h-full object-cover">
@@ -71,7 +66,7 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
     
     swiperWrapper.innerHTML = slidesHtml;
     
-    // เริ่มการทำงานของ Swiper (เรียกใช้ Library Global ที่โหลดใน index.html)
+    // 5. เริ่มต้นการทำงานของ Swiper
     if (typeof Swiper !== 'undefined') {
         heroSwiperInstance = new Swiper(`#${containerId}`, {
             loop: banners.length > 1, 
@@ -82,7 +77,5 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
             observer: true, 
             observeParents: true
         });
-    } else {
-        console.warn('Swiper library not found');
     }
 }
