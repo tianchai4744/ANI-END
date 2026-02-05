@@ -1,24 +1,23 @@
 import { formatTimestamp } from "../utils/common.js";
 
 export function createAnimeCard(show, history = null) {
-    // --- ส่วนสำคัญ: เช็คตำแหน่งปัจจุบันเพื่อสร้างลิงก์ให้ถูก ---
-    // ถ้า url ปัจจุบันมีคำว่า '/pages/' แสดงว่าเราอยู่ในห้องย่อย -> ลิงก์ไปหา 'player.html' ได้เลย (เพื่อนบ้าน)
-    // ถ้าไม่มี (อยู่หน้าแรก) -> ต้องลิงก์ไปหา 'pages/player.html'
+    // ✅ จุดที่แก้ไข: เช็คว่าตอนนี้อยู่หน้าไหน เพื่อสร้างลิงก์ให้ถูก
+    // ถ้า url มีคำว่า /pages/ แสดงว่าอยู่ห้องใน -> ไปหา player.html ได้เลย
+    // ถ้าไม่มี (อยู่หน้าแรก) -> ต้องเดินเข้าห้อง pages/player.html
     const isPages = window.location.pathname.includes('/pages/');
     const basePath = isPages ? 'player.html' : 'pages/player.html';
 
-    // เช็คประวัติการดู (ถ้ามี)
+    // เช็คประวัติการดู
     let progressHtml = '';
     let lastEpText = '';
+    
+    // สร้างลิงก์โดยใช้ basePath ที่คำนวณไว้ (ไม่มี / นำหน้าแล้ว)
     let linkUrl = `${basePath}?id=${show.id}`;
 
     if (history) {
-        // ถ้าเคยดูแล้ว ให้ลิงก์ไปต่อที่ตอนเดิม
         if (history.lastWatchedEpisodeId) {
             linkUrl += `&ep_id=${history.lastWatchedEpisodeId}`;
         }
-        
-        // คำนวณ Progress Bar (แถบสีเขียวด้านล่างการ์ด)
         if (history.progress > 0) {
             progressHtml = `
                 <div class="absolute bottom-0 left-0 h-1 bg-red-600/50 w-full">
@@ -29,9 +28,7 @@ export function createAnimeCard(show, history = null) {
         lastEpText = `<span class="text-[10px] bg-green-900 text-green-300 px-1.5 py-0.5 rounded ml-2">ดูถึงตอนที่ ${history.lastWatchedEpisodeNumber || 1}</span>`;
     }
 
-    // สร้าง HTML ของการ์ด
     const col = document.createElement('div');
-    // ปรับแต่ง Grid ให้แสดงผลสวยงามทั้งมือถือและคอม
     col.className = 'bg-gray-800 rounded-lg overflow-hidden hover:scale-105 transition-transform duration-300 relative group shadow-lg';
     
     col.innerHTML = `
@@ -52,7 +49,6 @@ export function createAnimeCard(show, history = null) {
                     <i class="ri-play-fill text-2xl"></i>
                 </div>
             </div>
-            
             ${progressHtml}
         </a>
         
