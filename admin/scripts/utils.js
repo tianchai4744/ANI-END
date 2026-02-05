@@ -1,5 +1,5 @@
 import { collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, appId } from "./firebase-config.js";
+import { db } from "../../js/config/firebase.js";
 
 // Helper: ดึง Ref ของ Collection
 export function getCollectionRef(collectionName) {
