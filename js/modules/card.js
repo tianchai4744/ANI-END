@@ -1,66 +1,70 @@
-import { formatTimestamp } from "../utils/common.js";
+// ไฟล์: card.js
+// แม่พิมพ์สร้างการ์ดอนิเมะ แยกออกมาเพื่อการจัดการที่ง่ายและ Reusable
 
-export function createAnimeCard(show, history = null) {
-    // ✅ จุดที่แก้ไข: เช็คว่าตอนนี้อยู่หน้าไหน เพื่อสร้างลิงก์ให้ถูก
-    // ถ้า url มีคำว่า /pages/ แสดงว่าอยู่ห้องใน -> ไปหา player.html ได้เลย
-    // ถ้าไม่มี (อยู่หน้าแรก) -> ต้องเดินเข้าห้อง pages/player.html
-    const isPages = window.location.pathname.includes('/pages/');
-    const basePath = isPages ? 'player.html' : 'pages/player.html';
-
-    // เช็คประวัติการดู
-    let progressHtml = '';
-    let lastEpText = '';
+export function createAnimeCard(show, rankNumber = null, history = null) {
+    // 1. ตรวจสอบข้อมูลเบื้องต้น (Fallback กันค่า null)
+    const title = show.title || "ไม่ระบุชื่อ";
+    const thumbnail = show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img';
     
-    // สร้างลิงก์โดยใช้ basePath ที่คำนวณไว้ (ไม่มี / นำหน้าแล้ว)
-    let linkUrl = `${basePath}?id=${show.id}`;
-
-    if (history) {
-        if (history.lastWatchedEpisodeId) {
-            linkUrl += `&ep_id=${history.lastWatchedEpisodeId}`;
-        }
-        if (history.progress > 0) {
-            progressHtml = `
-                <div class="absolute bottom-0 left-0 h-1 bg-red-600/50 w-full">
-                    <div class="h-full bg-red-600" style="width: ${history.progress}%"></div>
-                </div>
-            `;
-        }
-        lastEpText = `<span class="text-[10px] bg-green-900 text-green-300 px-1.5 py-0.5 rounded ml-2">ดูถึงตอนที่ ${history.lastWatchedEpisodeNumber || 1}</span>`;
+    // 2. สร้างลิงก์ (Smart Link: ถ้าเคยดูแล้ว ให้ลิงก์ไปตอนล่าสุด)
+    const watchedEpisodeId = history ? history.lastWatchedEpisodeId : null;
+    let targetUrl = '/pages/player.html?id=${show.id}'; // ใส่ /pages/ นำหน้าเสมอ
+    if (watchedEpisodeId) {
+        targetUrl = `/pages/player.html?id=${show.id}&ep_id=${watchedEpisodeId}`;
     }
 
-    const col = document.createElement('div');
-    col.className = 'bg-gray-800 rounded-lg overflow-hidden hover:scale-105 transition-transform duration-300 relative group shadow-lg';
+    // 3. สร้าง Badges
     
-    col.innerHTML = `
-        <a href="${linkUrl}" class="block relative aspect-[2/3] overflow-hidden">
-            <img src="${show.thumbnailUrl}" alt="${show.title}" 
-                 class="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
-                 loading="lazy"
-                 onerror="this.src='https://placehold.co/200x300?text=No+Image'">
-            
-            <div class="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded backdrop-blur-sm">
-                ⭐ ${show.rating || 'N/A'}
-            </div>
-            
-            ${history ? `<div class="absolute top-2 left-2 bg-green-600 text-white text-[10px] px-2 py-1 rounded shadow">เคยดู</div>` : ''}
-            
-            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-                <div class="bg-green-500 text-white rounded-full p-3 shadow-xl transform scale-75 group-hover:scale-100 transition-transform">
-                    <i class="ri-play-fill text-2xl"></i>
-                </div>
-            </div>
-            ${progressHtml}
-        </a>
-        
-        <div class="p-3">
-            <h3 class="font-bold text-white text-sm truncate mb-1" title="${show.title}">${show.title}</h3>
-            <div class="flex items-center justify-between text-xs text-gray-400">
-                <span>${show.releaseYear || 'Unknown'}</span>
-                <span class="border border-gray-600 px-1 rounded">${show.type || 'TV'}</span>
-            </div>
-            ${lastEpText ? `<div class="mt-2 flex justify-end">${lastEpText}</div>` : ''}
-        </div>
-    `;
+    // - พากย์ไทย
+    const isThaiDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
+    const dubBadge = isThaiDub ? `
+        <div class="absolute top-2 left-2 z-10 bg-red-600 text-white px-2 py-1 rounded text-[10px] font-bold shadow flex items-center gap-1">
+            <i class="ri-volume-up-line"></i> พากย์ไทย
+        </div>` : '';
+    
+    // - จบแล้ว
+    const isCompleted = show.isCompleted === true;
+    const completedBadge = isCompleted ? `
+        <div class="absolute bottom-2 left-2 z-10 bg-green-600 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow">
+            จบแล้ว
+        </div>` : '';
+    
+    // - ตอนล่าสุด
+    let episodeBadge = '';
+    const latestEp = parseFloat(show.latestEpisodeNumber) || 0;
+    if (latestEp > 0) {
+        episodeBadge = `
+        <div class="absolute bottom-2 right-2 z-10 bg-gray-600 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow">
+            ตอนที่ ${latestEp}
+        </div>`;
+    }
 
-    return col;
+    // - อันดับ (Rank Badge) - แสดงเฉพาะเมื่อมีการส่งค่า rankNumber มาและมากกว่า 0
+    let rankBadge = '';
+    if (rankNumber && rankNumber > 0) {
+        rankBadge = `
+        <div class="absolute top-[-4px] right-[14px] w-[42px] h-[55px] bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center text-white font-black text-lg shadow-lg z-10" style="clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 50% 85%, 0% 100%);">
+            ${rankNumber}
+        </div>`;
+    }
+
+    // 4. Render HTML
+    return `
+        <a href="${targetUrl}" class="block group bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 relative">
+            <div class="aspect-[2/3] overflow-hidden relative bg-gray-700">
+                ${rankBadge}
+                ${dubBadge}
+                ${episodeBadge}
+                <img src="${thumbnail}" 
+                     alt="${title}" 
+                     loading="lazy" 
+                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                     onerror="this.onerror=null; this.src='https://placehold.co/400x600/333/fff?text=No+Img';">
+                ${completedBadge}
+            </div>
+            <div class="text-white p-3 pt-2 h-14"> 
+                <h4 class="font-bold text-base overflow-hidden text-ellipsis line-clamp-2 leading-tight">${title}</h4> 
+            </div>
+        </a>
+    `;
 }
