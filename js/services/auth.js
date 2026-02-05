@@ -10,7 +10,7 @@ import {
     sendPasswordResetEmail 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, setDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { auth, db, appId } from "../config/firebase.js";
+import { auth, db, appId } from "../config/db-config.js";
 
 const googleProvider = new GoogleAuthProvider();
 
