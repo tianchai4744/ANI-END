@@ -1,4 +1,131 @@
-<script type="module">
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANI-END - หน้าแรก</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            cursor: default;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            scrollbar-width: thin;
+            scrollbar-color: #333 #111;
+        }
+        
+        main { flex: 1; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00b87c; }
+
+        .swiper-button-next, .swiper-button-prev { 
+            color: #ffffff; 
+            background-color: rgba(0,0,0,0.5); 
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            backdrop-filter: blur(2px);
+            transition: all 0.2s;
+            z-index: 20;
+        }
+        .swiper-button-next:hover, .swiper-button-prev:hover {
+            background-color: rgba(0,184,124,0.9);
+            transform: scale(1.1);
+        }
+        .swiper-button-next:after, .swiper-button-prev:after {
+            font-size: 20px;
+            font-weight: 900;
+        }
+        .swiper-pagination-bullet {
+            background: #fff;
+            opacity: 0.5;
+            transition: all 0.3s;
+        }
+        .swiper-pagination-bullet-active {
+            background: #00b87c;
+            opacity: 1;
+            width: 20px;
+            border-radius: 4px;
+        }
+        
+        a { cursor: pointer; }
+        .nav-link { transition: color 0.2s, background-color 0.2s; }
+        .nav-link.active { color: #00b87c; } 
+        #mobile-search-bar { display: none; }
+        
+        .search-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            background-color: #1f2937;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .search-dropdown-item:hover { background-color: #374151; }
+     
+        .history-card {
+            display: flex;
+            align-items: center;
+            gap: 8px; 
+            padding: 6px; 
+            border-radius: 8px;
+            background-color: #1f2937; 
+            transition: background-color 0.15s;
+        }
+        .history-card:hover { background-color: #374151; }
+        .history-thumb {
+            width: 48px; 
+            height: 64px; 
+            aspect-ratio: 3/4;
+            object-fit: cover;
+            flex-shrink: 0;
+            border-radius: 4px;
+        }
+        
+        .banner-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 50%;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            pointer-events: none;
+        }
+
+        /* --- SKELETON ANIMATION --- */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .skeleton {
+            background-color: #374151; /* gray-700 */
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            border-radius: 0.5rem;
+        }
+        .skeleton-text {
+            height: 1em;
+            margin-bottom: 0.5em;
+            border-radius: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-black text-gray-100">
+
+    <script type="module">
         import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             onSnapshot, collection, query,
@@ -10,13 +137,13 @@
         import { setupSearchSystem } from "./js/modules/search.js";
         import { loadNavbar } from "./js/modules/navbar.js";
         
-        // [ใหม่] นำเข้า Module Hero Banner
+        // [NEW] นำเข้า Module Hero Banner
         import { renderHeroBanner, renderHeroSkeleton } from "./js/modules/hero-banner.js";
 
         let userId;
         let historyItems = []; 
         let allBanners = []; 
-        // [ลบ] heroSwiperInstance ออกแล้ว เพราะย้ายไปอยู่ในไฟล์ module
+        // [ลบ] heroSwiperInstance ออก
         let sectionSwipers = []; 
         let historyUnsubscribe = null; 
         let isSearchInitialized = false; 
@@ -96,7 +223,7 @@
              return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
         }
 
-        // [แก้ไข] ใช้ฟังก์ชันจาก Module
+        // [แก้ไข] ใช้ renderHeroSkeleton จาก Module
         function renderSkeletons() {
             renderHeroSkeleton('hero-swiper'); // <-- เรียกใช้ตรงนี้
 
@@ -208,8 +335,6 @@
                 updateHistorySectionOnly();
             });
         }
-        
-        // [ลบ] function renderHeroSlider() เดิมออกไปแล้ว
 
         function renderOptimizedSections(top30Shows, thaiDubShows, latestShows) {
             if (sectionSwipers.length > 0) {
@@ -223,14 +348,14 @@
             const top10Shows = top30Shows.slice(0, 10);
             const recommendedShows = top30Shows.slice(10, 30);
 
-            // 1. History (Mobile)
+            // 1. History (Mobile) - แสดงเสมอ
             const historyMobileSection = document.createElement('section');
             historyMobileSection.className = 'block lg:hidden w-full mb-8';
             historyMobileSection.id = 'history-mobile-container';
             historyMobileSection.innerHTML = createHistorySectionContent();
             sectionsContainer.appendChild(historyMobileSection);
 
-            // 2. Dual Grid
+            // 2. Dual Grid (Top 10 + History Desktop)
             const dualGridContainer = document.createElement('div');
             dualGridContainer.className = 'flex flex-wrap lg:flex-nowrap gap-6 mb-8'; 
             
@@ -241,7 +366,7 @@
                 dualGridContainer.appendChild(top10Section);
             }
             
-            // History Desktop
+            // History Desktop - แสดงเสมอ
             const historyDesktopSection = document.createElement('section');
             historyDesktopSection.className = 'hidden lg:block w-full lg:w-1/3 flex-shrink-0 bg-gray-900 p-4 rounded-lg order-2 lg:order-2'; 
             historyDesktopSection.id = 'history-desktop-container';
@@ -324,6 +449,7 @@
         }
         
         function createHistorySectionContent() {
+            // 1. กรณีไม่ได้ Login -> แสดงปุ่ม Login
             if (!userId) {
                 return `
                     <div class="flex justify-between items-center mb-4">
@@ -340,6 +466,7 @@
                 `;
             }
 
+            // 2. กรณี Login แล้ว -> แสดงรายการ
             let cardsHtml = '';
             if (historyItems.length > 0) {
                 historyItems.forEach(item => { cardsHtml += createHistoryCard(item); });
@@ -393,3 +520,47 @@
             initializeFirebase(); 
         });
     </script>
+    
+    <div id="navbar-placeholder"></div>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div id="home-view">
+            <section id="hero-banner-container" class="relative aspect-[10/3] rounded-lg overflow-hidden mb-8 bg-gray-800 shadow-xl">
+                <div id="hero-swiper" class="swiper w-full h-full">
+                    <div class="swiper-wrapper"></div>
+                    <div class="swiper-button-prev hidden md:flex items-center justify-center"></div>
+                    <div class="swiper-button-next hidden md:flex items-center justify-center"></div>
+                    <div class="swiper-pagination"></div>
+                </div>
+            </section>
+
+            <div id="sections-container">
+                <div class="animate-pulse">
+                    <div class="h-6 w-32 bg-gray-800 rounded mb-4"></div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-900 border-t border-gray-800 mt-8 py-8">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-gray-400 text-sm mb-2">© 2024 ANI-END. All rights reserved.</p>
+            <p class="text-gray-500 text-xs">เว็บไซต์นี้จัดทำขึ้นเพื่อการศึกษาและการเรียนรู้เท่านั้น</p>
+            <div class="flex justify-center gap-4 mt-4">
+                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="ri-facebook-fill text-xl"></i></a>
+                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="ri-twitter-x-fill text-xl"></i></a>
+                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="ri-discord-fill text-xl"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+</body>
+</html>
