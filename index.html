@@ -137,13 +137,14 @@
         import { setupSearchSystem } from "./js/modules/search.js";
         import { loadNavbar } from "./js/modules/navbar.js";
         
-        // [NEW] นำเข้า Module Hero Banner
+        // Modules
         import { renderHeroBanner, renderHeroSkeleton } from "./js/modules/hero-banner.js";
+        // [NEW] นำเข้า Module Top 10
+        import { createTop10Section } from "./js/modules/top10.js";
 
         let userId;
         let historyItems = []; 
         let allBanners = []; 
-        // [ลบ] heroSwiperInstance ออก
         let sectionSwipers = []; 
         let historyUnsubscribe = null; 
         let isSearchInitialized = false; 
@@ -223,9 +224,8 @@
              return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
         }
 
-        // [แก้ไข] ใช้ renderHeroSkeleton จาก Module
         function renderSkeletons() {
-            renderHeroSkeleton('hero-swiper'); // <-- เรียกใช้ตรงนี้
+            renderHeroSkeleton('hero-swiper');
 
             if (sectionsContainer) {
                 let html = '';
@@ -272,7 +272,6 @@
                 thaiDubShows = thaiDubSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 latestShows = latestSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                // [แก้ไข] เรียกใช้ renderHeroBanner ที่นี่
                 renderHeroBanner('hero-swiper', allBanners, historyItems, userId);
                 
                 renderOptimizedSections(top30Shows, thaiDubShows, latestShows);
@@ -312,7 +311,6 @@
         }
 
         function updateHistorySectionOnly() {
-            // [แก้ไข] อัปเดต Hero Banner ด้วยเมื่อประวัติเปลี่ยน
             if (allBanners.length > 0 || top30Shows.length > 0) {
                  renderHeroBanner('hero-swiper', allBanners, historyItems, userId);
             }
@@ -345,7 +343,6 @@
             if (!sectionsContainer) return;
             sectionsContainer.innerHTML = ''; 
             
-            const top10Shows = top30Shows.slice(0, 10);
             const recommendedShows = top30Shows.slice(10, 30);
 
             // 1. History (Mobile) - แสดงเสมอ
@@ -359,11 +356,17 @@
             const dualGridContainer = document.createElement('div');
             dualGridContainer.className = 'flex flex-wrap lg:flex-nowrap gap-6 mb-8'; 
             
-            if (top10Shows.length > 0) {
-                const top10Section = document.createElement('section');
-                top10Section.className = 'w-full lg:w-2/3 order-1 lg:order-1'; 
-                top10Section.appendChild(createCarouselSection("10 อันดับอนิเมะยอดนิยม", top10Shows, { showRank: true, swiperClass: 'swiper-default-up pb-4' })); 
-                dualGridContainer.appendChild(top10Section);
+            // [เรียกใช้ Top 10 Module ที่แยกออกมา]
+            const top10Result = createTop10Section(top30Shows, historyItems);
+            
+            if (top10Result) {
+                dualGridContainer.appendChild(top10Result.element);
+                
+                // เริ่มต้น Swiper หลังจาก Element ถูกใส่ใน DOM แล้ว
+                setTimeout(() => {
+                    const swiperInstance = top10Result.initSwiper();
+                    sectionSwipers.push(swiperInstance);
+                }, 0);
             }
             
             // History Desktop - แสดงเสมอ
@@ -396,6 +399,7 @@
         }
 
         function initSwipers() {
+            // Init swipers ปกติ (ยกเว้น Top 10 ที่ init แยกไปแล้ว)
             document.querySelectorAll('.swiper-default-up').forEach(el => {
                 const swiper = new Swiper(el, { 
                     slidesPerView: 1.8, spaceBetween: 16,
