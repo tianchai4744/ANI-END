@@ -1,6 +1,6 @@
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getCountFromServer, setLogLevel, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, auth, appId } from "../../js/config/firebase.js";
+import { db, auth, appId } from "../../js/config/db-config.js";
 import { getCollectionRef, showToast, showConfirmModal } from "./utils.js";
 
 // Import Sub-Modules
@@ -133,3 +133,4 @@ function removeLoginOverlay() {
     const overlay = document.getElementById('admin-login-overlay');
     if (overlay) overlay.remove();
 }
+
