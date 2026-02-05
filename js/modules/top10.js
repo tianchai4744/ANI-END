@@ -1,30 +1,29 @@
 /**
  * js/modules/top10.js
- * จัดการแสดงผลส่วน 10 อันดับยอดนิยม (Top 10)
+ * จัดการแสดงผลส่วน 10 อันดับยอดนิยม (Top 10) แบบเบ็ดเสร็จ (Encapsulated)
  */
 
 import { createAnimeCard } from "./card.js";
 
 /**
- * สร้าง Element ของส่วน Top 10
- * @param {Array} shows - รายการอนิเมะ
+ * สร้างและเริ่มการทำงานของส่วน Top 10
+ * @param {Array} shows - รายการอนิเมะทั้งหมด
  * @param {Array} historyItems - ประวัติการรับชม
- * @returns {Object} { element: HTMLElement, initSwiper: Function }
+ * @returns {HTMLElement|null} - Element ที่พร้อมใช้งาน (หรือ null ถ้าไม่มีข้อมูล)
  */
-export function createTop10Section(shows, historyItems) {
-    // 1. คัดเฉพาะ 10 อันดับแรก
+export function renderTop10Section(shows, historyItems) {
+    // 1. Logic: คัดกรองข้อมูล (Business Logic)
+    // ตัดเฉพาะ 10 อันดับแรก
     const top10Shows = shows.slice(0, 10);
+    
+    // Validation: ถ้าไม่มีข้อมูล ไม่ต้องทำอะไรต่อ
     if (top10Shows.length === 0) return null;
 
-    // 2. สร้าง Wrapper หลัก (layout column)
+    // 2. UI Construction: สร้างโครงสร้าง HTML (View Logic)
     const wrapper = document.createElement('div');
     wrapper.className = 'w-full lg:w-2/3 order-1 lg:order-1';
 
-    // 3. สร้าง Section เนื้อหา (เหมือน createCarouselSection เดิม)
-    const section = document.createElement('section');
-    // เพิ่ม mb-8 หรือ class อื่นๆ ตามต้องการเพื่อให้ระยะห่างเท่าเดิม
-    // (ในที่นี้ใส่เพื่อให้เหมือน structure เดิมเป๊ะๆ)
-    
+    // สร้าง HTML ของการ์ด
     let cardsHtml = '';
     top10Shows.forEach((show, index) => {
         const historyItem = historyItems ? historyItems.find(h => h.showId === show.id) : null;
@@ -35,7 +34,8 @@ export function createTop10Section(shows, historyItems) {
         `;
     });
 
-    section.innerHTML = `
+    // ใส่โครงสร้างภายใน
+    wrapper.innerHTML = `
         <h3 class="text-2xl font-bold mb-4">10 อันดับอนิเมะยอดนิยม</h3>
         <div class="swiper relative swiper-top10 pb-4">
             <div class="swiper-wrapper">${cardsHtml}</div>
@@ -44,28 +44,26 @@ export function createTop10Section(shows, historyItems) {
         </div>
     `;
 
-    wrapper.appendChild(section);
+    // 3. Behavior: สั่งเริ่มการทำงานของ Swiper (Controller Logic)
+    // เราใช้ setTimeout 0 เพื่อรอให้ Element ถูกนำไปวางใน DOM หลักก่อน (Best Practice สำหรับ Swiper)
+    setTimeout(() => {
+        new Swiper(wrapper.querySelector('.swiper-top10'), { 
+            slidesPerView: 1.8, 
+            spaceBetween: 16,
+            navigation: { 
+                nextEl: wrapper.querySelector('.swiper-button-next'), 
+                prevEl: wrapper.querySelector('.swiper-button-prev') 
+            },
+            observer: true, 
+            observeParents: true,
+            breakpoints: {
+                640: { slidesPerView: 2.5 }, 
+                768: { slidesPerView: 3.5 }, 
+                1024: { slidesPerView: 4.2 }, 
+                1280: { slidesPerView: 4.5 }, 
+            }
+        });
+    }, 0);
 
-    // 4. ส่งคืน Wrapper และฟังก์ชัน Init Swiper
-    return {
-        element: wrapper,
-        initSwiper: () => {
-            return new Swiper(section.querySelector('.swiper-top10'), { 
-                slidesPerView: 1.8, 
-                spaceBetween: 16,
-                navigation: { 
-                    nextEl: section.querySelector('.swiper-button-next'), 
-                    prevEl: section.querySelector('.swiper-button-prev') 
-                },
-                observer: true, 
-                observeParents: true,
-                breakpoints: {
-                    640: { slidesPerView: 2.5 }, 
-                    768: { slidesPerView: 3.5 }, 
-                    1024: { slidesPerView: 4.2 }, 
-                    1280: { slidesPerView: 4.5 }, 
-                }
-            });
-        }
-    };
+    return wrapper;
 }
