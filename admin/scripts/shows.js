@@ -2,7 +2,7 @@ import {
     doc, getDoc, addDoc, updateDoc, deleteDoc, writeBatch,
     query, orderBy, limit, startAfter, getDocs, serverTimestamp, where 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db } from "../../js/config/firebase.js"; 
+import { db } from "../../js/config/db-config.js"; 
 import { getCollectionRef, showToast, toggleLoading, showConfirmModal } from "../../js/utils/common.js";
 import { generateKeywords, formatTimestamp } from "../../js/utils/common.js";
 
