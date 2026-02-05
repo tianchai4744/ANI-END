@@ -23,7 +23,7 @@
         let currentUser = null;
 
         document.addEventListener('DOMContentLoaded', async () => {
-            await loadNavbar();
+            await loadNavbar('..');
             
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
