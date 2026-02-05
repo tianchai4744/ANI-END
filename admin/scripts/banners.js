@@ -1,6 +1,8 @@
 import { doc, addDoc, deleteDoc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db } from "./firebase-config.js";
-import { getCollectionRef, showConfirmModal, showToast } from "./admin-utils.js";
+
+// ✅ แก้ไข Import
+import { db } from "../../js/config/db-config.js";
+import { getCollectionRef, showConfirmModal, showToast } from "./utils.js";
 
 let drake = null;
 let banners = []; // เพิ่มตัวแปรเก็บข้อมูลแบนเนอร์ เพื่อใช้ตอนกดแก้ไข
