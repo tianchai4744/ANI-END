@@ -1,35 +1,37 @@
-// ไฟล์: card.js
-// แม่พิมพ์สร้างการ์ดอนิเมะ แยกออกมาเพื่อการจัดการที่ง่ายและ Reusable
-
+// ไฟล์: card.js (แก้ไขแล้ว)
 export function createAnimeCard(show, rankNumber = null, history = null) {
-    // 1. ตรวจสอบข้อมูลเบื้องต้น (Fallback กันค่า null)
+    // 1. ตรวจสอบข้อมูลเบื้องต้น
     const title = show.title || "ไม่ระบุชื่อ";
     const thumbnail = show.thumbnailUrl || 'https://placehold.co/400x600/333/fff?text=No+Img';
     
-    // 2. สร้างลิงก์ (Smart Link: ถ้าเคยดูแล้ว ให้ลิงก์ไปตอนล่าสุด)
-    const watchedEpisodeId = history ? history.lastWatchedEpisodeId : null;
-    let targetUrl = '/pages/player.html?id=${show.id}'; // ใส่ /pages/ นำหน้าเสมอ
-    if (watchedEpisodeId) {
-        targetUrl = `/pages/player.html?id=${show.id}&ep_id=${watchedEpisodeId}`;
+    // 2. สร้างลิงก์ (แก้ Bug ตรงนี้)
+    // เช็คว่าตอนนี้อยู่หน้าไหน? (หน้าแรก หรือ หน้าในโฟลเดอร์ pages)
+    const isPages = window.location.pathname.includes('/pages/');
+    
+    // ถ้าอยู่หน้า pages ให้ไป 'player.html' เฉยๆ (เพราะอยู่ห้องเดียวกัน)
+    // ถ้าอยู่หน้าแรก ให้เดินเข้าห้อง 'pages/player.html'
+    const basePath = isPages ? 'player.html' : 'pages/player.html';
+    
+    // ใช้ Backtick (`) เพื่อให้ใส่ตัวแปร ${show.id} ได้จริง
+    let targetUrl = `${basePath}?id=${show.id}`; 
+    
+    if (history && history.lastWatchedEpisodeId) {
+        targetUrl += `&ep_id=${history.lastWatchedEpisodeId}`;
     }
 
-    // 3. สร้าง Badges
-    
-    // - พากย์ไทย
+    // 3. สร้าง Badges (ส่วนนี้ของคุณเดิมๆ โอเคแล้ว)
     const isThaiDub = (show.tags || []).includes('อนิเมะพากย์ไทย');
     const dubBadge = isThaiDub ? `
         <div class="absolute top-2 left-2 z-10 bg-red-600 text-white px-2 py-1 rounded text-[10px] font-bold shadow flex items-center gap-1">
             <i class="ri-volume-up-line"></i> พากย์ไทย
         </div>` : '';
     
-    // - จบแล้ว
     const isCompleted = show.isCompleted === true;
     const completedBadge = isCompleted ? `
         <div class="absolute bottom-2 left-2 z-10 bg-green-600 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow">
             จบแล้ว
         </div>` : '';
     
-    // - ตอนล่าสุด
     let episodeBadge = '';
     const latestEp = parseFloat(show.latestEpisodeNumber) || 0;
     if (latestEp > 0) {
@@ -39,7 +41,6 @@ export function createAnimeCard(show, rankNumber = null, history = null) {
         </div>`;
     }
 
-    // - อันดับ (Rank Badge) - แสดงเฉพาะเมื่อมีการส่งค่า rankNumber มาและมากกว่า 0
     let rankBadge = '';
     if (rankNumber && rankNumber > 0) {
         rankBadge = `
