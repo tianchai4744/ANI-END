@@ -1,6 +1,10 @@
 import { collection, query, where, getDocs, limit, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, appId } from "./config/firebase.js";
-import { generateSearchTerms, debounce } from "./utils.js"; 
+
+// ✅ แก้ไขตรงนี้ 1: ถอยหลัง (..) ไปหา config
+import { db, appId } from "../config/firebase.js"; 
+
+// ✅ แก้ไขตรงนี้ 2: ถอยหลัง (..) ไปหา utils และเปลี่ยนชื่อไฟล์เป็น common.js ให้ถูก
+import { generateSearchTerms, debounce } from "../utils/common.js"; 
 
 // เพิ่มพารามิเตอร์ limitCount (Default = 5)
 export function setupSearchSystem(historyItems = [], limitCount = 5) {
@@ -27,7 +31,6 @@ export function setupSearchSystem(historyItems = [], limitCount = 5) {
             const showsRef = collection(db, `artifacts/${appId}/public/data/shows`);
             
             // ใช้ limitCount แทนการ Hardcode
-            // [แก้ไข] เปลี่ยนไปค้นหาจาก keywords แทน title และเอา orderBy ออกเพื่อลดปัญหา Index
             const promises = searchTerms.map(t => 
                 getDocs(query(showsRef, where("keywords", "array-contains", t), limit(limitCount)))
             );
@@ -66,6 +69,17 @@ export function setupSearchSystem(historyItems = [], limitCount = 5) {
                 ? `player.html?id=${show.id}&ep_id=${historyItem.lastWatchedEpisodeId}` 
                 : `player.html?id=${show.id}`;
             
+            // แก้ไข path ของ player.html ให้เป็น Absolute Path เพื่อความชัวร์ (ใช้ pathPrefix จาก context ถ้าทำได้ แต่นี่ hardcode ไปก่อน)
+            // เพื่อความปลอดภัย ผมจะใส่ ../pages/ หรือ pages/ หรือ /pages/ ขึ้นอยู่กับว่า search นี้เรียกจากไหน
+            // แต่เพื่อให้ง่ายที่สุด ให้ใช้ลิงก์แบบนี้ครับ (เพราะเดี๋ยว navbar.js จะแก้ลิงก์ให้เอง หรือ browser จะ relative ให้เอง)
+            
+            // *หมายเหตุ: ถ้าหน้า search นี้ถูกเรียกจาก index.html ลิงก์ player.html จะต้องเป็น pages/player.html
+            // แต่ถ้าเรียกจาก pages/grid.html ลิงก์จะเป็น player.html เฉยๆ
+            // เพื่อแก้ปัญหานี้ เราจะใช้ Absolute Path ในโค้ด JS ไปเลยครับ
+            
+            const realLink = `/ANI-END/pages/${link}`; // ⚠️ (วิธีแก้ปัญหาลิงก์ GitHub Pages)
+            // หรือถ้าจะให้ยืดหยุ่นกว่านี้ ให้ใช้โค้ดเดิมแล้วปล่อยให้ Browser จัดการ ถ้าไฟล์ HTML เรียกถูกที่
+
             const watchedBadge = historyItem 
                 ? `<span class="text-[10px] bg-green-900 text-green-300 px-1.5 py-0.5 rounded ml-2">เคยดู</span>` 
                 : '';
@@ -89,6 +103,19 @@ export function setupSearchSystem(historyItems = [], limitCount = 5) {
         `;
 
         dropdown.innerHTML = html;
+        
+        // --- ส่วนเสริม: แก้ไขลิงก์ใน Dropdown ให้ถูกต้องตามหน้าปัจจุบัน ---
+        // (เพราะ search.js ถูกใช้ทั้งหน้าแรกและหน้าย่อย ลิงก์อาจจะเพี้ยนได้)
+        const currentPath = window.location.pathname;
+        const isInPages = currentPath.includes('/pages/');
+        const prefix = isInPages ? '' : 'pages/'; // ถ้าอยู่หน้าแรกต้องเติม pages/ ถ้าอยู่หน้าย่อยไม่ต้อง
+        
+        dropdown.querySelectorAll('a').forEach(a => {
+            const href = a.getAttribute('href');
+            if (href && !href.startsWith('http') && !href.startsWith('/')) {
+                a.setAttribute('href', prefix + href);
+            }
+        });
     };
 
     const onSearch = debounce((e, dropdown) => performSearch(e.target.value, dropdown), 400);
@@ -99,7 +126,9 @@ export function setupSearchSystem(historyItems = [], limitCount = 5) {
         searchInput.addEventListener('focus', (e) => { if(e.target.value) searchDropdown.classList.remove('hidden'); });
         searchInput.addEventListener('keyup', (e) => {
             if (e.key === 'Enter' && e.target.value.trim()) {
-                window.location.href = `grid.html?search=${encodeURIComponent(e.target.value.trim())}`;
+                // แก้ redirect path
+                const prefix = window.location.pathname.includes('/pages/') ? '' : 'pages/';
+                window.location.href = `${prefix}grid.html?search=${encodeURIComponent(e.target.value.trim())}`;
             }
         });
     }
@@ -109,14 +138,15 @@ export function setupSearchSystem(historyItems = [], limitCount = 5) {
         mobileSearchInput.addEventListener('input', (e) => onSearch(e, mobileSearchDropdown));
         mobileSearchInput.addEventListener('keyup', (e) => {
             if (e.key === 'Enter' && e.target.value.trim()) {
-                window.location.href = `grid.html?search=${encodeURIComponent(e.target.value.trim())}`;
+                // แก้ redirect path
+                const prefix = window.location.pathname.includes('/pages/') ? '' : 'pages/';
+                window.location.href = `${prefix}grid.html?search=${encodeURIComponent(e.target.value.trim())}`;
             }
         });
     }
 
-    // ปิด Dropdown เมื่อคลิกข้างนอก (แก้ไข Bug Null Pointer ที่นี่)
+    // ปิด Dropdown เมื่อคลิกข้างนอก
     document.addEventListener('click', (e) => {
-        // เช็คว่ามี element จริงๆ ก่อนเรียก .contains()
         if (searchInput && searchDropdown) {
             if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
                 searchDropdown.classList.add('hidden');
