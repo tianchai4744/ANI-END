@@ -2,9 +2,15 @@ import {
     doc, getDoc, addDoc, updateDoc, deleteDoc, writeBatch,
     query, orderBy, limit, startAfter, getDocs, serverTimestamp, where 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+// ✅ 1. แก้ firebase.js -> db-config.js
 import { db } from "../../js/config/db-config.js"; 
-import { getCollectionRef, showToast, toggleLoading, showConfirmModal } from "../../js/utils/common.js";
-import { generateKeywords, formatTimestamp } from "../../js/utils/common.js";
+
+// ✅ 2. เครื่องมือ Admin (getCollectionRef, showToast) อยู่ในโฟลเดอร์เดียวกัน (./utils.js)
+import { getCollectionRef, showToast, toggleLoading, showConfirmModal } from "./utils.js";
+
+// ✅ 3. เครื่องมือทั่วไป (generateKeywords, formatTimestamp) เปลี่ยนจาก common.js -> tools.js
+import { generateKeywords, formatTimestamp } from "../../js/utils/tools.js";
 
 let shows = [];
 // Pagination & Sorting State
