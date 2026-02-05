@@ -133,19 +133,19 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         import { db, auth, appId } from "./js/config/db-config.js";
-        import { createAnimeCard } from "./js/modules/card.js";
         import { setupSearchSystem } from "./js/modules/search.js";
         import { loadNavbar } from "./js/modules/navbar.js";
         
-        // Modules
+        // Modules (Import ทั้งหมดไว้ที่นี่)
         import { renderHeroBanner, renderHeroSkeleton } from "./js/modules/hero-banner.js";
-        // [NEW] นำเข้า Module Top 10 ที่รวม Logic ไว้แล้ว
         import { renderTop10Section } from "./js/modules/top10.js";
+        import { renderRecommendedSection } from "./js/modules/recommended.js";
+        import { renderThaiDubSection } from "./js/modules/thai-dub.js";
+        import { renderLatestUpdatesSection } from "./js/modules/latest-updates.js";
 
         let userId;
         let historyItems = []; 
         let allBanners = []; 
-        let sectionSwipers = []; 
         let historyUnsubscribe = null; 
         let isSearchInitialized = false; 
         
@@ -254,6 +254,7 @@
                 const showsRef = getCollectionRef("shows");
                 const bannerRef = getCollectionRef("banners");
 
+                // ดึงข้อมูลตาม Query เดิม
                 const top30Query = query(showsRef, orderBy("viewCount", "desc"), limit(30));
                 const thaiDubQuery = query(showsRef, where("tags", "array-contains", "อนิเมะพากย์ไทย"), limit(15));
                 const latestQuery = query(showsRef, orderBy("latestEpisodeUpdateAt", "desc"), limit(15));
@@ -267,13 +268,13 @@
                 ]);
 
                 allBanners = bannerSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
                 top30Shows = top30Snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 thaiDubShows = thaiDubSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 latestShows = latestSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
                 renderHeroBanner('hero-swiper', allBanners, historyItems, userId);
                 
+                // ส่งข้อมูลไป Render ผ่าน Module
                 renderOptimizedSections(top30Shows, thaiDubShows, latestShows);
 
             } catch (error) {
@@ -334,18 +335,12 @@
             });
         }
 
+        // ฟังก์ชันหลักที่รวบรวม Module ต่างๆ มาแสดงผล
         function renderOptimizedSections(top30Shows, thaiDubShows, latestShows) {
-            if (sectionSwipers.length > 0) {
-                sectionSwipers.forEach(swiper => swiper.destroy(true, true));
-                sectionSwipers = [];
-            }
-            
             if (!sectionsContainer) return;
             sectionsContainer.innerHTML = ''; 
             
-            const recommendedShows = top30Shows.slice(10, 30);
-
-            // 1. History (Mobile) - แสดงเสมอ
+            // 1. History (Mobile)
             const historyMobileSection = document.createElement('section');
             historyMobileSection.className = 'block lg:hidden w-full mb-8';
             historyMobileSection.id = 'history-mobile-container';
@@ -356,15 +351,11 @@
             const dualGridContainer = document.createElement('div');
             dualGridContainer.className = 'flex flex-wrap lg:flex-nowrap gap-6 mb-8'; 
             
-            // [เรียกใช้ Module Top 10 ที่สะอาดตา]
-            // ไม่ต้องยุ่งกับ Swiper Logic ที่นี่อีกแล้ว
+            // [Module Top 10]
             const top10Element = renderTop10Section(top30Shows, historyItems);
+            if (top10Element) dualGridContainer.appendChild(top10Element);
             
-            if (top10Element) {
-                dualGridContainer.appendChild(top10Element);
-            }
-            
-            // History Desktop - แสดงเสมอ
+            // History Desktop
             const historyDesktopSection = document.createElement('section');
             historyDesktopSection.className = 'hidden lg:block w-full lg:w-1/3 flex-shrink-0 bg-gray-900 p-4 rounded-lg order-2 lg:order-2'; 
             historyDesktopSection.id = 'history-desktop-container';
@@ -373,83 +364,24 @@
             
             sectionsContainer.appendChild(dualGridContainer);
             
-            // 3. Recommended
-            if (recommendedShows.length > 0) {
-                 sectionsContainer.appendChild(createCarouselSection("อนิเมะแนะนำ", recommendedShows, { swiperClass: 'swiper-7-up pb-4' })); 
-            }
-            // 4. Thai Dub
-            if (thaiDubShows.length > 0) {
-                sectionsContainer.appendChild(createCarouselSection("อนิเมะพากย์ไทย", thaiDubShows, { swiperClass: 'swiper-7-up pb-4' }));
-            }
-            // 5. Latest Updates
-            if (latestShows.length > 0) {
-                 sectionsContainer.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up pb-4' }));
-            }
+            // 3. [Module Recommended]
+            const recommendedEl = renderRecommendedSection(top30Shows, historyItems);
+            if (recommendedEl) sectionsContainer.appendChild(recommendedEl);
+
+            // 4. [Module Thai Dub]
+            const thaiDubEl = renderThaiDubSection(thaiDubShows, historyItems);
+            if (thaiDubEl) sectionsContainer.appendChild(thaiDubEl);
+
+            // 5. [Module Latest Updates]
+            const latestEl = renderLatestUpdatesSection(latestShows, historyItems);
+            if (latestEl) sectionsContainer.appendChild(latestEl);
             
             if(top30Shows.length === 0) { 
                 sectionsContainer.innerHTML = `<p class="text-center text-gray-400 py-10">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
             }
-
-            initSwipers();
-        }
-
-        function initSwipers() {
-            // Init swipers ปกติสำหรับ Section อื่นๆ
-            // (สังเกตว่าเราไม่ได้ยุ่งกับ swiper-top10 ที่นี่แล้ว)
-            document.querySelectorAll('.swiper-default-up').forEach(el => {
-                const swiper = new Swiper(el, { 
-                    slidesPerView: 1.8, spaceBetween: 16,
-                    navigation: { nextEl: el.querySelector('.swiper-button-next'), prevEl: el.querySelector('.swiper-button-prev') },
-                    observer: true, 
-                    observeParents: true,
-                    breakpoints: {
-                        640: { slidesPerView: 2.5 }, 768: { slidesPerView: 3.5 }, 
-                        1024: { slidesPerView: 4.2 }, 1280: { slidesPerView: 4.5 }, 
-                    }
-                });
-                sectionSwipers.push(swiper);
-            });
-
-            document.querySelectorAll('.swiper-7-up').forEach(el => {
-                const swiper = new Swiper(el, { 
-                    slidesPerView: 2.5, spaceBetween: 12, 
-                    navigation: { nextEl: el.querySelector('.swiper-button-next'), prevEl: el.querySelector('.swiper-button-prev') },
-                    observer: true, 
-                    observeParents: true,
-                    breakpoints: {
-                        640: { slidesPerView: 4.5 }, 768: { slidesPerView: 5.5 },
-                        1024: { slidesPerView: 6.5 }, 1280: { slidesPerView: 7.5 }, 
-                        1536: { slidesPerView: 7.5 }, 
-                    }
-                });
-                sectionSwipers.push(swiper);
-            });
-        }
-
-        function createCarouselSection(title, shows, options = {}) {
-            const section = document.createElement('section');
-            section.className = 'mb-8';
-            let cardsHtml = '';
-            shows.forEach((show, index) => { 
-                const rank = options.showRank ? index + 1 : null;
-                const historyItem = userId ? historyItems.find(h => h.showId === show.id) : null;
-                cardsHtml += `<div class="swiper-slide">${createAnimeCard(show, rank, historyItem)}</div>`; 
-            });
-            const swiperClass = options.swiperClass || 'swiper-default-up'; 
-
-            section.innerHTML = `
-                <h3 class="text-2xl font-bold mb-4">${title}</h3>
-                <div class="swiper relative ${swiperClass}">
-                    <div class="swiper-wrapper">${cardsHtml}</div>
-                    <div class="swiper-button-next hidden md:flex items-center justify-center"></div>
-                    <div class="swiper-button-prev hidden md:flex items-center justify-center"></div>
-                </div>
-            `;
-            return section;
         }
         
         function createHistorySectionContent() {
-            // 1. กรณีไม่ได้ Login -> แสดงปุ่ม Login
             if (!userId) {
                 return `
                     <div class="flex justify-between items-center mb-4">
@@ -466,7 +398,6 @@
                 `;
             }
 
-            // 2. กรณี Login แล้ว -> แสดงรายการ
             let cardsHtml = '';
             if (historyItems.length > 0) {
                 historyItems.forEach(item => { cardsHtml += createHistoryCard(item); });
