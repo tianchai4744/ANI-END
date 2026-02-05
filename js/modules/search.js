@@ -1,20 +1,23 @@
 import { collection, query, where, getDocs, limit, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// ✅ แก้ไขตรงนี้ 1: ถอยหลัง (..) ไปหา config
-import { db, appId } from "../config/firebase.js"; 
+// ✅ เปลี่ยนชื่อไฟล์ Import เป็นชื่อใหม่
+import { db, appId } from "../config/db-config.js"; 
+import { generateSearchTerms, debounce } from "../utils/tools.js"; 
 
-// ✅ แก้ไขตรงนี้ 2: ถอยหลัง (..) ไปหา utils และเปลี่ยนชื่อไฟล์เป็น common.js ให้ถูก
-import { generateSearchTerms, debounce } from "../utils/common.js"; 
-
-// เพิ่มพารามิเตอร์ limitCount (Default = 5)
 export function setupSearchSystem(historyItems = [], limitCount = 5) {
     const searchInput = document.getElementById('search-input');
     const searchDropdown = document.getElementById('search-dropdown');
-    
     const mobileSearchInput = document.getElementById('mobile-search-input');
     const mobileSearchDropdown = document.getElementById('mobile-search-dropdown');
 
-    // ฟังก์ชันค้นหาหลัก
+    const getPaths = () => {
+        const isPages = window.location.pathname.includes('/pages/');
+        return {
+            player: isPages ? 'player.html' : 'pages/player.html',
+            grid: isPages ? 'grid.html' : 'pages/grid.html'
+        };
+    };
+
     const performSearch = async (term, dropdownElement) => {
         if (!term || term.length < 2) {
             dropdownElement.classList.add('hidden');
@@ -26,27 +29,20 @@ export function setupSearchSystem(historyItems = [], limitCount = 5) {
         dropdownElement.classList.remove('hidden');
 
         try {
-            // ใช้ Logic กลางจาก utils.js
             const searchTerms = generateSearchTerms(term);
             const showsRef = collection(db, `artifacts/${appId}/public/data/shows`);
-            
-            // ใช้ limitCount แทนการ Hardcode
             const promises = searchTerms.map(t => 
                 getDocs(query(showsRef, where("keywords", "array-contains", t), limit(limitCount)))
             );
 
             const snapshots = await Promise.all(promises);
-            
             const results = new Map();
             snapshots.forEach(snap => {
                 snap.forEach(doc => {
-                    if (!results.has(doc.id)) {
-                        results.set(doc.id, { id: doc.id, ...doc.data() });
-                    }
+                    if (!results.has(doc.id)) results.set(doc.id, { id: doc.id, ...doc.data() });
                 });
             });
 
-            // ตัดผลลัพธ์ตามจำนวน limitCount
             const uniqueResults = Array.from(results.values()).slice(0, limitCount); 
             renderDropdown(uniqueResults, dropdownElement, historyItems);
 
@@ -62,24 +58,14 @@ export function setupSearchSystem(historyItems = [], limitCount = 5) {
             return;
         }
 
+        const paths = getPaths();
         let html = '';
         results.forEach(show => {
             const historyItem = history.find(h => h.showId === show.id);
             const link = historyItem && historyItem.lastWatchedEpisodeId 
-                ? `player.html?id=${show.id}&ep_id=${historyItem.lastWatchedEpisodeId}` 
-                : `player.html?id=${show.id}`;
+                ? `${paths.player}?id=${show.id}&ep_id=${historyItem.lastWatchedEpisodeId}` 
+                : `${paths.player}?id=${show.id}`;
             
-            // แก้ไข path ของ player.html ให้เป็น Absolute Path เพื่อความชัวร์ (ใช้ pathPrefix จาก context ถ้าทำได้ แต่นี่ hardcode ไปก่อน)
-            // เพื่อความปลอดภัย ผมจะใส่ ../pages/ หรือ pages/ หรือ /pages/ ขึ้นอยู่กับว่า search นี้เรียกจากไหน
-            // แต่เพื่อให้ง่ายที่สุด ให้ใช้ลิงก์แบบนี้ครับ (เพราะเดี๋ยว navbar.js จะแก้ลิงก์ให้เอง หรือ browser จะ relative ให้เอง)
-            
-            // *หมายเหตุ: ถ้าหน้า search นี้ถูกเรียกจาก index.html ลิงก์ player.html จะต้องเป็น pages/player.html
-            // แต่ถ้าเรียกจาก pages/grid.html ลิงก์จะเป็น player.html เฉยๆ
-            // เพื่อแก้ปัญหานี้ เราจะใช้ Absolute Path ในโค้ด JS ไปเลยครับ
-            
-            const realLink = `/ANI-END/pages/${link}`; // ⚠️ (วิธีแก้ปัญหาลิงก์ GitHub Pages)
-            // หรือถ้าจะให้ยืดหยุ่นกว่านี้ ให้ใช้โค้ดเดิมแล้วปล่อยให้ Browser จัดการ ถ้าไฟล์ HTML เรียกถูกที่
-
             const watchedBadge = historyItem 
                 ? `<span class="text-[10px] bg-green-900 text-green-300 px-1.5 py-0.5 rounded ml-2">เคยดู</span>` 
                 : '';
@@ -97,62 +83,40 @@ export function setupSearchSystem(historyItems = [], limitCount = 5) {
         
         const searchTerm = searchInput ? searchInput.value : (mobileSearchInput ? mobileSearchInput.value : '');
         html += `
-            <a href="grid.html?search=${encodeURIComponent(searchTerm)}" class="block p-3 text-center text-sm text-green-400 hover:text-green-300 bg-gray-800 hover:bg-gray-700 font-medium transition-colors">
+            <a href="${paths.grid}?search=${encodeURIComponent(searchTerm)}" class="block p-3 text-center text-sm text-green-400 hover:text-green-300 bg-gray-800 hover:bg-gray-700 font-medium transition-colors">
                 ดูผลการค้นหาทั้งหมด (${results.length}+)
             </a>
         `;
 
         dropdown.innerHTML = html;
-        
-        // --- ส่วนเสริม: แก้ไขลิงก์ใน Dropdown ให้ถูกต้องตามหน้าปัจจุบัน ---
-        // (เพราะ search.js ถูกใช้ทั้งหน้าแรกและหน้าย่อย ลิงก์อาจจะเพี้ยนได้)
-        const currentPath = window.location.pathname;
-        const isInPages = currentPath.includes('/pages/');
-        const prefix = isInPages ? '' : 'pages/'; // ถ้าอยู่หน้าแรกต้องเติม pages/ ถ้าอยู่หน้าย่อยไม่ต้อง
-        
-        dropdown.querySelectorAll('a').forEach(a => {
-            const href = a.getAttribute('href');
-            if (href && !href.startsWith('http') && !href.startsWith('/')) {
-                a.setAttribute('href', prefix + href);
-            }
-        });
     };
 
     const onSearch = debounce((e, dropdown) => performSearch(e.target.value, dropdown), 400);
+    
+    const handleEnter = (e) => {
+        if (e.key === 'Enter' && e.target.value.trim()) {
+            const paths = getPaths();
+            window.location.href = `${paths.grid}?search=${encodeURIComponent(e.target.value.trim())}`;
+        }
+    };
 
-    // Desktop Listeners
     if (searchInput && searchDropdown) {
         searchInput.addEventListener('input', (e) => onSearch(e, searchDropdown));
         searchInput.addEventListener('focus', (e) => { if(e.target.value) searchDropdown.classList.remove('hidden'); });
-        searchInput.addEventListener('keyup', (e) => {
-            if (e.key === 'Enter' && e.target.value.trim()) {
-                // แก้ redirect path
-                const prefix = window.location.pathname.includes('/pages/') ? '' : 'pages/';
-                window.location.href = `${prefix}grid.html?search=${encodeURIComponent(e.target.value.trim())}`;
-            }
-        });
+        searchInput.addEventListener('keyup', handleEnter);
     }
 
-    // Mobile Listeners
     if (mobileSearchInput && mobileSearchDropdown) {
         mobileSearchInput.addEventListener('input', (e) => onSearch(e, mobileSearchDropdown));
-        mobileSearchInput.addEventListener('keyup', (e) => {
-            if (e.key === 'Enter' && e.target.value.trim()) {
-                // แก้ redirect path
-                const prefix = window.location.pathname.includes('/pages/') ? '' : 'pages/';
-                window.location.href = `${prefix}grid.html?search=${encodeURIComponent(e.target.value.trim())}`;
-            }
-        });
+        mobileSearchInput.addEventListener('keyup', handleEnter);
     }
 
-    // ปิด Dropdown เมื่อคลิกข้างนอก
     document.addEventListener('click', (e) => {
         if (searchInput && searchDropdown) {
             if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
                 searchDropdown.classList.add('hidden');
             }
         }
-        
         if (mobileSearchInput && mobileSearchDropdown) {
             if (!mobileSearchInput.contains(e.target) && !mobileSearchDropdown.contains(e.target)) {
                 mobileSearchDropdown.classList.add('hidden');
