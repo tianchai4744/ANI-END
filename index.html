@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANI-END - หน้าแรก</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            cursor: default;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            scrollbar-width: thin;
+            scrollbar-color: #333 #111;
+        }
+        
+        main { flex: 1; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00b87c; }
+
+        .swiper-button-next, .swiper-button-prev { 
+            color: #ffffff; 
+            background-color: rgba(0,0,0,0.5); 
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            backdrop-filter: blur(2px);
+            transition: all 0.2s;
+            z-index: 20;
+        }
+        .swiper-button-next:hover, .swiper-button-prev:hover {
+            background-color: rgba(0,184,124,0.9);
+            transform: scale(1.1);
+        }
+        .swiper-button-next:after, .swiper-button-prev:after {
+            font-size: 20px;
+            font-weight: 900;
+        }
+        .swiper-pagination-bullet {
+            background: #fff;
+            opacity: 0.5;
+            transition: all 0.3s;
+        }
+        .swiper-pagination-bullet-active {
+            background: #00b87c;
+            opacity: 1;
+            width: 20px;
+            border-radius: 4px;
+        }
+        
+        a { cursor: pointer; }
+        .nav-link { transition: color 0.2s, background-color 0.2s; }
+        .nav-link.active { color: #00b87c; } 
+        #mobile-search-bar { display: none; }
+        
+        .search-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            background-color: #1f2937;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .search-dropdown-item:hover { background-color: #374151; }
+     
+        .history-card {
+            display: flex;
+            align-items: center;
+            gap: 8px; 
+            padding: 6px; 
+            border-radius: 8px;
+            background-color: #1f2937; 
+            transition: background-color 0.15s;
+        }
+        .history-card:hover { background-color: #374151; }
+        .history-thumb {
+            width: 48px; 
+            height: 64px; 
+            aspect-ratio: 3/4;
+            object-fit: cover;
+            flex-shrink: 0;
+            border-radius: 4px;
+        }
+        
+        .banner-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 50%;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            pointer-events: none;
+        }
+
+        /* --- SKELETON ANIMATION --- */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .skeleton {
+            background-color: #374151; /* gray-700 */
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            border-radius: 0.5rem;
+        }
+        .skeleton-text {
+            height: 1em;
+            margin-bottom: 0.5em;
+            border-radius: 0.25rem;
+        }
+ </style>
+</head>
+<body class="bg-black text-gray-100">
+
+    <script type="module">
+        import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            onSnapshot, collection, query,
+            limit, orderBy, where, getDocs 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        import { db, auth, appId } from "./js/config/firebase.js";
+        import { createAnimeCard } from "./js/modules/card.js";
+        import { setupSearchSystem } from "./js/modules/search.js";
+        import { loadNavbar } from "./js/modules/navbar.js";
+
+        let userId;
+        let historyItems = []; 
+        let allBanners = []; 
+        let heroSwiperInstance = null;
+        let sectionSwipers = []; 
+        let historyUnsubscribe = null; 
+        let isSearchInitialized = false; 
+        
+        let top30Shows = [];
+        let thaiDubShows = [];
+        let latestShows = [];
+        
+        let sectionsContainer;
+        
+        function formatDateTime(timestamp) {
+            if (!timestamp || !timestamp.toDate) return 'N/A';
+            const date = timestamp.toDate();
+            const now = new Date();
+            const isToday = date.toDateString() === now.toDateString();
+            
+            const timeStr = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+            
+            if (isToday) {
+                return `วันนี้ ${timeStr}`;
+            } else {
+                return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) + ' ' + timeStr;
+            }
+        }
+        
+        function initializeFirebase() {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.has('search')) {
+                        const query = urlParams.get('search');
+                        if(query) {
+                            window.location.replace(`pages/grid.html?search=${encodeURIComponent(query)}`);
+                            return; 
+                        }
+                    }
+
+                    if (!isSearchInitialized) {
+                        const input = document.getElementById('search-input');
+                        const mobileInput = document.getElementById('mobile-search-input');
+                        if (input || mobileInput) {
+                            setupSearchSystem(historyItems);
+                            isSearchInitialized = true;
+                        } else {
+                            setTimeout(() => {
+                                if(!isSearchInitialized) {
+                                    setupSearchSystem(historyItems);
+                                    isSearchInitialized = true;
+                                }
+                            }, 500);
+                        }
+                    }
+
+                    setupHistoryListener();
+                } else {
+                    userId = null;
+                    historyItems = [];
+                     if (!isSearchInitialized) {
+                        setupSearchSystem([]);
+                        isSearchInitialized = true;
+                    }
+                    
+                    updateHistorySectionOnly();
+                }
+                
+                await setupOptimizedDataFetch(); 
+            });
+        }
+
+        function getCollectionRef(collectionName) {
+            return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+        }
+        
+        function getHistoryCollectionRef() {
+             return collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
+        }
+
+        // --- SKELETON RENDER FUNCTION ---
+        function renderSkeletons() {
+            // Hero Banner Skeleton
+            const heroContainer = document.getElementById('hero-swiper');
+            if (heroContainer) {
+                heroContainer.innerHTML = `
+                    <div class="w-full h-full bg-gray-800 skeleton relative overflow-hidden">
+                        <div class="absolute bottom-10 left-4 md:left-10 w-1/3 h-8 bg-gray-700 skeleton rounded mb-2"></div>
+                        <div class="absolute bottom-4 left-4 md:left-10 w-1/2 h-4 bg-gray-700 skeleton rounded"></div>
+                    </div>
+                `;
+            }
+
+            // Sections Skeleton
+            if (sectionsContainer) {
+                let html = '';
+                // สร้าง Skeleton 3 Section
+                for(let i=0; i<3; i++) {
+                    html += `
+                        <div class="mb-8">
+                            <div class="h-8 w-48 bg-gray-800 skeleton mb-4 rounded"></div>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                ${Array(6).fill(0).map(() => `
+                                    <div class="aspect-[2/3] bg-gray-800 skeleton rounded-lg"></div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                sectionsContainer.innerHTML = html;
+            }
+        }
+
+        async function setupOptimizedDataFetch() {
+            try {
+                // Call Skeleton before fetch
+                if (allBanners.length === 0 && top30Shows.length === 0) {
+                    renderSkeletons();
+                }
+
+                const showsRef = getCollectionRef("shows");
+                const bannerRef = getCollectionRef("banners");
+
+                const top30Query = query(showsRef, orderBy("viewCount", "desc"), limit(30));
+                const thaiDubQuery = query(showsRef, where("tags", "array-contains", "อนิเมะพากย์ไทย"), limit(15));
+                const latestQuery = query(showsRef, orderBy("latestEpisodeUpdateAt", "desc"), limit(15));
+                const bannerQuery = query(bannerRef, orderBy("updatedAt", "desc"), limit(10));
+
+                const [top30Snap, thaiDubSnap, latestSnap, bannerSnap] = await Promise.all([
+                    getDocs(top30Query),
+                    getDocs(thaiDubQuery),
+                    getDocs(latestQuery),
+                    getDocs(bannerQuery)
+                ]);
+
+                allBanners = bannerSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                top30Shows = top30Snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                thaiDubShows = thaiDubSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                latestShows = latestSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                renderHeroSlider();
+                renderOptimizedSections(top30Shows, thaiDubShows, latestShows);
+
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                
+                let errorMsg = `<p class="text-center text-red-500 py-10">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>`;
+    
+                if (error.message.includes("index")) {
+                    const indexLink = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+                    if (indexLink) {
+                        errorMsg = `
+                            <div class="flex flex-col items-center justify-center py-12">
+                                <i class="ri-alert-line text-4xl text-yellow-500 mb-3"></i>
+                                <h3 class="text-xl font-bold text-white mb-2">ต้องการการตั้งค่าเพิ่มเติม (Index)</h3>
+                                <a href="${indexLink[0]}" target="_blank" class="px-6 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-full font-medium transition-colors">
+                                    คลิกเพื่อสร้าง Index
+                                </a>
+                            </div>
+                        `;
+                    }
+                }
+                
+                if(sectionsContainer) sectionsContainer.innerHTML = errorMsg;
+            }
+        }
+        
+        function renderHistorySection() {
+            const htmlContent = createHistorySectionContent();
+            
+            const mobileContainer = document.getElementById('history-mobile-container');
+            if (mobileContainer) mobileContainer.innerHTML = htmlContent;
+            
+            const desktopContainer = document.getElementById('history-desktop-container');
+            if (desktopContainer) desktopContainer.innerHTML = htmlContent;
+        }
+
+        function updateHistorySectionOnly() {
+            renderHeroSlider(); 
+            renderHistorySection();
+        }
+
+        function setupHistoryListener() {
+            if (!userId) return;
+            
+            if (historyUnsubscribe) {
+                historyUnsubscribe();
+            }
+
+            const historyQuery = query(getHistoryCollectionRef(), orderBy("watchedAt", "desc"), limit(5));
+            historyUnsubscribe = onSnapshot(historyQuery, (snapshot) => {
+                historyItems.length = 0; 
+                snapshot.forEach((doc) => {
+                    historyItems.push({ id: doc.id, ...doc.data() });
+                });
+                updateHistorySectionOnly();
+            });
+        }
+        
+        function renderHeroSlider() {
+            const banners = allBanners; 
+            const heroSwiperContainer = document.getElementById('hero-swiper'); 
+            
+            if (!heroSwiperContainer) return;
+            
+            if (heroSwiperInstance) {
+                heroSwiperInstance.destroy(true, true);
+                heroSwiperInstance = null;
+            }
+
+            heroSwiperContainer.innerHTML = `
+                <div class="swiper-wrapper"></div>
+                <div class="swiper-button-prev hidden md:flex items-center justify-center"></div>
+                <div class="swiper-button-next hidden md:flex items-center justify-center"></div>
+                <div class="swiper-pagination"></div>
+            `;
+            
+            const swiperWrapper = heroSwiperContainer.querySelector('.swiper-wrapper');
+            
+            if (banners.length === 0) {
+                if (allBanners.length === 0 && top30Shows.length > 0) {
+                     // Fallback if no banner
+                     swiperWrapper.innerHTML = '<div class="swiper-slide flex items-center justify-center bg-gray-800 text-gray-500">No Banners</div>';
+                }
+                return;
+            }
+            
+            let slidesHtml = '';
+            banners.forEach(banner => {
+                const historyItem = userId ? historyItems.find(h => h.showId === banner.showId) : null;
+                let targetUrl = `pages/player.html?id=${banner.showId}`;
+                if (historyItem && historyItem.lastWatchedEpisodeId) {
+                    targetUrl = `pages/player.html?id=${banner.showId}&ep_id=${historyItem.lastWatchedEpisodeId}`;
+                }
+                
+                const imgUrl = banner.bannerImageUrl || 'https://placehold.co/1200x400/222/fff?text=No+Banner';
+
+                slidesHtml += `
+                    <a href="${targetUrl}" class="swiper-slide relative block w-full h-full">
+                        <img src="${imgUrl}" alt="${banner.title || 'Banner'}" class="w-full h-full object-cover">
+                        <div class="banner-overlay"></div>
+                    </a>
+                `;
+            });
+            
+            swiperWrapper.innerHTML = slidesHtml;
+            
+            heroSwiperInstance = new Swiper('#hero-swiper', {
+                loop: banners.length > 1, 
+                autoplay: { delay: 4000, disableOnInteraction: false },
+                navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
+                pagination: { el: '.swiper-pagination', clickable: true }, 
+                slidesPerView: 1, 
+                observer: true, 
+                observeParents: true
+            });
+        }
+
+        function renderOptimizedSections(top30Shows, thaiDubShows, latestShows) {
+            if (sectionSwipers.length > 0) {
+                sectionSwipers.forEach(swiper => swiper.destroy(true, true));
+                sectionSwipers = [];
+            }
+            
+            if (!sectionsContainer) return;
+            sectionsContainer.innerHTML = ''; 
+            
+            const top10Shows = top30Shows.slice(0, 10);
+            const recommendedShows = top30Shows.slice(10, 30);
+
+            // 1. History (Mobile) - แสดงเสมอ
+            const historyMobileSection = document.createElement('section');
+            historyMobileSection.className = 'block lg:hidden w-full mb-8';
+            historyMobileSection.id = 'history-mobile-container';
+            historyMobileSection.innerHTML = createHistorySectionContent();
+            sectionsContainer.appendChild(historyMobileSection);
+
+            // 2. Dual Grid (Top 10 + History Desktop)
+            const dualGridContainer = document.createElement('div');
+            dualGridContainer.className = 'flex flex-wrap lg:flex-nowrap gap-6 mb-8'; 
+            
+            if (top10Shows.length > 0) {
+                const top10Section = document.createElement('section');
+                top10Section.className = 'w-full lg:w-2/3 order-1 lg:order-1'; 
+                top10Section.appendChild(createCarouselSection("10 อันดับอนิเมะยอดนิยม", top10Shows, { showRank: true, swiperClass: 'swiper-default-up pb-4' })); 
+                dualGridContainer.appendChild(top10Section);
+            }
+            
+            // History Desktop - แสดงเสมอ
+            const historyDesktopSection = document.createElement('section');
+            historyDesktopSection.className = 'hidden lg:block w-full lg:w-1/3 flex-shrink-0 bg-gray-900 p-4 rounded-lg order-2 lg:order-2'; 
+            historyDesktopSection.id = 'history-desktop-container';
+            historyDesktopSection.innerHTML = createHistorySectionContent();
+            dualGridContainer.appendChild(historyDesktopSection);
+            
+            sectionsContainer.appendChild(dualGridContainer);
+            
+            // 3. Recommended
+            if (recommendedShows.length > 0) {
+                 sectionsContainer.appendChild(createCarouselSection("อนิเมะแนะนำ", recommendedShows, { swiperClass: 'swiper-7-up pb-4' })); 
+            }
+            // 4. Thai Dub
+            if (thaiDubShows.length > 0) {
+                sectionsContainer.appendChild(createCarouselSection("อนิเมะพากย์ไทย", thaiDubShows, { swiperClass: 'swiper-7-up pb-4' }));
+            }
+            // 5. Latest Updates
+            if (latestShows.length > 0) {
+                 sectionsContainer.appendChild(createCarouselSection("อนิเมะอัปเดตใหม่", latestShows, { swiperClass: 'swiper-7-up pb-4' }));
+            }
+            
+            if(top30Shows.length === 0) { 
+                sectionsContainer.innerHTML = `<p class="text-center text-gray-400 py-10">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
+            }
+
+            initSwipers();
+        }
+
+        function initSwipers() {
+            document.querySelectorAll('.swiper-default-up').forEach(el => {
+                const swiper = new Swiper(el, { 
+                    slidesPerView: 1.8, spaceBetween: 16,
+                    navigation: { nextEl: el.querySelector('.swiper-button-next'), prevEl: el.querySelector('.swiper-button-prev') },
+                    observer: true, 
+                    observeParents: true,
+                    breakpoints: {
+                        640: { slidesPerView: 2.5 }, 768: { slidesPerView: 3.5 }, 
+                        1024: { slidesPerView: 4.2 }, 1280: { slidesPerView: 4.5 }, 
+                    }
+                });
+                sectionSwipers.push(swiper);
+            });
+
+            document.querySelectorAll('.swiper-7-up').forEach(el => {
+                const swiper = new Swiper(el, { 
+                    slidesPerView: 2.5, spaceBetween: 12, 
+                    navigation: { nextEl: el.querySelector('.swiper-button-next'), prevEl: el.querySelector('.swiper-button-prev') },
+                    observer: true, 
+                    observeParents: true,
+                    breakpoints: {
+                        640: { slidesPerView: 4.5 }, 768: { slidesPerView: 5.5 },
+                        1024: { slidesPerView: 6.5 }, 1280: { slidesPerView: 7.5 }, 
+                        1536: { slidesPerView: 7.5 }, 
+                    }
+                });
+                sectionSwipers.push(swiper);
+            });
+        }
+
+        function createCarouselSection(title, shows, options = {}) {
+            const section = document.createElement('section');
+            section.className = 'mb-8';
+            let cardsHtml = '';
+            shows.forEach((show, index) => { 
+                const rank = options.showRank ? index + 1 : null;
+                const historyItem = userId ? historyItems.find(h => h.showId === show.id) : null;
+                cardsHtml += `<div class="swiper-slide">${createAnimeCard(show, rank, historyItem)}</div>`; 
+            });
+            const swiperClass = options.swiperClass || 'swiper-default-up'; 
+
+            section.innerHTML = `
+                <h3 class="text-2xl font-bold mb-4">${title}</h3>
+                <div class="swiper relative ${swiperClass}">
+                    <div class="swiper-wrapper">${cardsHtml}</div>
+                    <div class="swiper-button-next hidden md:flex items-center justify-center"></div>
+                    <div class="swiper-button-prev hidden md:flex items-center justify-center"></div>
+                </div>
+            `;
+            return section;
+        }
+        
+        function createHistorySectionContent() {
+            // 1. กรณีไม่ได้ Login -> แสดงปุ่ม Login
+            if (!userId) {
+                return `
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-2xl font-bold">ประวัติ</h3>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg p-6 text-center border border-gray-700 flex flex-col items-center justify-center min-h-[200px]">
+                        <i class="ri-lock-2-line text-4xl text-gray-500 mb-3"></i>
+                        <p class="text-gray-300 font-medium mb-1">เข้าสู่ระบบเพื่อดูประวัติ</p>
+                        <p class="text-xs text-gray-500 mb-4">บันทึกประวัติการรับชมของคุณเพื่อให้ดูต่อได้ทุกที่</p>
+                        <button onclick="window.triggerLogin()" class="bg-white hover:bg-gray-200 text-gray-900 px-6 py-2 rounded-full text-sm font-bold transition-colors shadow-lg flex items-center gap-2">
+                            <i class="ri-google-fill text-lg text-red-600"></i> เข้าสู่ระบบ
+                        </button>
+                    </div>
+                `;
+            }
+
+            // 2. กรณี Login แล้ว -> แสดงรายการ
+            let cardsHtml = '';
+            if (historyItems.length > 0) {
+                historyItems.forEach(item => { cardsHtml += createHistoryCard(item); });
+            } else {
+                 cardsHtml = `<div class="p-4 text-center text-gray-400 text-sm bg-gray-800 rounded-lg">
+                                <i class="ri-time-line text-2xl mb-2 block"></i>
+                                ไม่พบประวัติการเข้าชม
+                            </div>`;
+            }
+            return `
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold">ประวัติ</h3>
+                    <a href="pages/history.html" class="text-green-500 hover:text-green-400 font-medium flex items-center text-sm">
+                        ดูทั้งหมด <i class="ri-arrow-right-s-line ml-1"></i>
+                    </a>
+                </div>
+                <div class="space-y-2"> ${cardsHtml} </div>
+            `;
+        }
+        
+        function createHistoryCard(history) {
+            const showId = history.showId; 
+            const episodeId = history.lastWatchedEpisodeId; 
+            const title = history.showTitle;
+            const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.latestEpisodeNumber || 'N/A'}`; 
+            const thumbnail = history.showThumbnail || 'https://placehold.co/48x64/333/fff?text=Img'; 
+            const watchedTime = formatDateTime(history.watchedAt);
+
+            const targetUrl = `pages/player.html?id=${showId}${episodeId ? `&ep_id=${episodeId}` : ''}`;
+
+            return `
+                <a href="${targetUrl}" class="history-card shadow-md group">
+                    <div class="relative">
+                        <img src="${thumbnail}" alt="${title}" class="history-thumb shadow-sm group-hover:brightness-75 transition-all">
+                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i class="ri-play-circle-fill text-2xl text-green-500"></i>
+                        </div>
+                    </div>
+                    <div class="flex-grow min-w-0">
+                        <h4 class="font-bold text-sm text-white line-clamp-1 group-hover:text-green-400 transition-colors">${title}</h4>
+                        <p class="text-xs text-gray-300 line-clamp-1">${episodeTitle}</p>
+                        <p class="text-xs text-gray-400 mt-1">เข้าชม: ${watchedTime}</p>
+                    </div>
+                </a>
+            `;
+        }
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadNavbar();
+            sectionsContainer = document.getElementById('sections-container');
+            initializeFirebase(); 
+        });
+    </script>
+    
+    <div id="navbar-placeholder"></div>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div id="home-view">
+            <section id="hero-banner-container" class="relative aspect-[10/3] rounded-lg overflow-hidden mb-8 bg-gray-800 shadow-xl">
+                <div id="hero-swiper" class="swiper w-full h-full">
+                    <div class="swiper-wrapper"></div>
+                    <div class="swiper-button-prev hidden md:flex items-center justify-center"></div>
+                    <div class="swiper-button-next hidden md:flex items-center justify-center"></div>
+                    <div class="swiper-pagination"></div>
+                </div>
+            </section>
+
+            <div id="sections-container">
+                <div class="animate-pulse">
+                    <div class="h-6 w-32 bg-gray-800 rounded mb-4"></div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-900 border-t border-gray-800 mt-8 py-8">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-gray-400 text-sm mb-2">© 2024 ANI-END. All rights reserved.</p>
+            <p class="text-gray-500 text-xs">เว็บไซต์นี้จัดทำขึ้นเพื่อการศึกษาและการเรียนรู้เท่านั้น</p>
+            <div class="flex justify-center gap-4 mt-4">
+                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="ri-facebook-fill text-xl"></i></a>
+                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="ri-twitter-x-fill text-xl"></i></a>
+                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="ri-discord-fill text-xl"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+</body>
+</html>

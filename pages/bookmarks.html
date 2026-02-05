@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANI-END - รายการโปรด (My List)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+        body { background-color: #111; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; display: flex; flex-direction: column; min-height: 100vh; }
+        main { flex: 1; }
+    </style>
+</head>
+<body class="bg-black text-gray-100">
+
+    <div id="navbar-placeholder"></div>
+
+    <script type="module">
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { onSnapshot, collection, query, orderBy, getDocs, doc, deleteDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { db, auth, appId } from "../js/config/firebase.js";
+        import { createAnimeCard } from "../js/modules/card.js";
+        import { setupSearchSystem } from "../js/modules/search.js";
+        import { loadNavbar } from "../js/modules/navbar.js";
+
+        let userId;
+        let historyItems = [];
+        
+        async function initializeFirebase() {
+            setLogLevel('silent');
+            onAuthStateChanged(auth, async (user) => {
+                const loading = document.getElementById('loading-state');
+                const loginState = document.getElementById('login-required-state');
+                const empty = document.getElementById('empty-state');
+                const container = document.getElementById('bookmarks-grid');
+
+                if (user) {
+                    // Logged In
+                    userId = user.uid;
+                    loginState.classList.add('hidden');
+                    
+                    await setupSearchSystemFromHistory();
+                    setupBookmarksListener();
+                } else {
+                    // Not Logged In
+                    loading.classList.add('hidden');
+                    loginState.classList.remove('hidden');
+                    empty.classList.add('hidden');
+                    container.innerHTML = '';
+                    
+                    setupSearchSystem([]); // Search without history
+                }
+            });
+        }
+
+        async function setupSearchSystemFromHistory() {
+            try {
+                const q = query(collection(db, `artifacts/${appId}/users/${userId}/viewHistory`));
+                const snap = await getDocs(q);
+                historyItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setupSearchSystem(historyItems);
+            } catch (e) { console.error("Search init error", e); }
+        }
+
+        function setupBookmarksListener() {
+            const container = document.getElementById('bookmarks-grid');
+            const loading = document.getElementById('loading-state');
+            const empty = document.getElementById('empty-state');
+
+            const q = query(collection(db, `artifacts/${appId}/users/${userId}/bookmarks`), orderBy("savedAt", "desc"));
+
+            onSnapshot(q, (snapshot) => {
+                loading.classList.add('hidden');
+                container.innerHTML = '';
+
+                if (snapshot.empty) {
+                    empty.classList.remove('hidden');
+                    return;
+                }
+
+                empty.classList.add('hidden');
+                let html = '';
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const historyItem = historyItems.find(h => h.showId === doc.id);
+
+                    html += `
+                        <div class="relative group">
+                            ${createAnimeCard({ id: doc.id, ...data }, null, historyItem)}
+                            <button class="btn-remove-bookmark absolute top-2 right-2 z-20 bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity transform hover:scale-110" data-id="${doc.id}" title="ลบจากรายการโปรด">
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+                
+                document.querySelectorAll('.btn-remove-bookmark').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if(confirm('ลบเรื่องนี้จากรายการโปรด?')) {
+                            await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/bookmarks`, btn.dataset.id));
+                        }
+                    });
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadNavbar();
+            initializeFirebase();
+            
+            // Bind Login Button in Empty State
+            const btnLogin = document.getElementById('btn-login-page');
+            if(btnLogin) btnLogin.onclick = () => window.triggerLogin();
+        });
+    </script>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 class="text-3xl font-bold flex items-center gap-2 mb-6 border-b border-gray-800 pb-4">
+            <i class="ri-heart-fill text-red-500"></i> รายการโปรดของฉัน
+        </h1>
+
+        <div id="loading-state" class="flex flex-col items-center justify-center py-20">
+            <i class="ri-loader-4-line text-4xl text-green-500 animate-spin mb-4"></i>
+            <p class="text-gray-400">กำลังโหลดรายการโปรด...</p>
+        </div>
+
+        <div id="login-required-state" class="hidden flex flex-col items-center justify-center py-20 bg-gray-900/50 rounded-lg border border-gray-800 border-dashed">
+            <i class="ri-lock-2-line text-6xl text-gray-600 mb-4"></i>
+            <p class="text-xl text-gray-300 font-medium">กรุณาเข้าสู่ระบบ</p>
+            <p class="text-gray-500 mt-2 text-sm max-w-md text-center">คุณต้องเข้าสู่ระบบเพื่อดูและจัดการรายการโปรดของคุณ</p>
+            <button id="btn-login-page" class="mt-6 bg-white hover:bg-gray-200 text-gray-900 px-6 py-2.5 rounded-full font-bold transition-colors flex items-center gap-2 shadow-lg">
+                <i class="ri-google-fill"></i> เข้าสู่ระบบด้วย Google
+            </button>
+        </div>
+
+        <div id="empty-state" class="hidden flex flex-col items-center justify-center py-20 bg-gray-900/50 rounded-lg border border-gray-800 border-dashed">
+            <i class="ri-bookmark-3-line text-6xl text-gray-600 mb-4"></i>
+            <p class="text-xl text-gray-400 font-medium">ยังไม่มีรายการโปรด</p>
+            <p class="text-gray-500 mt-2 text-sm">กดหัวใจเพื่อเก็บอนิเมะที่คุณชอบไว้ที่นี่</p>
+            <a href="/index.html" class="mt-6 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-full font-medium transition-colors">
+                ไปเลือกดูอนิเมะ
+            </a>
+        </div>
+
+        <div id="bookmarks-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4"></div>
+    </main>
+
+    <footer class="bg-gray-900 border-t border-gray-800 mt-8 py-8 text-center">
+        <p class="text-gray-400 text-sm">© 2024 ANI-END.</p>
+    </footer>
+</body>
+</html>

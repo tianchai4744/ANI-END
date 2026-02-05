@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANI-END - ประวัติการรับชม</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+        body { background-color: #111; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; display: flex; flex-direction: column; min-height: 100vh; }
+        main { flex: 1; }
+        a { cursor: pointer; }
+        .history-item { transition: background-color 0.2s; }
+        .history-item:hover { background-color: #1f2937; }
+        .history-thumb { aspect-ratio: 16/9; object-fit: cover; }
+    </style>
+</head>
+<body class="bg-black text-gray-100">
+
+    <div id="navbar-placeholder"></div>
+
+    <script type="module">
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { onSnapshot, collection, query, limit, orderBy, deleteDoc, doc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { db, auth, appId } from "../js/config/firebase.js";
+        import { setupSearchSystem } from "../js/modules/search.js";
+        import { loadNavbar } from "../js/modules/navbar.js";
+
+        let userId;
+        let historyItems = [];
+        
+        let historyListContainer, loadingState, emptyState, loginRequiredState, clearHistoryBtn;
+
+        function formatDateTime(timestamp) {
+            if (!timestamp || !timestamp.toDate) return 'N/A';
+            const date = timestamp.toDate();
+            return date.toLocaleDateString('th-TH', { 
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        async function initializeFirebase() {
+            setLogLevel('silent');
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    loginRequiredState.classList.add('hidden');
+                    setupHistoryListener();
+                } else {
+                    loadingState.classList.add('hidden');
+                    loginRequiredState.classList.remove('hidden');
+                    emptyState.classList.add('hidden');
+                    historyListContainer.innerHTML = '';
+                    clearHistoryBtn.classList.add('hidden');
+                    setupSearchSystem([]); // Init search empty
+                }
+            });
+        }
+        
+        function setupHistoryListener() {
+            const historyRef = collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
+            const q = query(historyRef, orderBy("watchedAt", "desc"), limit(50));
+            
+            loadingState.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+            historyListContainer.innerHTML = '';
+            
+            onSnapshot(q, (snapshot) => {
+                loadingState.classList.add('hidden');
+                historyItems.length = 0;
+                
+                if (snapshot.empty) {
+                    emptyState.classList.remove('hidden');
+                    clearHistoryBtn.classList.add('hidden');
+                    setupSearchSystem([]);
+                    return;
+                }
+                
+                emptyState.classList.add('hidden');
+                clearHistoryBtn.classList.remove('hidden');
+                
+                let html = '';
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    historyItems.push({ id: doc.id, ...data }); 
+                    html += createHistoryItemHTML(doc.id, data);
+                });
+                
+                historyListContainer.innerHTML = html;
+                setupSearchSystem(historyItems); // Update search with history
+                attachDeleteListeners();
+            });
+        }
+        
+        function createHistoryItemHTML(docId, data) {
+            const title = data.showTitle || 'ไม่ระบุชื่อเรื่อง';
+            const epTitle = data.lastWatchedEpisodeTitle || `ตอนที่ ${data.latestEpisodeNumber || '?'}`;
+            const thumb = data.showThumbnail || 'https://placehold.co/160x90/333/fff?text=No+Img';
+            const time = formatDateTime(data.watchedAt);
+            const link = `player.html?id=${data.showId}&ep_id=${data.lastWatchedEpisodeId}`;
+            
+            return `
+                <div class="history-item flex flex-col sm:flex-row gap-4 p-4 rounded-lg bg-gray-900 border border-gray-800 relative group">
+                    <a href="${link}" class="block w-full sm:w-48 flex-shrink-0 relative">
+                        <img src="${thumb}" alt="${title}" class="history-thumb w-full h-28 sm:h-28 rounded-md shadow-md">
+                        <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                            <i class="ri-play-circle-fill text-4xl text-green-500"></i>
+                        </div>
+                    </a>
+                    <div class="flex-1 min-w-0 flex flex-col justify-center">
+                        <a href="${link}" class="hover:text-green-500 transition-colors">
+                            <h3 class="text-lg font-bold text-white truncate mb-1">${title}</h3>
+                        </a>
+                        <p class="text-green-400 text-sm font-medium mb-2">${epTitle}</p>
+                        <p class="text-gray-500 text-xs flex items-center">
+                            <i class="ri-time-line mr-1"></i> รับชมล่าสุด: ${time}
+                        </p>
+                    </div>
+                    <div class="absolute top-2 right-2 sm:static sm:self-center">
+                        <button class="delete-btn text-gray-500 hover:text-red-500 p-2 rounded-full hover:bg-red-500/10 transition-colors" data-id="${docId}" title="ลบรายการนี้">
+                            <i class="ri-delete-bin-line text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function attachDeleteListeners() {
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const docId = e.currentTarget.dataset.id;
+                    if (confirm('ลบประวัตินี้?')) {
+                        await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/viewHistory`, docId));
+                    }
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadNavbar();
+
+            historyListContainer = document.getElementById('history-list');
+            loadingState = document.getElementById('loading-state');
+            emptyState = document.getElementById('empty-state');
+            loginRequiredState = document.getElementById('login-required-state');
+            clearHistoryBtn = document.getElementById('clear-history-btn');
+            
+            const btnLogin = document.getElementById('btn-login-page');
+            if(btnLogin) btnLogin.onclick = () => window.triggerLogin();
+            
+            if (clearHistoryBtn) {
+                clearHistoryBtn.addEventListener('click', async () => {
+                    if (confirm('ลบประวัติทั้งหมด?')) {
+                        const promises = historyItems.map(item => deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/viewHistory`, item.id)));
+                        await Promise.all(promises);
+                    }
+                });
+            }
+
+            initializeFirebase();
+        });
+    </script>
+    
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-3xl font-bold flex items-center gap-2">
+                <i class="ri-history-line text-green-500"></i> ประวัติการรับชม
+            </h1>
+            <button id="clear-history-btn" class="hidden text-sm text-red-400 hover:text-red-300 border border-red-900 bg-red-900/20 px-3 py-1.5 rounded-md transition-colors">
+                <i class="ri-delete-bin-2-line mr-1"></i> ล้างประวัติทั้งหมด
+            </button>
+        </div>
+
+        <div id="loading-state" class="flex flex-col items-center justify-center py-20">
+            <i class="ri-loader-4-line text-4xl text-green-500 animate-spin mb-4"></i>
+            <p class="text-gray-400">กำลังโหลดข้อมูล...</p>
+        </div>
+
+        <div id="login-required-state" class="hidden flex flex-col items-center justify-center py-20 bg-gray-900/50 rounded-lg border border-gray-800 border-dashed">
+            <i class="ri-lock-2-line text-6xl text-gray-600 mb-4"></i>
+            <p class="text-xl text-gray-300 font-medium">กรุณาเข้าสู่ระบบ</p>
+            <p class="text-gray-500 mt-2 text-sm max-w-md text-center">ระบบจะบันทึกประวัติการรับชมของคุณอัตโนมัติเมื่อเข้าสู่ระบบ</p>
+            <button id="btn-login-page" class="mt-6 bg-white hover:bg-gray-200 text-gray-900 px-6 py-2.5 rounded-full font-bold transition-colors flex items-center gap-2 shadow-lg">
+                <i class="ri-google-fill"></i> เข้าสู่ระบบด้วย Google
+            </button>
+        </div>
+
+        <div id="empty-state" class="hidden flex flex-col items-center justify-center py-20 bg-gray-900/50 rounded-lg border border-gray-800 border-dashed">
+            <i class="ri-movie-2-line text-6xl text-gray-600 mb-4"></i>
+            <p class="text-xl text-gray-400 font-medium">ยังไม่มีประวัติการรับชม</p>
+            <a href="/index.html" class="mt-6 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-full font-medium transition-colors">ไปหน้าแรก</a>
+        </div>
+
+        <div id="history-list" class="space-y-4"></div>
+    </main>
+
+    <footer class="bg-gray-900 border-t border-gray-800 mt-8 py-8 text-center">
+        <p class="text-gray-400 text-sm">© 2024 ANI-END.</p>
+    </footer>
+</body>
+</html>
