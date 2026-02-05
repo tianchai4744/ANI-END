@@ -33,11 +33,11 @@
     <script type="module">
         import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { onSnapshot, collection, query, limit, orderBy, where, getDocs, startAfter, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { db, auth, appId } from "../js/config/firebase.js";
+        import { db, auth, appId } from "../js/config/db-config.js";
         import { createAnimeCard } from "../js/modules/card.js";
         import { setupSearchSystem } from "../js/modules/search.js";
         import { loadNavbar } from "../js/modules/navbar.js";
-        import { generateSearchTerms } from "../js/utils/common.js"; 
+        import { generateSearchTerms } from "../js/utils/tools.js";
 
         const ITEMS_PER_PAGE = 28; 
         let userId;
@@ -339,4 +339,5 @@
     </footer>
 </body>
 </html>
+
 
