@@ -1,4 +1,3 @@
-// navbar.js - ฉบับแก้ไขทางเดินไฟล์ (Professional Path Fix)
 import { 
     loginWithGoogle, 
     loginWithEmail, 
@@ -9,7 +8,12 @@ import {
     getAuthErrorMessage 
 } from "../services/auth.js";
 import { collection, getDocs, limit, query, where, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, appId } from "../config/firebase.js";
+// ✅ แก้ไขตรงนี้
+import { db, appId } from "../config/db-config.js";
+
+// ... (โค้ดส่วนที่เหลือเหมือนเดิม ไม่ต้องแก้) ...
+// ให้ก๊อปปี้ฟังก์ชัน loadNavbar และอื่นๆ ที่คุณมีอยู่แล้วมาต่อท้ายได้เลยครับ
+// แต่สำคัญคือบรรทัด import ข้างบนต้องชี้ไปที่ db-config.js
 
 // --- Toast Notification System ---
 window.showToast = (message, type = 'success') => {
