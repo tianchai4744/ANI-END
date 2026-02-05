@@ -139,8 +139,8 @@
         
         // Modules
         import { renderHeroBanner, renderHeroSkeleton } from "./js/modules/hero-banner.js";
-        // [NEW] นำเข้า Module Top 10
-        import { createTop10Section } from "./js/modules/top10.js";
+        // [NEW] นำเข้า Module Top 10 ที่รวม Logic ไว้แล้ว
+        import { renderTop10Section } from "./js/modules/top10.js";
 
         let userId;
         let historyItems = []; 
@@ -356,17 +356,12 @@
             const dualGridContainer = document.createElement('div');
             dualGridContainer.className = 'flex flex-wrap lg:flex-nowrap gap-6 mb-8'; 
             
-            // [เรียกใช้ Top 10 Module ที่แยกออกมา]
-            const top10Result = createTop10Section(top30Shows, historyItems);
+            // [เรียกใช้ Module Top 10 ที่สะอาดตา]
+            // ไม่ต้องยุ่งกับ Swiper Logic ที่นี่อีกแล้ว
+            const top10Element = renderTop10Section(top30Shows, historyItems);
             
-            if (top10Result) {
-                dualGridContainer.appendChild(top10Result.element);
-                
-                // เริ่มต้น Swiper หลังจาก Element ถูกใส่ใน DOM แล้ว
-                setTimeout(() => {
-                    const swiperInstance = top10Result.initSwiper();
-                    sectionSwipers.push(swiperInstance);
-                }, 0);
+            if (top10Element) {
+                dualGridContainer.appendChild(top10Element);
             }
             
             // History Desktop - แสดงเสมอ
@@ -399,7 +394,8 @@
         }
 
         function initSwipers() {
-            // Init swipers ปกติ (ยกเว้น Top 10 ที่ init แยกไปแล้ว)
+            // Init swipers ปกติสำหรับ Section อื่นๆ
+            // (สังเกตว่าเราไม่ได้ยุ่งกับ swiper-top10 ที่นี่แล้ว)
             document.querySelectorAll('.swiper-default-up').forEach(el => {
                 const swiper = new Swiper(el, { 
                     slidesPerView: 1.8, spaceBetween: 16,
