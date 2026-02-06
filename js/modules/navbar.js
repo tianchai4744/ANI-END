@@ -1,46 +1,28 @@
 import { 
-    loginWithGoogle, 
-    loginWithEmail, 
-    registerWithEmail, 
-    resetPasswordEmail,
-    logoutUser, 
-    monitorUserAuth,
-    getAuthErrorMessage 
+    loginWithGoogle, loginWithEmail, registerWithEmail, resetPasswordEmail,
+    logoutUser, monitorUserAuth, getAuthErrorMessage 
 } from "../services/auth.js";
-import { collection, getDocs, limit, query, where, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-// ✅ แก้ไขตรงนี้
+import { collection, getDocs, limit, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db, appId } from "../config/db-config.js";
 
-// ... (โค้ดส่วนที่เหลือเหมือนเดิม ไม่ต้องแก้) ...
-// ให้ก๊อปปี้ฟังก์ชัน loadNavbar และอื่นๆ ที่คุณมีอยู่แล้วมาต่อท้ายได้เลยครับ
-// แต่สำคัญคือบรรทัด import ข้างบนต้องชี้ไปที่ db-config.js
+// Import Modules ใหม่
+import { initRandomButton } from "./random-service.js";
+import { initNotificationSystem } from "./notification-service.js";
 
-// --- Toast Notification System ---
+// --- Global Toast ---
 window.showToast = (message, type = 'success') => {
     const container = document.getElementById('toast-container');
     if (!container) return;
-
     const toast = document.createElement('div');
     toast.className = `pointer-events-auto flex items-center gap-3 w-full p-4 rounded-lg shadow-xl border-l-4 toast-enter transition-all ${
         type === 'success' ? 'bg-gray-800 border-green-500 text-white' : 
         type === 'error' ? 'bg-gray-800 border-red-500 text-white' : 'bg-gray-800 border-blue-500 text-white'
     }`;
-    
     const iconClass = type === 'success' ? 'ri-checkbox-circle-fill text-green-500 text-xl' : 
                       type === 'error' ? 'ri-error-warning-fill text-red-500 text-xl' : 'ri-information-fill text-blue-500 text-xl';
-
-    toast.innerHTML = `
-        <i class="${iconClass}"></i>
-        <div class="text-sm font-medium">${message}</div>
-    `;
-
+    toast.innerHTML = `<i class="${iconClass}"></i><div class="text-sm font-medium">${message}</div>`;
     container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.classList.remove('toast-enter');
-        toast.classList.add('toast-exit');
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    setTimeout(() => { toast.classList.remove('toast-enter'); toast.classList.add('toast-exit'); setTimeout(() => toast.remove(), 300); }, 4000);
 };
 
 window.triggerLogin = () => {
@@ -50,25 +32,21 @@ window.triggerLogin = () => {
         modal.classList.remove('hidden');
         requestAnimationFrame(() => {
             modal.classList.remove('opacity-0', 'pointer-events-none');
-            content.classList.remove('scale-95');
-            content.classList.add('scale-100');
+            content.classList.remove('scale-95'); content.classList.add('scale-100');
         });
     }
 };
 
 function setUIStateLoggedIn(userData) {
     const { name, photo } = userData;
-    // Desktop
     document.getElementById('btn-login-google')?.classList.add('hidden');
     const profile = document.getElementById('user-profile');
     if (profile) {
         profile.classList.remove('hidden');
         document.getElementById('user-avatar').src = photo;
         document.getElementById('user-name').textContent = name;
-        if(document.getElementById('user-name-dropdown')) 
-            document.getElementById('user-name-dropdown').textContent = name;
+        if(document.getElementById('user-name-dropdown')) document.getElementById('user-name-dropdown').textContent = name;
     }
-    // Mobile
     document.getElementById('btn-login-google-mobile')?.classList.add('hidden');
     const mProfile = document.getElementById('mobile-user-profile');
     if (mProfile) {
@@ -79,15 +57,12 @@ function setUIStateLoggedIn(userData) {
 }
 
 function setUIStateLoggedOut() {
-    // Desktop
     document.getElementById('btn-login-google')?.classList.remove('hidden');
     document.getElementById('user-profile')?.classList.add('hidden');
-    // Mobile
     document.getElementById('btn-login-google-mobile')?.classList.remove('hidden');
     document.getElementById('mobile-user-profile')?.classList.add('hidden');
 }
 
-// --- ฟังก์ชันหลักที่แก้ไขแล้ว: รับค่า pathPrefix เพื่อบอกตำแหน่งไฟล์ ---
 export async function loadNavbar(pathPrefix = '.') {
     const placeholder = document.getElementById('navbar-placeholder');
     if (!placeholder) return;
@@ -97,23 +72,15 @@ export async function loadNavbar(pathPrefix = '.') {
     }
 
     try {
-        // ใช้ pathPrefix นำหน้าเพื่อหาไฟล์ให้เจอ ไม่ว่าจะอยู่หน้าไหน
         const response = await fetch(`${pathPrefix}/components/navbar.html`);
-        if (!response.ok) throw new Error(`Failed to load navbar from ${pathPrefix}/components/navbar.html`);
+        if (!response.ok) throw new Error(`Failed to load navbar`);
         
         let html = await response.text();
-        
-        // --- เทคนิคพิเศษ: แปลงลิงก์ให้ถูกต้องตามที่อยู่ปัจจุบัน ---
-        // เปลี่ยน href="index.html" เป็น href="./index.html" หรือ "../index.html" อัตโนมัติ
         html = html.replace(/href="([^"]*)"/g, (match, href) => {
-            // ข้ามลิงก์ที่เป็น # หรือ http (ลิงก์ภายนอก)
             if (href.startsWith('#') || href.startsWith('http')) return match;
-            // ลบ / ตัวหน้าสุดออกก่อน (ถ้ามี) แล้วเติม pathPrefix
             const cleanHref = href.startsWith('/') ? href.substring(1) : href;
             return `href="${pathPrefix}/${cleanHref}"`;
         });
-        
-        // แก้ไข src ของรูปภาพด้วย (ถ้ามี)
         html = html.replace(/src="([^"]*)"/g, (match, src) => {
              if (src.startsWith('http')) return match;
              const cleanSrc = src.startsWith('/') ? src.substring(1) : src;
@@ -122,16 +89,10 @@ export async function loadNavbar(pathPrefix = '.') {
 
         placeholder.innerHTML = html;
         
-        // Logic เดิม
         const cachedUser = localStorage.getItem('ani_user_cache');
         if (cachedUser) {
-            try {
-                const userData = JSON.parse(cachedUser);
-                setUIStateLoggedIn(userData); 
-            } catch(e) {
-                localStorage.removeItem('ani_user_cache');
-                setUIStateLoggedOut();
-            }
+            try { setUIStateLoggedIn(JSON.parse(cachedUser)); } 
+            catch(e) { localStorage.removeItem('ani_user_cache'); setUIStateLoggedOut(); }
         } else {
             setUIStateLoggedOut();
         }
@@ -143,89 +104,16 @@ export async function loadNavbar(pathPrefix = '.') {
 
     } catch (error) {
         console.error("Navbar load error:", error);
-        // แสดง Error บนหน้าจอเพื่อให้รู้ว่าพังตรงไหน (ช่วย Debug)
-        placeholder.innerHTML = `<div class="bg-red-900 text-white p-4 text-center">Error loading Navbar: ${error.message}</div>`;
     }
 }
 
-// ... (ส่วน notification และ setup อื่นๆ ใช้ของเดิมได้ หรือถ้าไม่แน่ใจให้ใช้โค้ดด้านล่างนี้ต่อได้เลยครับ ผมรวมไว้ให้ครบแล้ว)
-
-async function checkNotifications(userId) {
-    // (เหมือนเดิม)
-    const btn = document.getElementById('btn-notification');
-    const badge = document.getElementById('notif-badge');
-    const list = document.getElementById('notification-list');
-    const dropdown = document.getElementById('notification-dropdown');
-
-    if (!btn || !badge || !list || !dropdown) return;
-
-    try {
-        const bookmarksRef = collection(db, `artifacts/${appId}/users/${userId}/bookmarks`);
-        const bookmarksSnap = await getDocs(query(bookmarksRef, limit(20)));
-        if (bookmarksSnap.empty) return;
-
-        let notifications = [];
-        const historyRef = collection(db, `artifacts/${appId}/users/${userId}/viewHistory`);
-        const historySnap = await getDocs(query(historyRef));
-        const historyMap = new Map();
-        historySnap.forEach(doc => historyMap.set(doc.data().showId, doc.data().lastWatchedEpisodeNumber || 0));
-
-        for (const docSnap of bookmarksSnap.docs) {
-            const bm = docSnap.data();
-            const showId = docSnap.id;
-            const showDoc = await getDoc(doc(db, `artifacts/${appId}/public/data/shows`, showId));
-            if (!showDoc.exists()) continue;
-            const showData = showDoc.data();
-            const latestEp = showData.latestEpisodeNumber || 0;
-            const lastWatched = historyMap.get(showId) || 0;
-
-            if (latestEp > lastWatched) {
-                notifications.push({
-                    title: showData.title,
-                    ep: latestEp,
-                    id: showId,
-                    thumbnail: showData.thumbnailUrl
-                });
-            }
-        }
-
-        if (notifications.length > 0) {
-            badge.textContent = notifications.length;
-            badge.classList.remove('hidden');
-            let html = '';
-            notifications.forEach(n => {
-                html += `
-                    <a href="player.html?id=${n.id}&ep_id=latest" class="block p-3 hover:bg-gray-700 border-b border-gray-700 last:border-0 flex gap-3 items-center">
-                        <img src="${n.thumbnail}" class="w-10 h-14 object-cover rounded bg-gray-700">
-                        <div class="min-w-0">
-                            <p class="text-xs text-green-400 font-bold">ตอนใหม่! ตอนที่ ${n.ep}</p>
-                            <p class="text-sm text-white truncate">${n.title}</p>
-                        </div>
-                    </a>
-                `;
-            });
-            list.innerHTML = html;
-        } else { badge.classList.add('hidden'); }
-
-        btn.onclick = (e) => { e.stopPropagation(); dropdown.classList.toggle('hidden'); };
-        document.addEventListener('click', (e) => {
-            if (!dropdown.contains(e.target) && !btn.contains(e.target)) dropdown.classList.add('hidden');
-        });
-    } catch (e) { console.error("Notif Error:", e); }
-}
-
 function setupAuthModalLogic() {
-    // (เหมือนเดิม) - ย่อเพื่อความกระชับ แต่ในไฟล์จริงต้องมีนะครับ
-    // ... Copy Logic เดิมของ setupAuthModalLogic มาใส่ตรงนี้ ...
-    // เนื่องจากพื้นที่จำกัด ผมแนะนำให้ใช้ logic เดิมที่คุณมีได้เลยครับ 
-    // สิ่งสำคัญคือฟังก์ชัน loadNavbar ด้านบนครับ
     const modal = document.getElementById('auth-modal');
     const content = document.getElementById('auth-modal-content');
     const btnClose = document.getElementById('btn-close-auth');
     const btnGoogle = document.getElementById('btn-auth-google');
     const form = document.getElementById('email-auth-form');
     
-    // UI Elements
     const title = document.getElementById('auth-modal-title');
     const icon = document.getElementById('auth-icon');
     const nameField = document.getElementById('field-name-container');
@@ -292,12 +180,8 @@ function setupAuthModalLogic() {
     const closeModal = () => { 
         if(modal && content) {
             modal.classList.add('opacity-0', 'pointer-events-none');
-            content.classList.remove('scale-100');
-            content.classList.add('scale-95');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                mode = 'login'; updateUI(); form.reset();
-            }, 300);
+            content.classList.remove('scale-100'); content.classList.add('scale-95');
+            setTimeout(() => { modal.classList.add('hidden'); mode = 'login'; updateUI(); form.reset(); }, 300);
         }
     };
 
@@ -305,11 +189,8 @@ function setupAuthModalLogic() {
     if (modal) modal.onclick = (e) => { if(e.target === modal) closeModal(); };
 
     if (btnGoogle) btnGoogle.onclick = async () => {
-        try { 
-            await loginWithGoogle(); 
-            closeModal();
-            window.showToast('เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับ', 'success');
-        } catch(e) { window.showToast(getAuthErrorMessage(e.code), 'error'); }
+        try { await loginWithGoogle(); closeModal(); window.showToast('เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับ', 'success'); } 
+        catch(e) { window.showToast(getAuthErrorMessage(e.code), 'error'); }
     };
 
     if (form) form.onsubmit = async (e) => {
@@ -353,6 +234,7 @@ function setupAuthEvents() {
             }
         };
     });
+
     monitorUserAuth((user) => {
         if (user) {
             const name = user.displayName || user.email.split('@')[0];
@@ -360,7 +242,9 @@ function setupAuthEvents() {
             const userData = { name, photo };
             localStorage.setItem('ani_user_cache', JSON.stringify(userData));
             setUIStateLoggedIn(userData);
-            checkNotifications(user.uid);
+            
+            // ✅ เริ่มระบบแจ้งเตือนเมื่อ Login
+            initNotificationSystem(user.uid); 
         } else {
             localStorage.removeItem('ani_user_cache');
             setUIStateLoggedOut();
@@ -397,24 +281,8 @@ function setupNavbarEvents() {
         if (mSearchBar && isVisible(mSearchBar) && !mSearchBar.contains(e.target) && !mSearchBtn.contains(e.target)) hide(mSearchBar);
     });
 
-    const handleRandom = async () => {
-        try {
-             const q = query(collection(db, `artifacts/${appId}/public/data/shows`), limit(20));
-             const snap = await getDocs(q);
-             if(!snap.empty) {
-                const rIdx = Math.floor(Math.random() * snap.docs.length);
-                // Fix Random Link Path as well
-                const currentPath = window.location.pathname;
-                const prefix = currentPath.includes('/pages/') ? '' : 'pages/';
-                window.location.href = `${prefix}player.html?id=${snap.docs[rIdx].id}`;
-             } else { window.showToast("ไม่มีข้อมูล", "error"); }
-        } catch(e) { console.error(e); }
-    };
-
-    const btnRandD = document.getElementById('btn-random-anime');
-    const btnRandM = document.getElementById('btn-random-anime-mobile');
-    if(btnRandD) btnRandD.onclick = handleRandom;
-    if(btnRandM) btnRandM.onclick = handleRandom;
+    // ✅ เริ่มระบบปุ่มสุ่ม
+    initRandomButton();
 }
 
 function highlightActiveLink() {
@@ -424,7 +292,6 @@ function highlightActiveLink() {
     document.querySelectorAll('.nav-link').forEach(link => {
         const href = link.getAttribute('href');
         if (!href) return;
-        // Clean href for comparison (remove ../ or ./)
         const cleanHref = href.replace(/^(\.\.\/|\.\/)/, '').split('?')[0];
         
         if (cleanHref !== currentPath && !(cleanHref === 'index.html' && currentPath === '')) {
@@ -433,7 +300,6 @@ function highlightActiveLink() {
              return;
         }
         
-        // (Logic เดิม)
         let isMatch = true;
         if (href.includes('?')) {
             const linkQueryRaw = href.split('?')[1];
