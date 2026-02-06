@@ -12,6 +12,18 @@ let currentEpisodeNum = null;
 let lastCommentCursor = null; 
 let isCommentsLoading = false;
 
+// ✅ XSS Protection: ฟังก์ชันแปลงตัวอักษรพิเศษเป็น HTML Entities
+// ป้องกันไม่ให้ Browser รัน Script ที่ผู้ใช้พิมพ์เข้ามา
+function escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') return unsafe;
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
 // ฟังก์ชันเริ่มต้นระบบ (เรียกใช้เมื่อเปลี่ยนตอน หรือโหลดหน้าใหม่)
 export function initCommentSystem(showId, episodeId, episodeNum) {
     currentShowId = showId;
@@ -159,16 +171,21 @@ export async function loadComments(isReset = false) {
                 ? `<span class="bg-gray-700 text-gray-300 text-[10px] px-1.5 py-0.5 rounded ml-2">Ep.${c.episodeNum}</span>` 
                 : '';
 
+            // ✅ XSS Fix: ใช้ escapeHtml หุ้มข้อมูลที่มาจาก User ทั้งหมด (ชื่อ, ข้อความ, รูปภาพ)
+            const safeUserName = escapeHtml(c.userName || 'Guest');
+            const safeUserPhoto = escapeHtml(c.userPhoto) || 'https://placehold.co/40x40?text=?';
+            const safeText = escapeHtml(c.text); // ข้อความถูก sanitize แล้ว
+
             html += `
                 <div class="group flex gap-3 mb-4 border-b border-gray-800 pb-4 last:border-0 hover:bg-gray-800/30 p-2 rounded-lg transition-colors">
-                    <img src="${c.userPhoto || 'https://placehold.co/40x40?text=?'}" class="w-10 h-10 rounded-full bg-gray-700 object-cover flex-shrink-0 shadow-sm">
+                    <img src="${safeUserPhoto}" class="w-10 h-10 rounded-full bg-gray-700 object-cover flex-shrink-0 shadow-sm">
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center flex-wrap gap-y-1 mb-1">
-                            <span class="font-bold text-sm text-green-400 mr-2">${c.userName || 'Guest'}</span>
+                            <span class="font-bold text-sm text-green-400 mr-2">${safeUserName}</span>
                             <span class="text-xs text-gray-500">${date}</span>
                             ${epBadge}
                         </div>
-                        <p class="text-sm text-gray-200 whitespace-pre-line leading-relaxed">${c.text}</p>
+                        <p class="text-sm text-gray-200 whitespace-pre-line leading-relaxed">${safeText}</p>
                     </div>
                 </div>
             `;
@@ -230,7 +247,7 @@ export async function postComment(user) {
             userId: user.uid,
             userName: user.displayName || 'User',
             userPhoto: user.photoURL || '',
-            text: text,
+            text: text, // บันทึก Raw text ลง DB (sanitize ตอนแสดงผล เพื่อความยืดหยุ่น)
             createdAt: serverTimestamp(),
             showId: currentShowId,
             episodeId: currentEpisodeId || null,
