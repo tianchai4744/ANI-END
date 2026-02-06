@@ -1,24 +1,23 @@
 import { collection, query, where, orderBy, getDocs, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db, appId } from "../config/db-config.js";
 
-const EPISODES_PER_BATCH = 50;
+const EPISODES_PER_BATCH = 50; // ✅ กำหนดค่าคงที่ไว้ที่นี่ที่เดียว
 let currentShowId = null;
 let currentEpisodes = []; 
-let activeEpisodeId = null; // ✅ เพิ่มตัวแปรจำสถานะปุ่มที่เลือกอยู่
+let activeEpisodeId = null; 
 
-// ฟังก์ชันหลักสำหรับโหลดและจัดการ List
+// ฟังก์ชันหลักสำหรับโหลดและจัดการ List (เรียกครั้งแรก)
 export async function initEpisodeList(showId, latestEpisodeNumber, onEpisodeSelect) {
     currentShowId = showId;
     const container = document.getElementById('episode-list-container');
     const rangeContainer = document.getElementById('episode-range-container');
     const rangeSelect = document.getElementById('episode-range-select');
 
-    // 1. สร้าง Dropdown เลือกช่วงตอน
+    // สร้าง Dropdown เลือกช่วงตอน
     setupRangeSelector(latestEpisodeNumber, rangeSelect, rangeContainer, async (start, end) => {
         await loadEpisodesByRange(start, end, container, onEpisodeSelect);
     });
 
-    // 2. ถ้าไม่มีตอนเลย
     if (!latestEpisodeNumber || latestEpisodeNumber === 0) {
         container.innerHTML = '<p class="text-gray-500 text-sm">ยังไม่มีตอน</p>';
         return;
@@ -48,7 +47,7 @@ function setupRangeSelector(totalEpisodes, selectEl, containerEl, loadCallback) 
     selectEl.innerHTML = html;
     containerEl.classList.remove('hidden');
 
-    // Event Listener เปลี่ยนช่วง (เฉพาะตอนคนกดเปลี่ยนเอง)
+    // Event Listener เปลี่ยนช่วง
     selectEl.onchange = (e) => {
         if(!e.target.value) return;
         const [start, end] = e.target.value.split('-').map(Number);
@@ -92,7 +91,8 @@ function renderButtons(episodes, container, onClick) {
 
     episodes.forEach(ep => {
         const btn = document.createElement('button');
-        // ✅ เพิ่ม Logic ตรวจสอบ activeEpisodeId ทันทีตอนสร้างปุ่ม
+        
+        // เช็ค Active State ทันทีตอนสร้าง
         let activeClass = '';
         if (ep.id === activeEpisodeId) {
             activeClass = 'active bg-green-600 text-white';
@@ -118,7 +118,7 @@ function getStatusClass(status) {
 
 // ไฮไลท์ปุ่มตอนที่กำลังเล่น
 export function highlightActiveEpisode(episodeId) {
-    activeEpisodeId = episodeId; // ✅ จำค่าไว้ เผื่อมีการ Render ใหม่
+    activeEpisodeId = episodeId; // จำค่าไว้
     
     document.querySelectorAll('.ep-button').forEach(btn => {
         if (btn.dataset.id === episodeId) {
@@ -139,7 +139,7 @@ export async function findNextPrevEpisode(currentNum, direction, showData) {
     const cached = currentEpisodes.find(ep => ep.number === targetNum);
     if (cached) return cached;
 
-    // 2. ถ้าไม่มีใน Cache ให้โหลดจาก Server
+    // 2. ถ้าไม่มีใน Cache ให้โหลดจาก Server (เฉพาะตอนนั้น)
     const q = query(
         collection(db, `artifacts/${appId}/public/data/episodes`),
         where("showId", "==", currentShowId),
@@ -162,9 +162,29 @@ export function syncRangeSelector(episodeNum) {
         if (episodeNum >= start && episodeNum <= end) {
             if (rangeSelect.value !== option.value) {
                 rangeSelect.value = option.value;
-                // ❌ ลบบรรทัด dispatchEvent ออก เพื่อไม่ให้มันไปกระตุ้นการโหลดซ้ำโดยไม่จำเป็น
+                // ไม่ต้อง dispatchEvent เพื่อป้องกันการโหลดซ้ำซ้อน
             }
             return;
         }
+    }
+}
+
+// ✅ ฟังก์ชันใหม่: ตรวจสอบและโหลด Batch อัตโนมัติ (Encapsulation Logic)
+export async function checkAndLoadEpisodeBatch(episodeNumber, onEpisodeSelect) {
+    const container = document.getElementById('episode-list-container');
+    if (!container) return;
+
+    // คำนวณหาช่วงของตอนนั้นๆ
+    const rangeStart = Math.floor((episodeNumber - 1) / EPISODES_PER_BATCH) * EPISODES_PER_BATCH + 1;
+    const rangeEnd = rangeStart + EPISODES_PER_BATCH - 1;
+
+    // เช็คว่าปุ่มของตอนนั้นมีอยู่ใน DOM หรือยัง
+    const existingButton = Array.from(container.children).find(btn => btn.textContent == episodeNumber);
+    
+    if (!existingButton) {
+        // ถ้ายังไม่มีปุ่ม (แสดงว่าข้าม Batch หรือยังไม่โหลด) ให้โหลดใหม่
+        await loadEpisodesByRange(rangeStart, rangeEnd, container, onEpisodeSelect);
+        // อัปเดต Dropdown ให้ตรงกันด้วย
+        syncRangeSelector(episodeNumber);
     }
 }
