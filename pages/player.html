@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ANI-END - กำลังโหลด...</title>
     <meta name="description" content="ดูอนิเมะออนไลน์ อนิเมะจีน อนิเมะพากย์ไทย อัปเดตตอนใหม่ทุกวัน">
-    <meta property="og:type" content="video.other">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
@@ -13,23 +12,21 @@
         body { background-color: #111; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .video-aspect-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; background-color: #000; }
         #video-player-embed { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; display: flex; align-items: center; justify-content: center; }
-        #video-player-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; display: block; min-width: initial !important; }
-        .ep-button.active { background-color: #00b87c !important; color: #fff !important; }
-        .top10-thumbnail { width: 60px; height: 80px; aspect-ratio: 3/4; object-fit: cover; flex-shrink: 0; }
-        .top10-item { display: flex; align-items: center; padding: 8px; background-color: #374151; border-radius: 8px; transition: background-color 0.15s; }
-        .top10-item:hover { background-color: #4b5563; }
-        .rank-badge-lg { width: 30px; height: 80px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 12px; font-size: 28px; font-weight: 900; color: #f3f4f6; background-clip: text; -webkit-background-clip: text; background-image: linear-gradient(180deg, #f3f4f6 0%, #a1a1af 100%); }
-        .rank-badge-lg.rank-1 { background-image: linear-gradient(180deg, #fcd34d 0%, #b45309 100%); } 
-        .rank-badge-lg.rank-2 { background-image: linear-gradient(180deg, #e5e7eb 0%, #9ca3af 100%); } 
-        .rank-badge-lg.rank-3 { background-image: linear-gradient(180deg, #f87171 0%, #dc2626 100%); } 
-        #episode-list-container::-webkit-scrollbar { width: 6px; }
-        #episode-list-container::-webkit-scrollbar-track { background: #1f2937; }
-        #episode-list-container::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
-        #episode-list-container::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        #video-player-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+        .ep-button.active { background-color: #16a34a !important; color: #fff !important; pointer-events: none; }
         
-        /* Animation */
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        
+        /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        
+        /* Top 10 Styles */
+        .rank-badge-lg { display: flex; align-items: center; justify-content: center; background-clip: text; -webkit-background-clip: text; }
     </style>
 </head>
 <body class="bg-black text-gray-100"> 
@@ -38,549 +35,200 @@
 
 <script type="module">
     import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit, serverTimestamp, setDoc, addDoc, setLogLevel, runTransaction, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    
-    // ✅ แก้ชื่อไฟล์ตรงนี้
+    import { doc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { db, auth, appId } from "../js/config/db-config.js";
-    import { createAnimeCard } from "../js/modules/card.js";
-    import { setupSearchSystem } from "../js/modules/search.js";
-    import { loadNavbar } from "../js/modules/navbar.js";
-    // ✅ แก้ชื่อไฟล์ตรงนี้
-    import { generateVideoEmbed, formatTimestamp } from "../js/utils/tools.js"; 
     
+    // Core Modules
+    import { loadNavbar } from "../js/modules/navbar.js";
+    import { setupSearchSystem } from "../js/modules/search.js";
+    
+    // Player Modules (Refactored)
+    import { setupPlayerInfo, embedEpisode, updatePlayerMetadata } from "../js/modules/player-core.js";
+    import { initEpisodeList, loadEpisodesByRange, highlightActiveEpisode, findNextPrevEpisode, syncRangeSelector } from "../js/modules/episode-list.js";
+    import { initBookmarkSystem } from "../js/modules/bookmark-manager.js";
+    import { trackView, saveHistory, loadWatchHistory } from "../js/modules/watch-service.js";
+    import { initReportSystem, updateReportUI } from "../js/modules/report-service.js";
+    import { renderRelatedAnime } from "../js/modules/player-related.js";
+    import { renderPlayerTop10 } from "../js/modules/player-top10.js";
     import { initCommentSystem, postComment, updateCommentUIState } from "../js/modules/comments.js";
 
-        let userId;
-        let currentUser = null;
-        let currentShow = null;
-        let currentEpisodes = [];
-        let currentPlayingEpisode = null; 
-        let historyItems = []; 
-        let isSearchInitialized = false;
+    // Global State
+    let currentUser = null;
+    let currentShow = null;
+    let currentEpisode = null;
+    let historyItems = []; 
+    let isSearchInitialized = false;
+    const EPISODES_PER_BATCH = 50;
+
+    // Orchestrator Function: จัดการเมื่อมีการเล่นตอน
+    async function playEpisode(episode) {
+        if (!episode) return;
+        currentEpisode = episode;
         
-        let isBookmarked = false;
-        let btnBookmark;
-
-        const EPISODES_PER_BATCH = 50;
-        let isLoadingEpisodes = false;
-
-        let playerEmbedDiv, showTitleEl, showDescEl, episodeListContainer, relatedListContainer, top10ListContainer, loadingPlayer, playerContentWrapper, expandDescBtn, prevEpisodeBtn, nextEpisodeBtn, reportBrokenBtn, brokenAlertDiv, rangeSelectContainer, rangeSelect;
-
-        function getCollectionRef(collectionName) {
-            return collection(db, `artifacts/${appId}/public/data/${collectionName}`);
-        }
+        // 1. Core Player
+        embedEpisode(episode);
+        updatePlayerMetadata(currentShow, episode);
         
-        function updatePageMetadata(show, episode) {
-            if (!show) return;
-            const epText = episode ? ` ตอนที่ ${episode.number}` : '';
-            const title = `${show.title}${epText} | ANI-END`;
-            document.title = title;
-        }
-
-        async function loadHistoryOnce() {
-            if (!userId) return;
-            try {
-                const historyQuery = query(collection(db, `artifacts/${appId}/users/${userId}/viewHistory`), orderBy("watchedAt", "desc"), limit(50));
-                const snapshot = await getDocs(historyQuery);
-                historyItems.length = 0;
-                snapshot.docs.forEach(doc => historyItems.push({ id: doc.id, ...doc.data() }));
-            } catch (error) { console.error("History error:", error); }
-        }
-
-        async function saveToHistory(episode) {
-            if (!userId || !currentShow || !episode || !episode.id) return;
-            try {
-                const historyRef = doc(db, `artifacts/${appId}/users/${userId}/viewHistory`, currentShow.id);
-                const historyData = {
-                    showId: currentShow.id,
-                    showTitle: currentShow.title,
-                    showThumbnail: currentShow.thumbnailUrl || '',
-                    lastWatchedEpisodeId: episode.id,
-                    lastWatchedEpisodeTitle: episode.title,
-                    lastWatchedEpisodeNumber: episode.number,
-                    isCompleted: currentShow.isCompleted === true,
-                    latestEpisodeNumber: currentShow.latestEpisodeNumber || 0,
-                    watchedAt: serverTimestamp()
-                };
-                await setDoc(historyRef, historyData, { merge: true }); 
-                const existingIndex = historyItems.findIndex(h => h.showId === currentShow.id);
-                if (existingIndex !== -1) historyItems[existingIndex] = { ...historyItems[existingIndex], ...historyData };
-                else historyItems.unshift({ id: currentShow.id, ...historyData });
-            } catch (error) { console.error("Save history error:", error); }
-        }
-
-        async function incrementViewCountSafely(showId) {
-            const cooldown = 30 * 60 * 1000;
-            const storageKey = `last_view_${showId}`;
-            const lastViewTime = localStorage.getItem(storageKey);
-            const now = Date.now();
-            if (lastViewTime && (now - parseInt(lastViewTime)) < cooldown) return;
-            try {
-                const showRef = doc(getCollectionRef("shows"), showId);
-                await runTransaction(db, async (transaction) => {
-                    const sfDoc = await transaction.get(showRef);
-                    if (!sfDoc.exists()) return;
-                    const newViews = (sfDoc.data().viewCount || 0) + 1;
-                    transaction.update(showRef, { viewCount: newViews });
-                });
-                localStorage.setItem(storageKey, now.toString());
-            } catch (e) { console.warn("View count update skipped:", e); }
-        }
+        // 2. Services
+        if (currentUser) saveHistory(currentUser.uid, currentShow, episode);
+        trackView(currentShow.id);
         
-        function embedVideo(rawSource) {
-            playerEmbedDiv.innerHTML = ''; 
-            if (!rawSource) { playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบลิงก์วิดีโอ</p>`; return; }
-            const embedHtml = generateVideoEmbed(rawSource);
-            playerEmbedDiv.innerHTML = embedHtml;
-        }
-
-        function playEpisode(episode) {
-            currentPlayingEpisode = episode; 
-            updatePageMetadata(currentShow, episode);
-            if (currentShow) {
-                currentShow.latestEpisodeNumber = Math.max(currentShow.latestEpisodeNumber || 0, episode.number);
-            }
-            embedVideo(episode.videoUrl || episode.embedCode);
-            if (currentShow) showTitleEl.textContent = `${currentShow.title} - ${episode.title || 'ตอนที่ ' + episode.number}`;
-            
-            document.querySelectorAll('.ep-button').forEach(btn => {
-                if (btn.dataset.episodeId === episode.id) btn.classList.add('active');
-                else btn.classList.remove('active');
-            });
-            setTimeout(() => {
-                const activeBtn = episodeListContainer.querySelector('.ep-button.active');
-                if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-            }, 100);
-            
-            if (userId) saveToHistory(episode);
-            
-            if(prevEpisodeBtn) prevEpisodeBtn.disabled = (episode.number <= 1);
-            if(nextEpisodeBtn && currentShow) {
-                 const maxEp = currentShow.latestEpisodeNumber || 9999;
-                 nextEpisodeBtn.disabled = (episode.number >= maxEp);
-            }
-            
-            if (reportBrokenBtn) {
-                const status = episode.status;
-                if (status === 'broken' || status === 'user_reported') {
-                    reportBrokenBtn.disabled = true;
-                    reportBrokenBtn.innerHTML = status === 'broken' ? '<i class="ri-check-line"></i> แจ้งแล้ว (เสีย)' : '<i class="ri-check-line"></i> แจ้งแล้ว (รอตรวจสอบ)';
-                    reportBrokenBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-red-600');
-                    if(brokenAlertDiv) brokenAlertDiv.classList.remove('hidden');
-                } else { 
-                    reportBrokenBtn.disabled = false;
-                    reportBrokenBtn.innerHTML = '<i class="ri-error-warning-line"></i> แจ้ง (เสีย)';
-                    reportBrokenBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-red-600');
-                    if(brokenAlertDiv) brokenAlertDiv.classList.add('hidden');
-                }
-            }
-            
-            try {
-                const newUrl = new URL(window.location.href);
-                newUrl.searchParams.set('ep_id', episode.id); 
-                window.history.pushState({}, '', newUrl.href);
-            } catch (error) {}
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-
-            // [NEW] รีเซ็ตระบบคอมเมนต์เมื่อเปลี่ยนตอน
-            if (currentShow && episode) {
-                initCommentSystem(currentShow.id, episode.id, episode.number);
-            }
-        }
-
-        function setupRangeSelector(totalEpisodes, currentEpNumber) {
-            const effectiveTotal = Math.max(totalEpisodes || 0, currentEpNumber);
-            const totalRanges = Math.ceil(effectiveTotal / EPISODES_PER_BATCH);
-            
-            let html = '';
-            let activeValue = '';
-
-            for (let i = 0; i < totalRanges; i++) {
-                const start = (i * EPISODES_PER_BATCH) + 1;
-                const end = Math.min((i + 1) * EPISODES_PER_BATCH, effectiveTotal);
-                if (start > end) continue;
-                const value = `${start}-${end}`;
-                html += `<option value="${value}">ตอนที่ ${start} - ${end}</option>`;
-                if (currentEpNumber >= start && currentEpNumber <= end) activeValue = value;
-            }
-
-            if (!activeValue && totalRanges > 0) activeValue = `1-${Math.min(EPISODES_PER_BATCH, effectiveTotal)}`;
-            if (totalRanges === 0) html = '<option value="">ไม่มีตอน</option>';
-
-            rangeSelect.innerHTML = html;
-            rangeSelect.value = activeValue;
-            rangeSelectContainer.classList.remove('hidden'); 
-            rangeSelect.onchange = (e) => {
-                if(!e.target.value) return;
-                const [start, end] = e.target.value.split('-').map(Number);
-                loadEpisodesByRange(start, end);
-            };
-            return true;
-        }
+        // 3. UI Updates
+        highlightActiveEpisode(episode.id);
+        syncRangeSelector(episode.number); 
+        updateReportUI(episode);
+        updateNavButtons(episode.number);
         
-        window.loadEpisodesByRange = async function(start, end) {
-            if (isLoadingEpisodes) return;
-            isLoadingEpisodes = true;
-            episodeListContainer.innerHTML = '<p class="text-gray-400 p-2 text-sm">กำลังโหลด...</p>';
-            try {
-                const episodesRef = getCollectionRef("episodes");
-                const q = query(
-                    episodesRef, 
-                    where("showId", "==", currentShow.id), 
-                    where("number", ">=", start),
-                    where("number", "<=", end),
-                    orderBy("number", "asc")
-                );
-                const snapshot = await getDocs(q);
-                currentEpisodes = [];
-                snapshot.forEach((doc) => currentEpisodes.push({ id: doc.id, ...doc.data() }));
-                renderEpisodeList(currentEpisodes);
-            } catch (error) {
-                console.error("Error loading range:", error);
-                episodeListContainer.innerHTML = `<p class="text-red-500">โหลดข้อมูลล้มเหลว</p>`;
-            } finally { isLoadingEpisodes = false; }
-        }
+        // 4. Comments
+        initCommentSystem(currentShow.id, episode.id, episode.number);
+        
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
-        function renderEpisodeList(newEpisodes) {
-            episodeListContainer.innerHTML = '';
-            if (newEpisodes.length === 0) { 
-                episodeListContainer.innerHTML = `
-                    <div class="col-span-full flex flex-col items-center justify-center p-4 text-center w-full">
-                        <p class="text-gray-400 mb-2">ไม่พบตอนในช่วงนี้</p>
-                        <button onclick="loadEpisodesByRange(1, 9999)" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded transition-colors border border-gray-600">
-                            ลองโหลดตอนทั้งหมด
-                        </button>
-                    </div>`; 
-                return; 
-            }
-            newEpisodes.forEach((ep) => {
-                const button = document.createElement('button');
-                button.className = "ep-button w-12 h-12 flex-shrink-0 bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200 text-sm";
-                button.textContent = ep.number;
-                button.dataset.episodeId = ep.id;
-                if (currentPlayingEpisode && ep.id === currentPlayingEpisode.id) button.classList.add('active');
-                if (ep.status === 'broken' || ep.status === 'user_reported') button.classList.add('border-2', 'border-red-500', 'bg-red-900/30', 'text-red-300');
-                button.addEventListener('click', () => playEpisode(ep));
-                episodeListContainer.appendChild(button);
-            });
-        }
+    function updateNavButtons(currentNum) {
+        const prevBtn = document.getElementById('prev-episode-btn');
+        const nextBtn = document.getElementById('next-episode-btn');
+        const maxEp = currentShow.latestEpisodeNumber || 9999;
+        
+        if(prevBtn) prevBtn.disabled = (currentNum <= 1);
+        if(nextBtn) nextBtn.disabled = (currentNum >= maxEp);
+    }
 
-        async function loadContent() {
-            try {
-                const urlParams = new URLSearchParams(window.location.search);
-                const showId = urlParams.get('id'); 
-                const epIdFromUrl = urlParams.get('ep_id'); 
+    // Navigation Handler
+    async function navigateEpisode(direction) {
+        if (!currentEpisode) return;
+        
+        const btn = direction === 'next' ? document.getElementById('next-episode-btn') : document.getElementById('prev-episode-btn');
+        btn.disabled = true; 
+
+        try {
+            const nextEp = await findNextPrevEpisode(currentEpisode.number, direction, currentShow);
+            
+            if (nextEp) {
+                // ตรวจสอบว่าข้ามช่วงตอนหรือไม่ ถ้าข้ามต้องโหลดใหม่
+                const currentRangeStart = Math.floor((currentEpisode.number - 1) / EPISODES_PER_BATCH) * EPISODES_PER_BATCH + 1;
+                const nextRangeStart = Math.floor((nextEp.number - 1) / EPISODES_PER_BATCH) * EPISODES_PER_BATCH + 1;
                 
-                if (!showId) {
-                    loadingPlayer.innerHTML = '<p class="text-red-500">ไม่พบข้อมูลอนิเมะ (URL ไม่ถูกต้อง)</p>';
-                    return; 
-                }
-
-                // Reset comments UI before loading
-                const commentsContainer = document.getElementById('comments-list');
-                if(commentsContainer) commentsContainer.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">กำลังโหลด...</p>';
-
-                const showRef = doc(getCollectionRef("shows"), showId);
-                const showSnap = await getDoc(showRef);
-
-                if (!showSnap.exists()) { 
-                    playerEmbedDiv.innerHTML = `<p class="text-red-500 p-4">ไม่พบข้อมูลอนิเมะ</p>`; 
-                    loadingPlayer.classList.add('hidden');
-                    playerContentWrapper.classList.remove('hidden');
-                    return; 
+                if (currentRangeStart !== nextRangeStart) {
+                     const end = nextRangeStart + EPISODES_PER_BATCH - 1;
+                     await loadEpisodesByRange(nextRangeStart, end, document.getElementById('episode-list-container'), playEpisode);
                 }
                 
+                playEpisode(nextEp);
+            }
+        } catch(e) { console.error(e); }
+        finally { btn.disabled = false; }
+    }
+
+    // Main Init
+    document.addEventListener('DOMContentLoaded', async () => {
+        setLogLevel('silent');
+        await loadNavbar('..');
+        
+        // Get Elements
+        const loadingPlayer = document.getElementById('loading-player');
+        const playerContent = document.getElementById('player-content-wrapper');
+        
+        // Event Bindings
+        document.getElementById('prev-episode-btn').onclick = () => navigateEpisode('prev');
+        document.getElementById('next-episode-btn').onclick = () => navigateEpisode('next');
+        document.getElementById('btn-post-comment')?.addEventListener('click', () => postComment(currentUser));
+
+        // Auth & Data Loading
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user;
+            updateCommentUIState(user);
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const showId = urlParams.get('id');
+            const epIdFromUrl = urlParams.get('ep_id');
+
+            if (!showId) {
+                loadingPlayer.innerHTML = '<p class="text-red-500">URL ไม่ถูกต้อง</p>';
+                return;
+            }
+
+            try {
+                // 1. Fetch Show Data
+                const showSnap = await getDoc(doc(db, `artifacts/${appId}/public/data/shows`, showId));
+                if (!showSnap.exists()) throw new Error("ไม่พบข้อมูลอนิเมะ");
                 currentShow = { id: showSnap.id, ...showSnap.data() };
-                incrementViewCountSafely(showId);
-                renderRelatedList(currentShow.tags || []); 
 
-                if (userId) checkBookmarkStatus();
-                else updateBookmarkBtn(); 
-
-                let episodeToPlay = null;
-
-                if (epIdFromUrl) {
-                    try {
-                        const epRef = doc(getCollectionRef("episodes"), epIdFromUrl);
-                        const epSnap = await getDoc(epRef);
-                        if (epSnap.exists()) episodeToPlay = { id: epSnap.id, ...epSnap.data() };
-                    } catch (err) { console.error(err); }
-                } 
-                else if (historyItems.length > 0) {
-                    const historyItem = historyItems.find(h => h.showId === currentShow.id);
-                    if (historyItem && historyItem.lastWatchedEpisodeId) {
-                        try {
-                            const epRef = doc(getCollectionRef("episodes"), historyItem.lastWatchedEpisodeId);
-                            const epSnap = await getDoc(epRef);
-                            if (epSnap.exists()) {
-                                episodeToPlay = { id: epSnap.id, ...epSnap.data() };
-                                const newUrl = new URL(window.location.href);
-                                newUrl.searchParams.set('ep_id', episodeToPlay.id);
-                                window.history.replaceState({}, '', newUrl.href);
-                            }
-                        } catch (err) { console.warn("Resume history failed", err); }
-                    }
-                }
-
-                const targetEpNum = episodeToPlay ? episodeToPlay.number : 1;
-                const latestEpNum = Math.max(currentShow.latestEpisodeNumber || 0, targetEpNum);
-                setupRangeSelector(latestEpNum, targetEpNum);
-
-                const page = Math.ceil(targetEpNum / EPISODES_PER_BATCH);
-                const safePage = page > 0 ? page : 1;
-                const start = ((safePage - 1) * EPISODES_PER_BATCH) + 1;
-                const end = safePage * EPISODES_PER_BATCH;
+                // 2. Setup Player Core Info
+                setupPlayerInfo(currentShow);
                 
-                await loadEpisodesByRange(start, end);
-
-                if (!episodeToPlay && currentEpisodes.length > 0) {
-                     episodeToPlay = currentEpisodes.find(ep => ep.number === targetEpNum);
-                     if (!episodeToPlay) episodeToPlay = currentEpisodes[0];
-                }
-
-                if (episodeToPlay) {
-                    playEpisode(episodeToPlay); 
-                } else {
-                    playerEmbedDiv.innerHTML = `<p class="text-gray-400 p-4">ยังไม่มีตอนสำหรับอนิเมะนี้</p>`;
-                    updatePageMetadata(currentShow, null);
-                    // ถ้าไม่มีตอน ให้ init comment แบบ show mode
-                    initCommentSystem(showId, null, 0);
-                }
-
-            } catch (error) { 
-                console.error("Error loading content:", error); 
-                loadingPlayer.innerHTML = `<p class="text-red-500">เกิดข้อผิดพลาด: ${error.message}</p>`;
-            } finally {
-                if (document.getElementById('show-title').textContent !== '...') {
-                     loadingPlayer.classList.add('hidden');
-                     playerContentWrapper.classList.remove('hidden');
-                     if (currentShow) renderShowDetails(currentShow);
-                }
-            }
-        }
-        
-        async function checkBookmarkStatus() {
-            if(!userId || !currentShow) return;
-            try {
-                const docRef = doc(db, `artifacts/${appId}/users/${userId}/bookmarks`, currentShow.id);
-                const docSnap = await getDoc(docRef);
-                isBookmarked = docSnap.exists();
-                updateBookmarkBtn();
-            } catch(e) { console.error(e); }
-        }
-
-        function updateBookmarkBtn() {
-            if(!btnBookmark) return;
-            if (!userId) {
-                btnBookmark.innerHTML = '<i class="ri-heart-add-line"></i> เพิ่มรายการโปรด (Login)';
-                btnBookmark.classList.replace('border-red-500', 'border-gray-600');
-                btnBookmark.classList.remove('text-red-400', 'text-gray-300');
-                btnBookmark.classList.add('text-gray-400');
-                return;
-            }
-
-            if(isBookmarked) {
-                btnBookmark.innerHTML = '<i class="ri-heart-fill text-red-500"></i> รายการโปรด';
-                btnBookmark.classList.replace('border-gray-600', 'border-red-500');
-                btnBookmark.classList.add('text-red-400');
-            } else {
-                btnBookmark.innerHTML = '<i class="ri-heart-line"></i> เพิ่มรายการโปรด';
-                btnBookmark.classList.replace('border-red-500', 'border-gray-600');
-                btnBookmark.classList.remove('text-red-400');
-            }
-        }
-
-        async function toggleBookmark() {
-            if (!userId) {
-                if (confirm('คุณต้องเข้าสู่ระบบเพื่อบันทึกรายการโปรด\nต้องการเข้าสู่ระบบหรือไม่?')) {
-                    window.triggerLogin(); 
-                }
-                return;
-            }
-
-            if(!currentShow) return;
-            btnBookmark.disabled = true;
-            try {
-                const docRef = doc(db, `artifacts/${appId}/users/${userId}/bookmarks`, currentShow.id);
-                if(isBookmarked) {
-                    await deleteDoc(docRef);
-                    isBookmarked = false;
-                } else {
-                    const data = {
-                        title: currentShow.title,
-                        thumbnailUrl: currentShow.thumbnailUrl || '',
-                        tags: currentShow.tags || [], 
-                        isCompleted: currentShow.isCompleted || false,
-                        viewCount: currentShow.viewCount || 0,
-                        latestEpisodeNumber: currentShow.latestEpisodeNumber || 0,
-                        savedAt: serverTimestamp()
-                    };
-                    await setDoc(docRef, data);
-                    isBookmarked = true;
-                }
-                updateBookmarkBtn();
-            } catch(e) { console.error(e); alert('เกิดข้อผิดพลาดในการบันทึก'); }
-            finally { btnBookmark.disabled = false; }
-        }
-
-        async function navigateEpisode(direction) {
-            if(!currentPlayingEpisode || !currentShow) return;
-            const currentNum = currentPlayingEpisode.number;
-            const targetNum = direction === 'next' ? currentNum + 1 : currentNum - 1;
-
-            const cachedEpisode = currentEpisodes.find(ep => ep.number === targetNum);
-            if(cachedEpisode) {
-                playEpisode(cachedEpisode);
-                return;
-            }
-
-            const maxEp = currentShow.latestEpisodeNumber || 9999;
-            if (direction === 'prev' && targetNum < 1) return; 
-
-            try {
-                const page = Math.ceil(targetNum / EPISODES_PER_BATCH);
-                const start = ((page - 1) * EPISODES_PER_BATCH) + 1;
-                const end = page * EPISODES_PER_BATCH;
-                
-                await loadEpisodesByRange(start, end);
-                if(rangeSelect) rangeSelect.value = `${start}-${end}`;
-
-                const nextEp = currentEpisodes.find(ep => ep.number === targetNum);
-                if(nextEp) playEpisode(nextEp);
-                else {
-                     const q = query(getCollectionRef("episodes"), where("showId", "==", currentShow.id), where("number", "==", targetNum), limit(1));
-                     const snap = await getDocs(q);
-                     if(!snap.empty) playEpisode({id: snap.docs[0].id, ...snap.docs[0].data()});
-                }
-            } catch(e) { console.error("Navigation error", e); }
-        }
-
-        function renderShowDetails(show) {
-            showDescEl.textContent = show.description || "ไม่มีคำอธิบาย";
-            if (showDescEl.scrollHeight > showDescEl.clientHeight) expandDescBtn.classList.remove('hidden');
-        }
-
-        async function renderRelatedList(tags) {
-            if (!tags || tags.length === 0) return;
-            try {
-                const q = query(getCollectionRef("shows"), where("tags", "array-contains-any", tags.slice(0, 10)), limit(10));
-                const snapshot = await getDocs(q);
-                let html = '';
-                snapshot.forEach((doc) => {
-                    if (currentShow && doc.id !== currentShow.id) {
-                        html += createAnimeCard({ id: doc.id, ...doc.data() }, null, historyItems.find(h => h.showId === doc.id));
-                    }
-                });
-                relatedListContainer.innerHTML = html;
-            } catch (err) { console.warn("Related fetch error", err); }
-        }
-
-        async function renderTop10List() {
-            try {
-                const q = query(getCollectionRef("shows"), orderBy("viewCount", "desc"), limit(10));
-                const snapshot = await getDocs(q);
-                let html = '';
-                let rank = 1;
-                snapshot.forEach((doc) => {
-                    const show = { id: doc.id, ...doc.data() };
-                    const history = historyItems.find(h => h.showId === show.id);
-                    const link = history ? `player.html?id=${show.id}&ep_id=${history.lastWatchedEpisodeId}` : `player.html?id=${show.id}`;
-                    html += `
-                        <a href="${link}" class="top10-item hover:shadow-lg bg-gray-700"> 
-                            <span class="rank-badge-lg rank-${rank}">${rank}</span>
-                            <img src="${show.thumbnailUrl}" class="rounded-md top10-thumbnail shadow-md">
-                            <div class="top10-content flex-grow ml-3">
-                                <h4 class="font-bold text-white line-clamp-2 text-sm">${show.title}</h4>
-                            </div>
-                        </a>
-                    `;
-                    rank++;
-                });
-                top10ListContainer.innerHTML = html;
-            } catch (error) { console.error(error); }
-        }
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            await loadNavbar('..');
-
-            playerEmbedDiv = document.getElementById('video-player-embed');
-            showTitleEl = document.getElementById('show-title');
-            showDescEl = document.getElementById('show-description');
-            episodeListContainer = document.getElementById('episode-list-container');
-            relatedListContainer = document.getElementById('related-list-container');
-            top10ListContainer = document.getElementById('top10-list-container');
-            loadingPlayer = document.getElementById('loading-player');
-            playerContentWrapper = document.getElementById('player-content-wrapper');
-            expandDescBtn = document.getElementById('expand-desc-btn');
-            prevEpisodeBtn = document.getElementById('prev-episode-btn');
-            nextEpisodeBtn = document.getElementById('next-episode-btn');
-            reportBrokenBtn = document.getElementById('report-broken-btn');
-            brokenAlertDiv = document.getElementById('broken-alert');
-            
-            rangeSelectContainer = document.getElementById('episode-range-container');
-            rangeSelect = document.getElementById('episode-range-select');
-            
-            btnBookmark = document.getElementById('btn-bookmark');
-            if(btnBookmark) btnBookmark.onclick = toggleBookmark;
-
-            if(prevEpisodeBtn) prevEpisodeBtn.onclick = () => navigateEpisode('prev');
-            if(nextEpisodeBtn) nextEpisodeBtn.onclick = () => navigateEpisode('next');
-
-            if(expandDescBtn) expandDescBtn.onclick = () => { showDescEl.classList.toggle('line-clamp-2'); expandDescBtn.textContent = showDescEl.classList.contains('line-clamp-2') ? 'เพิ่มเติม' : 'ย่อ'; };
-            if(reportBrokenBtn) reportBrokenBtn.onclick = async () => {
-                if(!userId || !currentPlayingEpisode) return;
-                reportBrokenBtn.textContent = 'กำลังแจ้ง...';
-                try {
-                    await addDoc(collection(db, `artifacts/${appId}/public/data/reports`), { episodeId: currentPlayingEpisode.id, showId: currentShow.id, reportedBy: 'user', userId, createdAt: serverTimestamp() });
-                    await updateDoc(doc(getCollectionRef("episodes"), currentPlayingEpisode.id), { status: 'user_reported' });
-                    currentPlayingEpisode.status = 'user_reported';
-                    playEpisode(currentPlayingEpisode); 
-                } catch(e) { console.error(e); reportBrokenBtn.textContent = 'แจ้งล้มเหลว'; }
-            };
-
-            // Event Listener สำหรับปุ่มโพสต์คอมเมนต์ (เรียกฟังก์ชันจาก comments.js)
-            document.getElementById('btn-post-comment')?.addEventListener('click', () => {
-                postComment(currentUser);
-            });
-
-            // ดักจับการกดปุ่ม Back/Forward ของ Browser
-            window.addEventListener('popstate', async () => {
-                loadingPlayer.classList.remove('hidden');
-                playerContentWrapper.classList.add('hidden');
-                await loadContent();
-            });
-
-            setLogLevel('silent');
-            onAuthStateChanged(auth, async (user) => {
-                currentUser = user;
-                userId = user ? user.uid : null;
-                
-                // อัปเดตหน้าตาคอมเมนต์ (เรียกฟังก์ชันจาก comments.js)
-                updateCommentUIState(user);
-
+                // 3. Load User Data (History, Bookmarks)
                 if (user) {
-                    await loadHistoryOnce(); 
-                    if (!isSearchInitialized) { 
-                        setupSearchSystem(historyItems); 
-                        isSearchInitialized = true; 
+                    historyItems = await loadWatchHistory(user.uid);
+                    if (!isSearchInitialized) { setupSearchSystem(historyItems); isSearchInitialized = true; }
+                } else {
+                    if (!isSearchInitialized) { setupSearchSystem([]); isSearchInitialized = true; }
+                }
+
+                // 4. Determine Episode to Play
+                // Priority: URL -> History -> First Episode
+                let targetEpId = epIdFromUrl;
+                let targetEpNum = 1;
+
+                if (!targetEpId && historyItems.length > 0) {
+                    const history = historyItems.find(h => h.showId === showId);
+                    if (history) targetEpId = history.lastWatchedEpisodeId;
+                }
+
+                // 5. Initialize Modules
+                initBookmarkSystem(user, currentShow);
+                initReportSystem(user, currentShow, () => currentEpisode); 
+                renderRelatedAnime(currentShow, historyItems);
+                renderPlayerTop10(historyItems);
+
+                // 6. Initialize Episode List & Play
+                if (targetEpId) {
+                    const epSnap = await getDoc(doc(db, `artifacts/${appId}/public/data/episodes`, targetEpId));
+                    if (epSnap.exists()) {
+                        const epData = { id: epSnap.id, ...epSnap.data() };
+                        targetEpNum = epData.number;
+                        
+                        await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
+                        
+                        // Load Specific Range
+                        const rangeStart = Math.floor((targetEpNum - 1) / EPISODES_PER_BATCH) * EPISODES_PER_BATCH + 1;
+                        const rangeEnd = rangeStart + EPISODES_PER_BATCH - 1;
+                        
+                        await loadEpisodesByRange(rangeStart, rangeEnd, document.getElementById('episode-list-container'), playEpisode);
+                        playEpisode(epData);
+                    } else {
+                        // Fallback if episode deleted
+                         await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
+                         await loadEpisodesByRange(1, EPISODES_PER_BATCH, document.getElementById('episode-list-container'), playEpisode);
                     }
                 } else {
-                    historyItems = [];
-                    if (!isSearchInitialized) {
-                        setupSearchSystem([]); 
-                        isSearchInitialized = true;
-                    }
+                    // Default Case (No history, no url param)
+                    await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
+                    const episodes = await loadEpisodesByRange(1, EPISODES_PER_BATCH, document.getElementById('episode-list-container'), playEpisode);
+                    if (episodes.length > 0) playEpisode(episodes[0]);
+                    else embedEpisode(null);
                 }
-                
-                await loadContent(); 
-                renderTop10List();
-            });
+
+                // Reveal UI
+                loadingPlayer.classList.add('hidden');
+                playerContent.classList.remove('hidden');
+
+            } catch (error) {
+                console.error(error);
+                loadingPlayer.innerHTML = `<p class="text-red-500">เกิดข้อผิดพลาด: ${error.message}</p>`;
+            }
         });
-    </script>
+
+        // Browser Back Button Support
+        window.addEventListener('popstate', () => window.location.reload());
+    });
+</script>
 
     <div id="loading-player" class="flex items-center justify-center" style="min-height: 80vh;"><p class="text-2xl text-gray-400">กำลังโหลดเนื้อหา...</p></div>
     
     <div id="player-content-wrapper" class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 hidden">
+        
         <div id="broken-alert" class="hidden bg-red-800/80 border border-red-700 text-white p-3 rounded-lg mb-4 text-sm font-medium items-center">
             <i class="ri-error-warning-line mr-2"></i> วิดีโอนี้ถูกระบุว่ามีปัญหาโดยระบบ กำลังรอการแก้ไขโดยผู้ดูแลระบบ.
         </div>
@@ -588,57 +236,61 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
             
             <div class="lg:col-span-2 w-full order-1">
-                <div class="video-aspect-wrapper rounded-lg overflow-hidden relative z-10"> 
+                <div class="video-aspect-wrapper rounded-lg overflow-hidden relative z-10 shadow-lg bg-gray-900"> 
                     <div id="video-player-embed"></div>
                 </div>
                 
-                <div class="flex justify-between items-center mt-4"> 
-                    <button id="prev-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <div class="flex justify-between items-center mt-4 bg-gray-900/50 p-2 rounded-lg backdrop-blur-sm"> 
+                    <button id="prev-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1.5 px-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-700">
                         <i class="ri-arrow-left-s-line mr-1"></i> ตอนก่อนหน้า
                     </button>
-                    <button id="report-broken-btn" class="flex items-center bg-gray-700 hover:bg-red-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button id="report-broken-btn" class="flex items-center bg-gray-700 hover:bg-red-600 text-white text-sm font-medium py-1.5 px-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="ri-error-warning-line mr-1"></i> แจ้ง (เสีย)
                     </button>
-                    <button id="next-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1 px-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button id="next-episode-btn" class="flex items-center bg-gray-700 hover:bg-green-600 text-white text-sm font-medium py-1.5 px-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-700">
                         ตอนถัดไป <i class="ri-arrow-right-s-line ml-1"></i>
                     </button>
                 </div>
             </div>
 
             <div class="lg:col-span-1 w-full order-3 lg:order-2">
-                <section class="bg-gray-900/80 rounded-lg p-4"> 
+                <section class="bg-gray-900 rounded-lg p-4 border border-gray-800 shadow-lg h-full"> 
                     <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
-                        <h3 class="text-xl font-bold text-white">เลือกตอน</h3>
+                        <h3 class="text-lg font-bold text-white flex items-center"><i class="ri-list-check mr-2 text-green-500"></i> เลือกตอน</h3>
                         <div id="episode-range-container" class="hidden">
-                            <select id="episode-range-select" class="bg-gray-700 text-white text-sm rounded px-2 py-1 outline-none border border-gray-600 focus:border-green-500 cursor-pointer hover:bg-gray-600 transition-colors">
+                            <select id="episode-range-select" class="bg-gray-800 text-white text-xs rounded px-2 py-1 outline-none border border-gray-600 focus:border-green-500 cursor-pointer hover:bg-gray-700 transition-colors">
                             </select>
                         </div>
                     </div>
                     
-                    <div id="episode-list-container" class="flex flex-wrap gap-2 max-h-[60vh] overflow-y-auto content-start custom-scrollbar"><p class="text-gray-400">กำลังโหลด...</p></div>
+                    <div id="episode-list-container" class="flex flex-wrap gap-2 max-h-[400px] lg:max-h-[500px] overflow-y-auto content-start custom-scrollbar">
+                        <p class="text-gray-400">กำลังโหลด...</p>
+                    </div>
                 </section>
             </div>
 
             <div class="contents lg:flex lg:flex-col lg:col-span-2 lg:order-3 lg:gap-4">
                 
                 <div class="order-2 w-full">
-                    <div class="text-white p-4 bg-gray-900 rounded-lg shadow-sm"> 
-                        <div class="flex justify-between items-start">
-                            <div>
-                                 <h1 id="show-title" class="text-2xl font-bold mb-2">...</h1>
+                    <div class="text-white p-5 bg-gray-900 rounded-lg shadow-lg border border-gray-800"> 
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="flex-1">
+                                 <h1 id="show-title" class="text-2xl font-bold mb-2 leading-tight">...</h1>
                             </div>
-                            <button id="btn-bookmark" class="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-600 text-sm hover:bg-gray-800 transition-colors">
+                            <button id="btn-bookmark" class="flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full border border-gray-600 text-sm hover:bg-gray-800 transition-colors text-gray-400">
                                 <i class="ri-heart-line"></i> เพิ่มรายการโปรด
                             </button>
                         </div>
-                        <p id="show-description" class="text-gray-300 line-clamp-2 mt-2">...</p>
-                        <button id="expand-desc-btn" class="text-green-400 text-sm mt-1 hidden">เพิ่มเติม</button>
+                        <p id="show-description" class="text-gray-300 line-clamp-2 mt-3 text-sm leading-relaxed">...</p>
+                        <button id="expand-desc-btn" class="text-green-400 text-sm mt-1 hidden hover:underline">เพิ่มเติม</button>
                     </div>
                 </div>
 
                 <div class="order-5 w-full">
-                    <section class="bg-gray-900/80 rounded-lg p-4"> 
-                        <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">อนิเมะแนะนำ</h3>
+                    <section class="bg-gray-900 rounded-lg p-5 border border-gray-800 shadow-lg"> 
+                        <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-3 flex items-center">
+                            <i class="ri-film-line mr-2 text-green-500"></i> อนิเมะแนะนำ
+                        </h3>
                         <div id="related-list-container" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4"></div>
                     </section>
                 </div>
@@ -693,8 +345,10 @@
             </div>
 
             <div class="lg:col-span-1 w-full order-4">
-                <section class="bg-gray-900/80 rounded-lg p-4"> 
-                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">10 อันดับยอดนิยม</h3>
+                <section class="bg-gray-900 rounded-lg p-4 border border-gray-800 shadow-lg sticky top-20"> 
+                    <h3 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-3 flex items-center">
+                        <i class="ri-fire-line mr-2 text-orange-500"></i> 10 อันดับยอดนิยม
+                    </h3>
                     <div id="top10-list-container" class="flex flex-col space-y-1"></div>
                 </section>
             </div>
@@ -703,5 +357,3 @@
     </div>
 </body>
 </html>
-
-
