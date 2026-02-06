@@ -3,7 +3,8 @@ import { db, appId } from "../config/db-config.js";
 
 const EPISODES_PER_BATCH = 50;
 let currentShowId = null;
-let currentEpisodes = []; // Cache episodes locally
+let currentEpisodes = []; 
+let activeEpisodeId = null; // ✅ เพิ่มตัวแปรจำสถานะปุ่มที่เลือกอยู่
 
 // ฟังก์ชันหลักสำหรับโหลดและจัดการ List
 export async function initEpisodeList(showId, latestEpisodeNumber, onEpisodeSelect) {
@@ -47,7 +48,7 @@ function setupRangeSelector(totalEpisodes, selectEl, containerEl, loadCallback) 
     selectEl.innerHTML = html;
     containerEl.classList.remove('hidden');
 
-    // Event Listener เปลี่ยนช่วง
+    // Event Listener เปลี่ยนช่วง (เฉพาะตอนคนกดเปลี่ยนเอง)
     selectEl.onchange = (e) => {
         if(!e.target.value) return;
         const [start, end] = e.target.value.split('-').map(Number);
@@ -91,11 +92,22 @@ function renderButtons(episodes, container, onClick) {
 
     episodes.forEach(ep => {
         const btn = document.createElement('button');
-        btn.className = `ep-button w-12 h-12 flex-shrink-0 bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200 text-sm ${getStatusClass(ep.status)}`;
+        // ✅ เพิ่ม Logic ตรวจสอบ activeEpisodeId ทันทีตอนสร้างปุ่ม
+        let activeClass = '';
+        if (ep.id === activeEpisodeId) {
+            activeClass = 'active bg-green-600 text-white';
+        }
+        
+        btn.className = `ep-button w-12 h-12 flex-shrink-0 bg-gray-700 hover:bg-gray-600 rounded-md flex items-center justify-center font-medium transition-colors duration-200 text-sm ${getStatusClass(ep.status)} ${activeClass}`;
         btn.textContent = ep.number;
         btn.dataset.id = ep.id;
         btn.onclick = () => onClick(ep);
         container.appendChild(btn);
+
+        // Scroll into view if active
+        if (ep.id === activeEpisodeId) {
+             setTimeout(() => btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 100);
+        }
     });
 }
 
@@ -106,6 +118,8 @@ function getStatusClass(status) {
 
 // ไฮไลท์ปุ่มตอนที่กำลังเล่น
 export function highlightActiveEpisode(episodeId) {
+    activeEpisodeId = episodeId; // ✅ จำค่าไว้ เผื่อมีการ Render ใหม่
+    
     document.querySelectorAll('.ep-button').forEach(btn => {
         if (btn.dataset.id === episodeId) {
             btn.classList.add('active', 'bg-green-600', 'text-white');
@@ -148,7 +162,7 @@ export function syncRangeSelector(episodeNum) {
         if (episodeNum >= start && episodeNum <= end) {
             if (rangeSelect.value !== option.value) {
                 rangeSelect.value = option.value;
-                rangeSelect.dispatchEvent(new Event('change'));
+                // ❌ ลบบรรทัด dispatchEvent ออก เพื่อไม่ให้มันไปกระตุ้นการโหลดซ้ำโดยไม่จำเป็น
             }
             return;
         }
