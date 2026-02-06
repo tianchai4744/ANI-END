@@ -25,7 +25,7 @@ export function showToast(message, type = 'success') {
     }, 4000);
 }
 
-// Helper: Loading Overlay (แก้ไข: รองรับการเปลี่ยนข้อความ)
+// Helper: Loading Overlay (รองรับการเปลี่ยนข้อความ)
 export function toggleLoading(show, text = "กำลังประมวลผล...") {
     const overlay = document.getElementById('loading-overlay');
     const txtElement = document.getElementById('loading-text'); // หา Element ข้อความ
@@ -62,27 +62,4 @@ export function showConfirmModal(title, message, onConfirm) {
     newCancel.addEventListener('click', () => {
         modal.classList.add('hidden'); modal.classList.remove('flex');
     });
-}
-
-// Helper: Parse Video URL (รองรับ YouTube/Dailymotion/Iframe)
-export function parseVideoUrl(input) {
-    if (!input) return "";
-    const trimmed = input.trim();
-    if (trimmed.startsWith("<iframe")) return trimmed;
-    
-    // YouTube
-    const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
-    const ytMatch = trimmed.match(ytRegex);
-    if (ytMatch && ytMatch[1]) {
-        return `<iframe src="https://www.youtube.com/embed/${ytMatch[1]}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
-    }
-    
-    // Dailymotion
-    const dmRegex = /dailymotion\.com\/video\/([a-zA-Z0-9]+)/i;
-    const dmMatch = trimmed.match(dmRegex);
-    if (dmMatch && dmMatch[1]) {
-        return `<iframe src="https://www.dailymotion.com/embed/video/${dmMatch[1]}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
-    }
-    
-    return trimmed;
 }
