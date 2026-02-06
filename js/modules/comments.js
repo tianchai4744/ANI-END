@@ -12,8 +12,8 @@ let currentEpisodeNum = null;
 let lastCommentCursor = null; 
 let isCommentsLoading = false;
 
-// ✅ XSS Protection: ฟังก์ชันแปลงตัวอักษรพิเศษเป็น HTML Entities
-// ป้องกันไม่ให้ Browser รัน Script ที่ผู้ใช้พิมพ์เข้ามา
+// ✅ [NEW] XSS Protection: ฟังก์ชันป้องกันการฝัง Script
+// แปลงตัวอักษรพิเศษเป็น HTML Entities เพื่อความปลอดภัย
 function escapeHtml(unsafe) {
     if (typeof unsafe !== 'string') return unsafe;
     return unsafe
@@ -171,10 +171,11 @@ export async function loadComments(isReset = false) {
                 ? `<span class="bg-gray-700 text-gray-300 text-[10px] px-1.5 py-0.5 rounded ml-2">Ep.${c.episodeNum}</span>` 
                 : '';
 
-            // ✅ XSS Fix: ใช้ escapeHtml หุ้มข้อมูลที่มาจาก User ทั้งหมด (ชื่อ, ข้อความ, รูปภาพ)
+            // ✅ [FIXED] ใช้ escapeHtml หุ้มข้อมูลจาก User เพื่อป้องกัน XSS
             const safeUserName = escapeHtml(c.userName || 'Guest');
             const safeUserPhoto = escapeHtml(c.userPhoto) || 'https://placehold.co/40x40?text=?';
-            const safeText = escapeHtml(c.text); // ข้อความถูก sanitize แล้ว
+            // แปลง Text ให้ปลอดภัย
+            const safeText = escapeHtml(c.text); 
 
             html += `
                 <div class="group flex gap-3 mb-4 border-b border-gray-800 pb-4 last:border-0 hover:bg-gray-800/30 p-2 rounded-lg transition-colors">
@@ -247,7 +248,7 @@ export async function postComment(user) {
             userId: user.uid,
             userName: user.displayName || 'User',
             userPhoto: user.photoURL || '',
-            text: text, // บันทึก Raw text ลง DB (sanitize ตอนแสดงผล เพื่อความยืดหยุ่น)
+            text: text, // บันทึก Raw text ลง DB (เราจะ Sanitize ตอนแสดงผลแทน เพื่อความยืดหยุ่น)
             createdAt: serverTimestamp(),
             showId: currentShowId,
             episodeId: currentEpisodeId || null,
