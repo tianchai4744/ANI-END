@@ -79,12 +79,18 @@
         // --- Imported Modules ---
         import { renderHeroBanner, renderHeroSkeleton } from "./js/modules/hero-banner.js";
         import { renderTop10Section } from "./js/modules/top10.js";
-        import { renderHistorySectionHTML } from "./js/modules/history-section.js"; // [NEW]
+        import { renderHistorySectionHTML } from "./js/modules/history-section.js";
         
         // Section Modules
         import { renderRecommendedSection } from "./js/modules/recommended.js";
         import { renderThaiDubSection } from "./js/modules/thai-dub.js";
         import { renderLatestUpdatesSection } from "./js/modules/latest-updates.js";
+
+        // [NEW] Global Logger
+        import { initGlobalErrorLogging } from "./js/modules/logger.js";
+        
+        // เริ่มต้นระบบ Log ทันที
+        initGlobalErrorLogging();
 
         let userId;
         let historyItems = []; 
@@ -197,9 +203,8 @@
             }
         }
         
-        // ฟังก์ชันช่วยในการ Render History โดยใช้ Module
         function renderHistorySection() {
-            const htmlContent = renderHistorySectionHTML(historyItems, userId); // เรียกใช้ Module
+            const htmlContent = renderHistorySectionHTML(historyItems, userId);
             
             const mobileContainer = document.getElementById('history-mobile-container');
             if (mobileContainer) mobileContainer.innerHTML = htmlContent;
@@ -231,23 +236,18 @@
             if (!sectionsContainer) return;
             sectionsContainer.innerHTML = ''; 
             
-            // 1. History (Mobile) - แสดงเสมอ
             const historyMobileSection = document.createElement('section');
             historyMobileSection.className = 'block lg:hidden w-full mb-8';
             historyMobileSection.id = 'history-mobile-container';
-            // Render HTML เริ่มต้น (ว่างหรือ Login Prompt)
             historyMobileSection.innerHTML = renderHistorySectionHTML(historyItems, userId);
             sectionsContainer.appendChild(historyMobileSection);
 
-            // 2. Dual Grid (Top 10 + History Desktop)
             const dualGridContainer = document.createElement('div');
             dualGridContainer.className = 'flex flex-wrap lg:flex-nowrap gap-6 mb-8'; 
             
-            // [Module Top 10]
             const top10Element = renderTop10Section(top30Shows, historyItems);
             if (top10Element) dualGridContainer.appendChild(top10Element);
             
-            // History Desktop - แสดงเสมอ
             const historyDesktopSection = document.createElement('section');
             historyDesktopSection.className = 'hidden lg:block w-full lg:w-1/3 flex-shrink-0 bg-gray-900 p-4 rounded-lg order-2 lg:order-2'; 
             historyDesktopSection.id = 'history-desktop-container';
@@ -256,15 +256,12 @@
             
             sectionsContainer.appendChild(dualGridContainer);
             
-            // 3. Recommended Section
             const recommendedEl = renderRecommendedSection(top30Shows, historyItems);
             if (recommendedEl) sectionsContainer.appendChild(recommendedEl);
 
-            // 4. Thai Dub Section
             const thaiDubEl = renderThaiDubSection(thaiDubShows, historyItems);
             if (thaiDubEl) sectionsContainer.appendChild(thaiDubEl);
 
-            // 5. Latest Updates Section
             const latestEl = renderLatestUpdatesSection(latestShows, historyItems);
             if (latestEl) sectionsContainer.appendChild(latestEl);
             
