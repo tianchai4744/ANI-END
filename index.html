@@ -4,27 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ANI-END - หน้าแรก</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
-    <style>
-        body {
-            background-color: #111;
-            color: #fff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            cursor: default;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            scrollbar-width: thin;
-            scrollbar-color: #333 #111;
-        }
-        main { flex: 1; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #111; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #00b87c; }
+    
+    <link rel="stylesheet" href="./style.css">
 
+    <style>
+        /* CSS เฉพาะหน้าที่ยังคงไว้ */
         .swiper-button-next, .swiper-button-prev { 
             color: #ffffff; 
             background-color: rgba(0,0,0,0.5); 
@@ -69,8 +53,8 @@
 <body class="bg-black text-gray-100">
 
     <script type="module">
-        import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { onSnapshot, collection, query, limit, orderBy, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+        import { onSnapshot, collection, query, limit, orderBy, where, getDocs } from "firebase/firestore";
 
         import { db, auth, appId } from "./js/config/db-config.js";
         import { setupSearchSystem } from "./js/modules/search.js";
@@ -316,7 +300,5 @@
             </div>
         </div>
     </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
 </body>
 </html>
