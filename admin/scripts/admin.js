@@ -1,8 +1,11 @@
 // admin/scripts/admin.js
 
-// ✅ แก้ไข Import ทั้งหมดตรงนี้
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getCountFromServer, setLogLevel, doc, getDoc } from "firebase/firestore";
+
+// ✅ แก้ไข: ใช้ CDN Import (ไม่ต้องลง npm install)
+import Chart from "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/auto/+esm";
+
 import { db, auth, appId } from "../../js/config/db-config.js";
 import { getCollectionRef, showToast, showConfirmModal } from "./utils.js";
 
@@ -15,6 +18,9 @@ import { initReportModule } from "./reports.js";
 
 setLogLevel('silent');
 
+let epChart = null;
+let tagChart = null;
+
 // Global Tab Switcher
 window.switchTab = function(tabName) {
     ['dashboard', 'shows', 'episodes', 'banners', 'reports', 'tags'].forEach(t => {
@@ -22,15 +28,10 @@ window.switchTab = function(tabName) {
         if(el) t === tabName ? el.classList.remove('hidden') : el.classList.add('hidden');
     });
     
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('bg-gray-800', 'text-white', 'shadow-md');
-        btn.classList.add('text-gray-400');
-    });
+    // Update Sidebar Active State
+    document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active', 'text-indigo-400', 'bg-gray-800'));
     const activeBtn = document.getElementById('tab-' + tabName);
-    if(activeBtn) {
-        activeBtn.classList.add('bg-gray-800', 'text-white', 'shadow-md');
-        activeBtn.classList.remove('text-gray-400');
-    }
+    if(activeBtn) activeBtn.classList.add('active');
 
     if(tabName === 'dashboard') fetchDashboardStats();
     if(tabName === 'reports' && window.fetchReports) window.fetchReports('reset');
@@ -53,7 +54,64 @@ async function fetchDashboardStats() {
             badge.innerText = r.data().count;
             badge.classList.toggle('hidden', r.data().count === 0);
         }
+
+        // Render Charts (Mockup Data)
+        renderCharts();
+
     } catch(err) { console.error(err); }
+}
+
+function renderCharts() {
+    // 1. Episodes Chart
+    const ctxEp = document.getElementById('chart-episodes');
+    if (ctxEp) {
+        if (epChart) epChart.destroy();
+        epChart = new Chart(ctxEp, {
+            type: 'line',
+            data: {
+                labels: ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์', 'อาทิตย์'],
+                datasets: [{
+                    label: 'ตอนที่เพิ่มใหม่',
+                    data: [12, 19, 3, 5, 2, 3, 10], // Mock Data
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+    }
+
+    // 2. Tags Chart
+    const ctxTag = document.getElementById('chart-tags');
+    if (ctxTag) {
+        if (tagChart) tagChart.destroy();
+        tagChart = new Chart(ctxTag, {
+            type: 'doughnut',
+            data: {
+                labels: ['Action', 'Romance', 'Fantasy', 'Isekai', 'Drama'],
+                datasets: [{
+                    data: [30, 20, 25, 15, 10], // Mock Data
+                    backgroundColor: ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'right', labels: { color: '#cbd5e1' } } }
+            }
+        });
+    }
 }
 
 window.fetchDashboardStats = fetchDashboardStats;
@@ -83,13 +141,16 @@ onAuthStateChanged(auth, async (user) => {
                 
                 const logoutBtn = document.getElementById('btn-logout');
                 if(logoutBtn) {
-                    // ใช้ replaceWith เพื่อลบ Event Listener เก่าที่อาจซ้อนทับกัน
                     const newBtn = logoutBtn.cloneNode(true);
                     logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
                     newBtn.addEventListener('click', () => {
                         showConfirmModal('ออกจากระบบ', 'ยืนยัน?', async() => { await signOut(auth); window.location.reload(); });
                     });
                 }
+                
+                // Default Tab
+                switchTab('dashboard');
+
             } else {
                 showToast("บัญชีของคุณไม่มีสิทธิ์ Admin", "error");
                 await signOut(auth);
@@ -113,7 +174,7 @@ function showLoginOverlay() {
     overlay.className = "fixed inset-0 bg-gray-900 z-[9999] flex flex-col items-center justify-center p-4";
     overlay.innerHTML = `
         <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 max-w-sm w-full text-center">
-            <h1 class="text-3xl font-bold text-white mb-2">Admin Login</h1>
+            <h1 class="text-3xl font-bold text-white mb-2">ANI-END Admin</h1>
             <p class="text-gray-400 mb-8">กรุณาเข้าสู่ระบบเพื่อจัดการเว็บไซต์</p>
             
             <button id="btn-admin-login" class="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 shadow-lg">
