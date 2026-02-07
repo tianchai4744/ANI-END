@@ -1,4 +1,5 @@
-import { collection, addDoc, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db, appId } from "../config/db-config.js";
 
 // รับ currentEpisode แบบ Function Getter เพื่อให้ได้ค่าล่าสุดเสมอ
