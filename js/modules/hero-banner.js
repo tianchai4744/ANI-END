@@ -1,5 +1,9 @@
 // js/modules/hero-banner.js
 
+// ✅ เพิ่มบรรทัดนี้: นำเข้า Swiper จาก node_modules
+import Swiper from 'swiper/bundle'; 
+// (CSS ของ Swiper เรานำเข้าไว้ที่ style.css แล้ว)
+
 let heroSwiperInstance = null;
 
 // ส่วนแสดงผลโครงร่างรอโหลด (Skeleton)
@@ -67,15 +71,14 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
     swiperWrapper.innerHTML = slidesHtml;
     
     // 5. เริ่มต้นการทำงานของ Swiper
-    if (typeof Swiper !== 'undefined') {
-        heroSwiperInstance = new Swiper(`#${containerId}`, {
-            loop: banners.length > 1, 
-            autoplay: { delay: 4000, disableOnInteraction: false },
-            navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
-            pagination: { el: '.swiper-pagination', clickable: true }, 
-            slidesPerView: 1, 
-            observer: true, 
-            observeParents: true
-        });
-    }
+    // ✅ ไม่ต้องเช็ค typeof แล้ว เพราะเรา import มาเองด้านบน
+    heroSwiperInstance = new Swiper(`#${containerId}`, {
+        loop: banners.length > 1, 
+        autoplay: { delay: 4000, disableOnInteraction: false },
+        navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
+        pagination: { el: '.swiper-pagination', clickable: true }, 
+        slidesPerView: 1, 
+        observer: true, 
+        observeParents: true
+    });
 }
