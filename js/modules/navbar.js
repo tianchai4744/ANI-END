@@ -2,7 +2,10 @@ import {
     loginWithGoogle, loginWithEmail, registerWithEmail, resetPasswordEmail,
     logoutUser, monitorUserAuth, getAuthErrorMessage 
 } from "../services/auth.js";
-import { collection, getDocs, limit, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
+import { collection, getDocs, limit, query } from "firebase/firestore";
+
 import { db, appId } from "../config/db-config.js";
 
 // Import Modules ใหม่
