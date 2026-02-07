@@ -2,9 +2,8 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
-  // ⚠️ สำคัญมาก! เปลี่ยน 'ANI-END' เป็นชื่อ Repository ของคุณใน GitHub
-  // ถ้าชื่อ Repo คุณคือ "my-anime-web" ก็ให้ใส่ '/my-anime-web/'
-  // ถ้าไม่ใส่บรรทัดนี้ เวลาขึ้นเว็บจริง หน้าจอจะขาวครับ
+  // ⚠️ ต้องเพิ่มบรรทัดนี้ครับ! ไม่งั้นขึ้น GitHub แล้วหน้าขาว
+  // เปลี่ยน 'ANI-END' เป็นชื่อ Repository ของคุณจริงๆ
   base: '/ANI-END/', 
 
   build: {
