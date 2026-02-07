@@ -23,6 +23,7 @@
         import { createAnimeCard } from "../js/modules/card.js";
         import { setupSearchSystem } from "../js/modules/search.js";
         import { loadNavbar } from "../js/modules/navbar.js";
+        import { observeImages } from "../js/utils/tools.js"; // ✅ Import
 
         let userId;
         let historyItems = [];
@@ -95,6 +96,9 @@
                     `;
                 });
                 container.innerHTML = html;
+                
+                // ✅ เรียกใช้ Lazy Load
+                observeImages(container);
                 
                 document.querySelectorAll('.btn-remove-bookmark').forEach(btn => {
                     btn.addEventListener('click', async (e) => {
