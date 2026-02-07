@@ -2,7 +2,7 @@ import {
     doc, getDoc, addDoc, updateDoc, deleteDoc, 
     query, orderBy, limit, getDocs, serverTimestamp, 
     where, writeBatch, getCountFromServer, startAfter 
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; 
+} from "firebase/firestore"; 
 
 // ✅ แก้ไข Import ให้ถูกต้อง
 import { db } from "../../js/config/db-config.js"; 
@@ -22,7 +22,7 @@ let episodeCursors = [null];
 let currentEpisodeSort = 'desc'; 
 
 export function initEpisodeModule() {
-    // 1. Inject Search Input UI (สร้างช่องค้นหาเลขตอนด้วย JS โดยไม่ต้องแก้ HTML)
+    // 1. Inject Search Input UI
     injectEpisodeSearchUI();
 
     // 2. Event Listeners ปุ่มหลัก
@@ -85,7 +85,6 @@ export function initEpisodeModule() {
 }
 
 function injectEpisodeSearchUI() {
-    // หาตำแหน่งที่จะแทรกช่องค้นหา (ข้างๆ ปุ่ม Sort)
     const sortBtn = document.getElementById('btn-sort-episodes');
     if (sortBtn && !document.getElementById('search-ep-number')) {
         const wrapper = document.createElement('div');
@@ -100,7 +99,6 @@ function injectEpisodeSearchUI() {
         `;
         sortBtn.parentNode.insertBefore(wrapper, sortBtn);
         
-        // ผูก Event ค้นหา
         const input = wrapper.querySelector('input');
         const btn = wrapper.querySelector('button');
         
