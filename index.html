@@ -56,7 +56,6 @@
 <body class="bg-black text-gray-100">
 
     <script type="module">
-        // ✅ เพิ่มส่วนนี้: Import CSS สำหรับ Vite
         import 'remixicon/fonts/remixicon.css';
         import 'swiper/css';
         import 'swiper/css/navigation';
@@ -79,9 +78,11 @@
         import { renderThaiDubSection } from "./js/modules/thai-dub.js";
         import { renderLatestUpdatesSection } from "./js/modules/latest-updates.js";
 
-        // [NEW] Global Logger
         import { initGlobalErrorLogging } from "./js/modules/logger.js";
         
+        // ✅ เพิ่ม import observeImages เพื่อเริ่มระบบ Lazy Load
+        import { observeImages } from "./js/utils/tools.js";
+
         // เริ่มต้นระบบ Log ทันที
         initGlobalErrorLogging();
 
@@ -261,6 +262,9 @@
             if(top30Shows.length === 0) { 
                 sectionsContainer.innerHTML = `<p class="text-center text-gray-400 py-10">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
             }
+
+            // ✅ เรียกใช้ Lazy Load Observer ตรงนี้! เพื่อให้เริ่มทำงานกับรูปที่เพิ่ง Render
+            observeImages(sectionsContainer);
         }
         
         document.addEventListener('DOMContentLoaded', async () => {
