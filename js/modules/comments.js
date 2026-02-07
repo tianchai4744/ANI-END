@@ -1,4 +1,5 @@
-import { collection, addDoc, query, where, orderBy, limit, getDocs, serverTimestamp, startAfter } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
+import { collection, addDoc, query, where, orderBy, limit, getDocs, serverTimestamp, startAfter } from "firebase/firestore";
 import { db, appId } from "../config/db-config.js";
 import { formatTimestamp } from "../utils/tools.js";
 
@@ -12,8 +13,7 @@ let currentEpisodeNum = null;
 let lastCommentCursor = null; 
 let isCommentsLoading = false;
 
-// ✅ [NEW] XSS Protection: ฟังก์ชันป้องกันการฝัง Script
-// แปลงตัวอักษรพิเศษเป็น HTML Entities เพื่อความปลอดภัย
+// XSS Protection: ฟังก์ชันป้องกันการฝัง Script
 function escapeHtml(unsafe) {
     if (typeof unsafe !== 'string') return unsafe;
     return unsafe
@@ -171,10 +171,9 @@ export async function loadComments(isReset = false) {
                 ? `<span class="bg-gray-700 text-gray-300 text-[10px] px-1.5 py-0.5 rounded ml-2">Ep.${c.episodeNum}</span>` 
                 : '';
 
-            // ✅ [FIXED] ใช้ escapeHtml หุ้มข้อมูลจาก User เพื่อป้องกัน XSS
+            // ใช้ escapeHtml หุ้มข้อมูลจาก User เพื่อป้องกัน XSS
             const safeUserName = escapeHtml(c.userName || 'Guest');
             const safeUserPhoto = escapeHtml(c.userPhoto) || 'https://placehold.co/40x40?text=?';
-            // แปลง Text ให้ปลอดภัย
             const safeText = escapeHtml(c.text); 
 
             html += `
