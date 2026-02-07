@@ -3,8 +3,8 @@
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getCountFromServer, setLogLevel, doc, getDoc } from "firebase/firestore";
 
-// ✅ ใช้ Chart.js แบบ ESM CDN (ทำงานได้เลยบน GitHub Pages ไม่ต้องลง npm)
-import Chart from "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/+esm";
+// ❌ ลบ Import Chart ออก (เพราะเราใช้ <script> ใน HTML แล้ว)
+// import Chart from "..."; 
 
 import { db, auth, appId } from "../../js/config/db-config.js";
 import { getCollectionRef, showToast, showConfirmModal } from "./utils.js";
@@ -61,11 +61,14 @@ async function fetchDashboardStats() {
 }
 
 function renderCharts() {
+    // ✅ เรียกใช้ window.Chart แทน (ดึงมาจาก Script Tag)
+    if (typeof window.Chart === 'undefined') return;
+
     // 1. Episodes Chart
     const ctxEp = document.getElementById('chart-episodes');
     if (ctxEp) {
         if (epChart) epChart.destroy();
-        epChart = new Chart(ctxEp, {
+        epChart = new window.Chart(ctxEp, {
             type: 'line',
             data: {
                 labels: ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์', 'อาทิตย์'],
@@ -96,7 +99,7 @@ function renderCharts() {
     const ctxTag = document.getElementById('chart-tags');
     if (ctxTag) {
         if (tagChart) tagChart.destroy();
-        tagChart = new Chart(ctxTag, {
+        tagChart = new window.Chart(ctxTag, {
             type: 'doughnut',
             data: {
                 labels: ['Action', 'Romance', 'Fantasy', 'Isekai', 'Drama'],
