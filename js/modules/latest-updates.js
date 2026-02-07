@@ -1,4 +1,6 @@
 import { createAnimeCard } from "./card.js";
+// ✅ เพิ่มบรรทัดนี้: นำเข้า Swiper
+import Swiper from 'swiper/bundle';
 
 export function renderLatestUpdatesSection(shows, historyItems) {
     if (!shows || shows.length === 0) return null;
@@ -28,7 +30,6 @@ export function renderLatestUpdatesSection(shows, historyItems) {
     `;
 
     setTimeout(() => {
-        if (typeof Swiper === 'undefined') return;
         new Swiper(section.querySelector('.swiper-latest'), { 
             slidesPerView: 2.5, spaceBetween: 12, 
             navigation: { nextEl: section.querySelector('.swiper-button-next'), prevEl: section.querySelector('.swiper-button-prev') },
