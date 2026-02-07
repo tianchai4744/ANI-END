@@ -1,6 +1,6 @@
 import { 
     doc, deleteDoc, query, orderBy, limit, startAfter, getDocs, getDoc 
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+} from "firebase/firestore";
 
 // ✅ แก้ไข Import
 import { getCollectionRef, showToast, showConfirmModal, toggleLoading } from "./utils.js";
@@ -17,9 +17,6 @@ export function initReportModule() {
     document.getElementById('next-page-report')?.addEventListener('click', () => fetchReports('next'));
     document.getElementById('prev-page-report')?.addEventListener('click', () => fetchReports('prev'));
     document.getElementById('btn-refresh-reports')?.addEventListener('click', () => fetchReports('reset'));
-
-    // Initial Fetch
-    // (เรียกผ่าน tab switch หรือเรียกตอน init เลยก็ได้)
 }
 
 // Global Function ให้ admin.js เรียกใช้ตอนสลับแท็บ
