@@ -1,6 +1,6 @@
 // js/pages/player.js
 
-// ✅ แก้ไข Import ตรงนี้
+// ✅ แก้ไข: ใช้ npm import ทั้งหมด
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setLogLevel } from "firebase/firestore";
 import { db, auth, appId } from "../config/db-config.js";
@@ -71,7 +71,7 @@ async function navigateEpisode(direction) {
         const nextEp = await findNextPrevEpisode(currentEpisode.number, direction, currentShow);
         
         if (nextEp) {
-            // ✅ ใช้ Function อัจฉริยะโหลด Batch ให้เองถ้าจำเป็น
+            // ใช้ Function อัจฉริยะโหลด Batch ให้เองถ้าจำเป็น
             await checkAndLoadEpisodeBatch(nextEp.number, playEpisode);
             playEpisode(nextEp);
         }
@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Setup List structure
                     await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
                     
-                    // ✅ Load correct batch automatically
+                    // Load correct batch automatically
                     await checkAndLoadEpisodeBatch(targetEpNum, playEpisode);
                     
                     playEpisode(epData);
