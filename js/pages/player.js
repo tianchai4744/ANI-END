@@ -1,6 +1,5 @@
 // js/pages/player.js
 
-// ✅ แก้ไข: ใช้ npm import ทั้งหมด
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setLogLevel } from "firebase/firestore";
 import { db, auth, appId } from "../config/db-config.js";
@@ -8,6 +7,7 @@ import { db, auth, appId } from "../config/db-config.js";
 // Core Modules
 import { loadNavbar } from "../modules/navbar.js";
 import { setupSearchSystem } from "../modules/search.js";
+import { observeImages } from "../utils/tools.js"; // ✅ นำเข้า observeImages
 
 // Player Modules
 import { setupPlayerInfo, embedEpisode, updatePlayerMetadata } from "../modules/player-core.js";
@@ -26,7 +26,7 @@ let currentEpisode = null;
 let historyItems = []; 
 let isSearchInitialized = false;
 
-// Orchestrator Function: ควบคุมการทำงานเมื่อเริ่มเล่นตอน
+// Orchestrator Function
 async function playEpisode(episode) {
     if (!episode) return;
     currentEpisode = episode;
@@ -60,7 +60,7 @@ function updateNavButtons(currentNum) {
     if(nextBtn) nextBtn.disabled = (currentNum >= maxEp);
 }
 
-// Navigation Handler (ปุ่ม Prev/Next)
+// Navigation Handler
 async function navigateEpisode(direction) {
     if (!currentEpisode) return;
     
@@ -71,7 +71,6 @@ async function navigateEpisode(direction) {
         const nextEp = await findNextPrevEpisode(currentEpisode.number, direction, currentShow);
         
         if (nextEp) {
-            // ใช้ Function อัจฉริยะโหลด Batch ให้เองถ้าจำเป็น
             await checkAndLoadEpisodeBatch(nextEp.number, playEpisode);
             playEpisode(nextEp);
         }
@@ -135,7 +134,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             initBookmarkSystem(user, currentShow);
             initReportSystem(user, currentShow, () => currentEpisode); 
             renderRelatedAnime(currentShow, historyItems);
+            
+            // ✅ Render Top 10 และเรียก Lazy Load (เพื่อแก้ปัญหา Top 10 ไม่โหลดภาพ)
             renderPlayerTop10(historyItems);
+            setTimeout(() => observeImages(document.getElementById('top10-list-container')), 500);
 
             // 5. Init Episode List & Play
             if (targetEpId) {
@@ -143,23 +145,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (epSnap.exists()) {
                     const epData = { id: epSnap.id, ...epSnap.data() };
                     targetEpNum = epData.number;
-                    
-                    // Setup List structure
                     await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
-                    
-                    // Load correct batch automatically
                     await checkAndLoadEpisodeBatch(targetEpNum, playEpisode);
-                    
                     playEpisode(epData);
                 } else {
-                     // Fallback: Play first episode if target not found
                      await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
                      await checkAndLoadEpisodeBatch(1, playEpisode);
                 }
             } else {
-                // Default: Play first episode
                 await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
-                // Load first batch explicitly
                 const episodes = await loadEpisodesByRange(1, 50, document.getElementById('episode-list-container'), playEpisode);
                 if (episodes.length > 0) playEpisode(episodes[0]);
                 else embedEpisode(null);
@@ -175,6 +169,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Browser Back Button Support
     window.addEventListener('popstate', () => window.location.reload());
 });
