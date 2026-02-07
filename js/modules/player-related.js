@@ -1,7 +1,8 @@
-// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
+// ✅ แก้ไข: ใช้ npm import
 import { collection, query, where, limit, getDocs } from "firebase/firestore";
 import { db, appId } from "../config/db-config.js";
 import { createAnimeCard } from "./card.js";
+import { observeImages } from "../utils/tools.js"; // ✅ นำเข้า observeImages
 
 export async function renderRelatedAnime(showData, historyItems) {
     const container = document.getElementById('related-list-container');
@@ -26,6 +27,9 @@ export async function renderRelatedAnime(showData, historyItems) {
         });
 
         container.innerHTML = html || '<p class="text-gray-500 col-span-full text-center">ไม่มีอนิเมะที่เกี่ยวข้อง</p>';
+        
+        // ✅ สั่งให้เริ่มสังเกตภาพ (Lazy Load)
+        observeImages(container);
         
     } catch (err) {
         console.warn("Related fetch error", err);
