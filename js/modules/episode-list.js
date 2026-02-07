@@ -1,7 +1,8 @@
-import { collection, query, where, orderBy, getDocs, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
+import { collection, query, where, orderBy, getDocs, limit } from "firebase/firestore";
 import { db, appId } from "../config/db-config.js";
 
-const EPISODES_PER_BATCH = 50; // ✅ กำหนดค่าคงที่ไว้ที่นี่ที่เดียว
+const EPISODES_PER_BATCH = 50; 
 let currentShowId = null;
 let currentEpisodes = []; 
 let activeEpisodeId = null; 
@@ -169,7 +170,7 @@ export function syncRangeSelector(episodeNum) {
     }
 }
 
-// ✅ ฟังก์ชันใหม่: ตรวจสอบและโหลด Batch อัตโนมัติ (Encapsulation Logic)
+// ตรวจสอบและโหลด Batch อัตโนมัติ (Encapsulation Logic)
 export async function checkAndLoadEpisodeBatch(episodeNumber, onEpisodeSelect) {
     const container = document.getElementById('episode-list-container');
     if (!container) return;
