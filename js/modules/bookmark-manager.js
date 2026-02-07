@@ -1,4 +1,5 @@
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db, appId } from "../config/db-config.js";
 
 let isBookmarked = false;
