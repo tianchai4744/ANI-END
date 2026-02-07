@@ -32,7 +32,7 @@
         import { createAnimeCard } from "../js/modules/card.js";
         import { setupSearchSystem } from "../js/modules/search.js";
         import { loadNavbar } from "../js/modules/navbar.js";
-        import { generateSearchTerms } from "../js/utils/tools.js";
+        import { generateSearchTerms, observeImages } from "../js/utils/tools.js"; // ✅ เพิ่ม observeImages
 
         const ITEMS_PER_PAGE = 28; 
         let userId;
@@ -250,6 +250,9 @@
                     });
 
                     gridViewContent.insertAdjacentHTML('beforeend', html);
+                    
+                    // ✅ เรียกใช้ Lazy Load ทันทีที่ Render เสร็จ
+                    observeImages(gridViewContent);
                     
                     if (hasMoreData) {
                         loadMoreBtn.classList.remove('hidden');
