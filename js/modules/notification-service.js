@@ -1,4 +1,5 @@
-import { collection, getDocs, query, limit, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package เพื่อให้ทำงานร่วมกับ db-config ได้
+import { collection, getDocs, query, limit, doc, getDoc } from "firebase/firestore";
 import { db, appId } from "../config/db-config.js";
 
 export async function initNotificationSystem(userId) {
