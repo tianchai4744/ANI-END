@@ -1,6 +1,6 @@
-import { collection, query, where, getDocs, limit, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
+import { collection, query, where, getDocs, limit, orderBy } from "firebase/firestore";
 
-// ✅ เปลี่ยนชื่อไฟล์ Import เป็นชื่อใหม่
 import { db, appId } from "../config/db-config.js"; 
 import { generateSearchTerms, debounce } from "../utils/tools.js"; 
 
