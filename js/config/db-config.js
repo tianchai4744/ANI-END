@@ -2,14 +2,15 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
+// ดึงค่าจาก .env ผ่าน import.meta.env (มาตรฐานของ Vite)
 const firebaseConfig = {
-    apiKey: "AIzaSyDVXZUnw5oiTLqCG00GYdtPTwzOubCSe1o",
-    authDomain: "ani-end-94710.firebaseapp.com",
-    projectId: "ani-end-94710",
-    storageBucket: "ani-end-94710.firebasestorage.app",
-    messagingSenderId: "374608108501",
-    appId: "1:374608108501:web:19a4767c41a020bfb03b5c",
-    measurementId: "G-VZM1XTPMYL"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
@@ -18,4 +19,5 @@ const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
 export { app, db, auth, googleProvider };
+// ส่งออก appId โดยใช้ค่าจาก config ที่ดึงมาจาก .env
 export const appId = firebaseConfig.projectId;
