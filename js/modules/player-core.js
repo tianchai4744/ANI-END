@@ -38,12 +38,45 @@ export function embedEpisode(episode) {
     playerEmbedDiv.innerHTML = generateVideoEmbed(source);
 }
 
-// อัปเดต Page Title และ URL
+// Helper: อัปเดต Meta Tags (SEO & Social Share)
+function updateMetaTag(property, content) {
+    let element = document.querySelector(`meta[property="${property}"]`);
+    if (!element) {
+        element = document.createElement('meta');
+        element.setAttribute('property', property);
+        document.head.appendChild(element);
+    }
+    element.setAttribute('content', content);
+}
+
+// อัปเดต Page Title, URL และ Meta Tags แบบ Realtime
 export function updatePlayerMetadata(show, episode) {
     if (!show) return;
     const epText = episode ? ` ตอนที่ ${episode.number}` : '';
-    document.title = `${show.title}${epText} | ANI-END`;
+    const pageTitle = `${show.title}${epText} | ANI-END`;
+    const description = show.description || `ดูอนิเมะ ${show.title} ฟรีที่ ANI-END`;
+    const image = show.thumbnailUrl || 'https://placehold.co/600x400?text=ANI-END';
     
+    // 1. Title
+    document.title = pageTitle;
+    
+    // 2. Open Graph Tags (Facebook/Line)
+    updateMetaTag('og:title', pageTitle);
+    updateMetaTag('og:description', description);
+    updateMetaTag('og:image', image);
+    updateMetaTag('og:url', window.location.href);
+    updateMetaTag('og:type', 'video.episode');
+
+    // 3. Twitter Card
+    let twCard = document.querySelector('meta[name="twitter:card"]');
+    if (!twCard) {
+        twCard = document.createElement('meta');
+        twCard.setAttribute('name', 'twitter:card');
+        document.head.appendChild(twCard);
+    }
+    twCard.setAttribute('content', 'summary_large_image');
+    
+    // 4. Update UI Header
     if (episode) {
         const titleEl = document.getElementById('show-title');
         titleEl.textContent = `${show.title} - ${episode.title || 'ตอนที่ ' + episode.number}`;
