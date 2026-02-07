@@ -8,9 +8,11 @@ import {
     signInWithEmailAndPassword,
     updateProfile,
     sendPasswordResetEmail 
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { doc, setDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+} from "firebase/auth";
+import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { auth, db, appId } from "../config/db-config.js";
+
+// ... (ส่วนที่เหลือข้างล่างเหมือนเดิม ไม่ต้องลบ) ...
 
 const googleProvider = new GoogleAuthProvider();
 
