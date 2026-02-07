@@ -2,8 +2,7 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
-  // ⚠️ ต้องเพิ่มบรรทัดนี้ครับ! ไม่งั้นขึ้น GitHub แล้วหน้าขาว
-  // เปลี่ยน 'ANI-END' เป็นชื่อ Repository ของคุณจริงๆ
+  // ✅ ต้องเพิ่มบรรทัดนี้ครับ! สำคัญที่สุดสำหรับ GitHub Pages
   base: '/ANI-END/', 
 
   build: {
