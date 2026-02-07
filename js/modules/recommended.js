@@ -1,4 +1,6 @@
 import { createAnimeCard } from "./card.js";
+// ✅ เพิ่มบรรทัดนี้: นำเข้า Swiper
+import Swiper from 'swiper/bundle';
 
 export function renderRecommendedSection(top30Shows, historyItems) {
     // Logic: ตัดเอาเฉพาะลำดับที่ 11-30 มาแสดงเป็น "แนะนำ"
@@ -27,8 +29,7 @@ export function renderRecommendedSection(top30Shows, historyItems) {
         </div>
     `;
 
-    // Initialize Swiper (Logic แยกออกมาเพื่อให้ดูแลได้อิสระ)
-    // ใช้ setTimeout 0 เพื่อรอให้ Element ถูกแปะลง DOM หลักก่อน
+    // Initialize Swiper
     setTimeout(() => {
         new Swiper(section.querySelector('.swiper-recommended'), { 
             slidesPerView: 2.5, 
@@ -39,7 +40,6 @@ export function renderRecommendedSection(top30Shows, historyItems) {
             },
             observer: true, 
             observeParents: true,
-            // Config การแสดงผล responsive (7-up Style)
             breakpoints: {
                 640: { slidesPerView: 4.5 }, 
                 768: { slidesPerView: 5.5 },
