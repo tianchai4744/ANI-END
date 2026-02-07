@@ -1,13 +1,12 @@
 // admin/scripts/admin.js
 
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
-import { getCountFromServer, setLogLevel, doc, getDoc } from "firebase/firestore";
+import { getCountFromServer, setLogLevel, doc, getDoc, query, orderBy, limit, getDocs } from "firebase/firestore";
 
-// ❌ ลบ Import Chart ออก (เพราะเราใช้ <script> ใน HTML แล้ว)
-// import Chart from "..."; 
-
+// ไม่ต้อง Import Chart เพราะใช้ Script Tag แล้ว
 import { db, auth, appId } from "../../js/config/db-config.js";
 import { getCollectionRef, showToast, showConfirmModal } from "./utils.js";
+import { formatTimestamp } from "../../js/utils/tools.js"; // ใช้ตัวนี้จัดรูปแบบเวลา
 
 // Import Sub-Modules
 import { initShowModule } from "./shows.js";
@@ -28,7 +27,6 @@ window.switchTab = function(tabName) {
         if(el) t === tabName ? el.classList.remove('hidden') : el.classList.add('hidden');
     });
     
-    // Update Sidebar Active State
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active', 'text-indigo-400', 'bg-slate-800'));
     const activeBtn = document.getElementById('tab-' + tabName);
     if(activeBtn) activeBtn.classList.add('active');
@@ -44,24 +42,88 @@ async function fetchDashboardStats() {
             getCountFromServer(getCollectionRef("episodes")),
             getCountFromServer(getCollectionRef("reports"))
         ]);
+        
         document.getElementById('stat-total-shows').innerText = s.data().count;
         document.getElementById('stat-total-episodes').innerText = e.data().count;
         document.getElementById('stat-total-reports').innerText = r.data().count;
         
-        const badge = document.getElementById('report-badge');
-        if(badge) {
-            badge.innerText = r.data().count;
-            badge.classList.toggle('hidden', r.data().count === 0);
-        }
+        // --- Badge Logic (แจ้งเตือนแดงๆ) ---
+        const reportCount = r.data().count;
+        updateBadges(reportCount);
 
-        // Render Charts
+        // Render Charts & Recent List
         renderCharts();
+        fetchRecentActivity();
 
     } catch(err) { console.error(err); }
 }
 
+function updateBadges(count) {
+    // 1. Badge ที่เมนู Sidebar
+    const sidebarBadge = document.getElementById('sidebar-report-badge');
+    if (sidebarBadge) {
+        sidebarBadge.innerText = count;
+        if (count > 0) {
+            sidebarBadge.classList.remove('hidden');
+            sidebarBadge.classList.add('badge-pulse'); // เพิ่ม Animation เด้งๆ
+        } else {
+            sidebarBadge.classList.add('hidden');
+            sidebarBadge.classList.remove('badge-pulse');
+        }
+    }
+
+    // 2. Badge ที่กล่อง Dashboard
+    const dashBadge = document.getElementById('dashboard-report-badge');
+    if (dashBadge) {
+        if (count > 0) {
+            dashBadge.innerText = `${count} New!`;
+            dashBadge.classList.remove('hidden');
+        } else {
+            dashBadge.classList.add('hidden');
+        }
+    }
+}
+
+// ฟังก์ชันดึง "การเคลื่อนไหวล่าสุด" (ใช้อนิเมะที่เพิ่งอัปเดต)
+async function fetchRecentActivity() {
+    const list = document.getElementById('recent-activity-list');
+    if (!list) return;
+
+    try {
+        // ดึง 5 เรื่องล่าสุดที่เพิ่งมีการอัปเดต (updatedAt desc)
+        const q = query(getCollectionRef("shows"), orderBy("updatedAt", "desc"), limit(5));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+            list.innerHTML = '<p class="text-slate-500 text-sm text-center py-4">ยังไม่มีการเคลื่อนไหว</p>';
+            return;
+        }
+
+        let html = '';
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            html += `
+                <div class="flex items-center space-x-3 p-2 hover:bg-slate-700/50 rounded-lg transition-colors cursor-pointer" onclick="openShowModal('${doc.id}')">
+                    <img src="${data.thumbnailUrl}" class="w-10 h-14 rounded object-cover bg-slate-800" onerror="this.src='https://placehold.co/40x60'">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">${data.title}</p>
+                        <p class="text-xs text-slate-400">อัปเดต: ${formatTimestamp(data.updatedAt)}</p>
+                    </div>
+                    <div class="text-xs text-indigo-400 font-bold bg-indigo-400/10 px-2 py-1 rounded">
+                        Ep.${data.latestEpisodeNumber || 0}
+                    </div>
+                </div>
+            `;
+        });
+        list.innerHTML = html;
+
+    } catch (e) {
+        console.error("Recent Activity Error:", e);
+        list.innerHTML = '<p class="text-rose-500 text-xs">โหลดข้อมูลไม่สำเร็จ</p>';
+    }
+}
+
 function renderCharts() {
-    // ✅ เรียกใช้ window.Chart แทน (ดึงมาจาก Script Tag)
     if (typeof window.Chart === 'undefined') return;
 
     // 1. Episodes Chart
@@ -74,7 +136,7 @@ function renderCharts() {
                 labels: ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์', 'อาทิตย์'],
                 datasets: [{
                     label: 'ตอนที่เพิ่มใหม่',
-                    data: [12, 19, 3, 5, 2, 3, 10], // (Mockup Data)
+                    data: [12, 19, 3, 5, 2, 3, 10], // Mock Data
                     borderColor: '#6366f1',
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
                     borderWidth: 3,
@@ -104,7 +166,7 @@ function renderCharts() {
             data: {
                 labels: ['Action', 'Romance', 'Fantasy', 'Isekai', 'Drama'],
                 datasets: [{
-                    data: [35, 20, 25, 15, 5], // (Mockup Data)
+                    data: [35, 20, 25, 15, 5], // Mock Data
                     backgroundColor: ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'],
                     borderWidth: 0,
                     hoverOffset: 10
@@ -136,7 +198,7 @@ onAuthStateChanged(auth, async (user) => {
                 console.log("Admin Logged In:", user.email);
                 removeLoginOverlay();
 
-                fetchDashboardStats();
+                fetchDashboardStats(); // เรียกครั้งแรกเพื่ออัปเดต Badge และ Recent List
                 
                 initShowModule();
                 initEpisodeModule();
@@ -144,7 +206,7 @@ onAuthStateChanged(auth, async (user) => {
                 initTagModule();
                 initReportModule();
                 
-                setInterval(fetchDashboardStats, 60000);
+                setInterval(fetchDashboardStats, 60000); // อัปเดตทุกนาที
                 
                 const logoutBtn = document.getElementById('btn-logout');
                 if(logoutBtn) {
