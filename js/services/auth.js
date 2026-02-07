@@ -12,8 +12,6 @@ import {
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { auth, db, appId } from "../config/db-config.js";
 
-// ... (ส่วนที่เหลือข้างล่างเหมือนเดิม ไม่ต้องลบ) ...
-
 const googleProvider = new GoogleAuthProvider();
 
 // --- Helper: แปลง Error Code เป็นข้อความไทย ---
@@ -30,13 +28,14 @@ export function getAuthErrorMessage(errorCode) {
     }
 }
 
-// --- Save User Data ---
+// --- Save User Data (Secure Version) ---
 async function saveUserToFirestore(user) {
     if (!user) return;
     try {
         const userRef = doc(db, `artifacts/${appId}/users/${user.uid}`);
         const userSnap = await getDoc(userRef);
         
+        // ข้อมูลที่จะอัปเดตทุกครั้งที่ล็อกอิน
         const userData = {
             uid: user.uid,
             email: user.email,
@@ -46,14 +45,19 @@ async function saveUserToFirestore(user) {
             authProvider: user.providerData[0]?.providerId || 'password'
         };
 
+        // สร้างข้อมูลใหม่เฉพาะถ้ายังไม่มี user นี้
         if (!userSnap.exists()) {
             userData.createdAt = serverTimestamp();
-            userData.role = 'user';
+            // ✅ Security Note: เราส่ง role: 'user' ไป
+            // แต่ Firestore Rules จะเป็นตัวคุมสุดท้ายว่าห้ามส่ง 'admin' มาเด็ดขาด
+            userData.role = 'user'; 
         }
 
+        // ใช้ setDoc แบบ merge เพื่อไม่ให้ข้อมูลหาย
         await setDoc(userRef, userData, { merge: true });
     } catch (error) {
-        console.error("Error saving user:", error);
+        console.error("Error saving user profile:", error);
+        // ไม่ throw error เพื่อให้ user ยังใช้งานเว็บต่อได้แม้ save profile ไม่สำเร็จ
     }
 }
 
