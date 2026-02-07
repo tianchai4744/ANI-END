@@ -49,6 +49,9 @@
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .skeleton { background-color: #374151; animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; border-radius: 0.5rem; }
     </style>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="apple-touch-icon" href="/favicon.ico">
 </head>
 <body class="bg-black text-gray-100">
 
@@ -306,5 +309,12 @@
             </div>
         </div>
     </footer>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js');
+        });
+      }
+    </script>
 </body>
 </html>
