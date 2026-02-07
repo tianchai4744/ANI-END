@@ -1,18 +1,18 @@
-import { doc, addDoc, deleteDoc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { doc, addDoc, deleteDoc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, writeBatch } from "firebase/firestore";
 
 // ✅ แก้ไข Import
 import { db } from "../../js/config/db-config.js";
 import { getCollectionRef, showConfirmModal, showToast } from "./utils.js";
 
 let drake = null;
-let banners = []; // เพิ่มตัวแปรเก็บข้อมูลแบนเนอร์ เพื่อใช้ตอนกดแก้ไข
+let banners = []; 
 let currentEditingBannerId = null;
 
 export function initBannerModule() {
     const tbody = document.getElementById('banner-table-body');
     const form = document.getElementById('banner-form');
 
-    // 1. Init Dragula (Drag & Drop) - แก้ไขให้รองรับการสลับหน้า (SPA)
+    // 1. Init Dragula (Drag & Drop)
     if (typeof window.dragula !== 'undefined' && tbody) {
         if (!drake) {
             drake = window.dragula([tbody]);
@@ -25,14 +25,12 @@ export function initBannerModule() {
                 showToast('อัปเดตลำดับเรียบร้อย');
             });
         } else {
-            // ถ้ามี drake อยู่แล้ว ให้เปลี่ยน container เป็นตัวใหม่ (กรณีสลับ Tab กลับมา)
             drake.containers = [tbody];
         }
     }
 
     // 2. Realtime Listener
     onSnapshot(query(getCollectionRef("banners"), orderBy("order")), (snap) => {
-        // เก็บข้อมูลลงตัวแปร global
         banners = snap.docs.map(d => ({id: d.id, ...d.data()}));
         
         tbody.innerHTML = '';
@@ -63,13 +61,11 @@ export function initBannerModule() {
 
     // Form Handlers
     if(form) {
-        // ล้าง listener เก่าก่อนเสมอเพื่อป้องกัน duplicate submit
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handleBannerSubmit);
     }
     
-    // Bind Global Function
     window.openBannerModal = openBannerModal;
 }
 
@@ -115,7 +111,6 @@ function openBannerModal(id = null) {
     form.reset();
     
     if (id) {
-        // กู้คืน: ดึงข้อมูลจากตัวแปร banners มาใส่ฟอร์ม
         const b = banners.find(x => x.id === id);
         if (b) {
             document.getElementById('banner-title').value = b.title;
@@ -125,7 +120,6 @@ function openBannerModal(id = null) {
             document.getElementById('banner-active').checked = b.isActive;
         }
     } else {
-        // Auto increment order
         document.getElementById('banner-order').value = banners.length + 1;
     }
 
