@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ANI-END - เว็บไซต์ดูอนิเมะออนไลน์ รวบรวมอนิเมะจีน อนิเมะพากย์ไทย และอนิเมะยอดนิยม อัปเดตตอนใหม่ทุกวัน">
+    <title>ANI-END - รายการอนิเมะและผลการค้นหา</title>
+    
+
+    <style>
+        #grid-view-title { scroll-margin-top: 80px; }
+        .scroll-to-top { transition: all 0.3s; visibility: hidden; opacity: 0; transform: translateY(20px); }
+        .scroll-to-top.visible { visibility: visible; opacity: 1; transform: translateY(0); }
+        
+        /* Skeleton */
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .skeleton {
+            background-color: #374151;
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+  <script type="module" crossorigin src="/assets/grid-BPwtFWHx.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/db-config-JzEx42YR.js">
+  <link rel="modulepreload" crossorigin href="/assets/card-DUAddn7M.js">
+  <link rel="modulepreload" crossorigin href="/assets/tools-Cv2G4J4g.js">
+  <link rel="modulepreload" crossorigin href="/assets/search-CnOzQKex.js">
+  <link rel="modulepreload" crossorigin href="/assets/navbar-DtgS--Xs.js">
+  <link rel="stylesheet" crossorigin href="/assets/db-config-B9_qiA1B.css">
+</head>
+<body class="bg-black text-gray-100">
+
+    <div id="navbar-placeholder"></div>
+
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div id="grid-view-container">
+            <h2 id="grid-view-title" class="text-3xl font-bold mb-6">...</h2>
+            <div id="grid-view-content" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4 min-h-[300px]"></div>
+            <div class="text-center mt-8">
+                <button id="load-more-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200 hidden">โหลดเพิ่มเติม...</button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-900 border-t border-gray-800 mt-8 py-8">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-gray-400 text-sm mb-2">© 2024 ANI-END. All rights reserved.</p>
+            <p class="text-gray-500 text-xs">เว็บไซต์นี้จัดทำขึ้นเพื่อการศึกษาและการเรียนรู้เท่านั้น</p>
+        </div>
+    </footer>
+</body>
+</html>

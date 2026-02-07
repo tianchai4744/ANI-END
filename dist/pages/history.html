@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANI-END - ประวัติการรับชม</title>
+    
+
+    <style>
+        body { background-color: #111; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; display: flex; flex-direction: column; min-height: 100vh; }
+        main { flex: 1; }
+        a { cursor: pointer; }
+        .history-item { transition: background-color 0.2s; }
+        .history-item:hover { background-color: #1f2937; }
+        .history-thumb { aspect-ratio: 16/9; -o-object-fit: cover; object-fit: cover; }
+    </style>
+  <script type="module" crossorigin src="/assets/history-aVJ62-rA.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/db-config-JzEx42YR.js">
+  <link rel="modulepreload" crossorigin href="/assets/tools-Cv2G4J4g.js">
+  <link rel="modulepreload" crossorigin href="/assets/search-CnOzQKex.js">
+  <link rel="modulepreload" crossorigin href="/assets/navbar-DtgS--Xs.js">
+  <link rel="stylesheet" crossorigin href="/assets/db-config-B9_qiA1B.css">
+</head>
+<body class="bg-black text-gray-100">
+
+    <div id="navbar-placeholder"></div>
+
+    
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-3xl font-bold flex items-center gap-2">
+                <i class="ri-history-line text-green-500"></i> ประวัติการรับชม
+            </h1>
+            <button id="clear-history-btn" class="hidden text-sm text-red-400 hover:text-red-300 border border-red-900 bg-red-900/20 px-3 py-1.5 rounded-md transition-colors">
+                <i class="ri-delete-bin-2-line mr-1"></i> ล้างประวัติทั้งหมด
+            </button>
+        </div>
+
+        <div id="loading-state" class="flex flex-col items-center justify-center py-20">
+            <i class="ri-loader-4-line text-4xl text-green-500 animate-spin mb-4"></i>
+            <p class="text-gray-400">กำลังโหลดข้อมูล...</p>
+        </div>
+
+        <div id="login-required-state" class="hidden flex flex-col items-center justify-center py-20 bg-gray-900/50 rounded-lg border border-gray-800 border-dashed">
+            <i class="ri-lock-2-line text-6xl text-gray-600 mb-4"></i>
+            <p class="text-xl text-gray-300 font-medium">กรุณาเข้าสู่ระบบ</p>
+            <p class="text-gray-500 mt-2 text-sm max-w-md text-center">ระบบจะบันทึกประวัติการรับชมของคุณอัตโนมัติเมื่อเข้าสู่ระบบ</p>
+            <button id="btn-login-page" class="mt-6 bg-white hover:bg-gray-200 text-gray-900 px-6 py-2.5 rounded-full font-bold transition-colors flex items-center gap-2 shadow-lg">
+                <i class="ri-google-fill"></i> เข้าสู่ระบบด้วย Google
+            </button>
+        </div>
+
+        <div id="empty-state" class="hidden flex flex-col items-center justify-center py-20 bg-gray-900/50 rounded-lg border border-gray-800 border-dashed">
+            <i class="ri-movie-2-line text-6xl text-gray-600 mb-4"></i>
+            <p class="text-xl text-gray-400 font-medium">ยังไม่มีประวัติการรับชม</p>
+            <a href="/index.html" class="mt-6 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-full font-medium transition-colors">ไปหน้าแรก</a>
+        </div>
+
+        <div id="history-list" class="space-y-4"></div>
+    </main>
+
+    <footer class="bg-gray-900 border-t border-gray-800 mt-8 py-8 text-center">
+        <p class="text-gray-400 text-sm">© 2024 ANI-END.</p>
+    </footer>
+</body>
+</html>

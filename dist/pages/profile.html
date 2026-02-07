@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANI-END - โปรไฟล์ของฉัน</title>
+    
+
+    <style>
+        body { background-color: #111; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    </style>
+  <script type="module" crossorigin src="/assets/profile-DMRdNsf5.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/db-config-JzEx42YR.js">
+  <link rel="modulepreload" crossorigin href="/assets/navbar-DtgS--Xs.js">
+  <link rel="stylesheet" crossorigin href="/assets/db-config-B9_qiA1B.css">
+</head>
+<body class="bg-black text-gray-100 min-h-screen flex flex-col">
+
+    <div id="navbar-placeholder"></div>
+
+
+    <main class="container mx-auto px-4 py-8 flex-grow">
+        <div id="loading-state" class="flex flex-col items-center justify-center py-20">
+            <i class="ri-loader-4-line text-4xl text-green-500 animate-spin mb-4"></i>
+            <p class="text-gray-400">กำลังโหลดข้อมูล...</p>
+        </div>
+
+        <div id="profile-content" class="hidden max-w-2xl mx-auto">
+            <h1 class="text-3xl font-bold mb-8 flex items-center gap-2">
+                <i class="ri-user-settings-line text-green-500"></i> ตั้งค่าโปรไฟล์
+            </h1>
+
+            <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 shadow-lg mb-8">
+                <div class="flex flex-col sm:flex-row items-center gap-6 mb-6">
+                    <img id="preview-avatar" src="" class="w-24 h-24 rounded-full border-4 border-gray-800 shadow-xl object-cover">
+                    <div class="text-center sm:text-left">
+                        <p id="user-email-display" class="text-gray-400 font-mono mb-1">...</p>
+                        <p class="text-xs text-gray-500">บัญชีผู้ใช้ทั่วไป</p>
+                    </div>
+                </div>
+
+                <form id="profile-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">ชื่อที่ใช้แสดง</label>
+                        <input type="text" id="input-name" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-green-500 focus:outline-none" placeholder="ชื่อเล่นของคุณ">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">รูปโปรไฟล์ (URL)</label>
+                        <input type="url" id="input-photo" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-green-500 focus:outline-none" placeholder="https://example.com/image.jpg">
+                        <p class="text-xs text-gray-500 mt-1">วางลิงก์รูปภาพจากอินเทอร์เน็ต</p>
+                    </div>
+                    <div class="pt-4 border-t border-gray-800 flex justify-end">
+                        <button type="submit" id="btn-save" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-full shadow-lg transition-colors">
+                            บันทึกการเปลี่ยนแปลง
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <a href="history.html" class="block bg-gray-800 hover:bg-gray-700 p-4 rounded-xl transition-colors border border-gray-800 flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-blue-500/10 p-2 rounded-lg text-blue-400"><i class="ri-history-line text-xl"></i></div>
+                        <div>
+                            <h3 class="font-bold">ประวัติการรับชม</h3>
+                            <p class="text-xs text-gray-400">ดูรายการที่คุณดูล่าสุด</p>
+                        </div>
+                    </div>
+                    <i class="ri-arrow-right-s-line text-gray-500 group-hover:text-white"></i>
+                </a>
+                
+                <a href="bookmarks.html" class="block bg-gray-800 hover:bg-gray-700 p-4 rounded-xl transition-colors border border-gray-800 flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-red-500/10 p-2 rounded-lg text-red-400"><i class="ri-heart-line text-xl"></i></div>
+                        <div>
+                            <h3 class="font-bold">รายการโปรด</h3>
+                            <p class="text-xs text-gray-400">จัดการอนิเมะที่คุณติดตาม</p>
+                        </div>
+                    </div>
+                    <i class="ri-arrow-right-s-line text-gray-500 group-hover:text-white"></i>
+                </a>
+            </div>
+
+        </div>
+    </main>
+</body>
+</html>
