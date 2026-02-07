@@ -1,4 +1,5 @@
-import { doc, setDoc, getDoc, runTransaction, serverTimestamp, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
+import { doc, setDoc, getDoc, runTransaction, serverTimestamp, collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { db, appId } from "../config/db-config.js";
 
 // โหลดประวัติการดู (ใช้สำหรับหาตอนที่ดูล่าสุดเพื่อ Resume)
