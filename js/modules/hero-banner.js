@@ -1,8 +1,7 @@
 // js/modules/hero-banner.js
 
-// ✅ เพิ่มบรรทัดนี้: นำเข้า Swiper จาก node_modules
+// นำเข้า Swiper
 import Swiper from 'swiper/bundle'; 
-// (CSS ของ Swiper เรานำเข้าไว้ที่ style.css แล้ว)
 
 let heroSwiperInstance = null;
 
@@ -25,7 +24,7 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
     
     if (!heroSwiperContainer) return;
     
-    // 1. Destroy instance เก่าทิ้งก่อนเสมอ เพื่อไม่ให้ทำงานซ้อนทับกัน
+    // 1. Destroy instance เก่าทิ้งก่อนเสมอ
     if (heroSwiperInstance) {
         heroSwiperInstance.destroy(true, true);
         heroSwiperInstance = null;
@@ -41,7 +40,7 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
     
     const swiperWrapper = heroSwiperContainer.querySelector('.swiper-wrapper');
     
-    // 3. กรณีโหลดเสร็จแล้วแต่ไม่มีข้อมูลแบนเนอร์
+    // 3. กรณีไม่มีข้อมูล
     if (!banners || banners.length === 0) {
         swiperWrapper.innerHTML = '<div class="swiper-slide flex items-center justify-center bg-gray-800 text-gray-500">No Banners</div>';
         return;
@@ -49,8 +48,8 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
     
     // 4. วนลูปสร้าง Slide
     let slidesHtml = '';
-    banners.forEach(banner => {
-        // Logic เดิม: เช็คประวัติการดูเพื่อสร้างลิงก์ดูต่อ (Resume)
+    banners.forEach((banner, index) => {
+        // Logic เดิม: เช็คประวัติการดู
         const historyItem = userId ? historyItems.find(h => h.showId === banner.showId) : null;
         
         let targetUrl = `pages/player.html?id=${banner.showId}`;
@@ -60,10 +59,17 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
         
         const imgUrl = banner.bannerImageUrl || 'https://placehold.co/1200x400/222/fff?text=No+Banner';
 
+        // ✅ เทคนิค Pro: รูปแรก (index 0) โหลดทันที (Eager), รูปที่เหลือโหลดทีหลัง (Lazy)
+        const loadingAttr = index === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
+
         slidesHtml += `
             <a href="${targetUrl}" class="swiper-slide relative block w-full h-full">
-                <img src="${imgUrl}" alt="${banner.title || 'Banner'}" class="w-full h-full object-cover">
+                <img src="${imgUrl}" alt="${banner.title || 'Banner'}" class="w-full h-full object-cover" ${loadingAttr}>
                 <div class="banner-overlay"></div>
+                <div class="absolute bottom-0 left-0 p-4 md:p-10 z-10 w-full md:w-2/3">
+                    <h2 class="text-2xl md:text-4xl font-bold text-white drop-shadow-md mb-2 line-clamp-1">${banner.title || ''}</h2>
+                    <p class="text-gray-200 text-sm md:text-base drop-shadow-sm line-clamp-2">${banner.description || ''}</p>
+                </div>
             </a>
         `;
     });
@@ -71,13 +77,14 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
     swiperWrapper.innerHTML = slidesHtml;
     
     // 5. เริ่มต้นการทำงานของ Swiper
-    // ✅ ไม่ต้องเช็ค typeof แล้ว เพราะเรา import มาเองด้านบน
     heroSwiperInstance = new Swiper(`#${containerId}`, {
         loop: banners.length > 1, 
         autoplay: { delay: 4000, disableOnInteraction: false },
         navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
         pagination: { el: '.swiper-pagination', clickable: true }, 
         slidesPerView: 1, 
+        effect: 'fade', // เพิ่ม Effect fade
+        fadeEffect: { crossFade: true },
         observer: true, 
         observeParents: true
     });
