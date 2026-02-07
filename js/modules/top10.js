@@ -4,6 +4,8 @@
  */
 
 import { createAnimeCard } from "./card.js";
+// ✅ แก้ไข: เพิ่มการ Import Swiper
+import Swiper from 'swiper/bundle';
 
 /**
  * สร้างและเริ่มการทำงานของส่วน Top 10
