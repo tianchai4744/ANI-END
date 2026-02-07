@@ -79,8 +79,6 @@
         import { renderLatestUpdatesSection } from "./js/modules/latest-updates.js";
 
         import { initGlobalErrorLogging } from "./js/modules/logger.js";
-        
-        // ✅ เพิ่ม import observeImages เพื่อเริ่มระบบ Lazy Load
         import { observeImages } from "./js/utils/tools.js";
 
         // เริ่มต้นระบบ Log ทันที
@@ -179,21 +177,36 @@
                 const latestQuery = query(showsRef, orderBy("latestEpisodeUpdateAt", "desc"), limit(15));
                 const bannerQuery = query(bannerRef, orderBy("updatedAt", "desc"), limit(10));
 
-                const [top30Snap, thaiDubSnap, latestSnap, bannerSnap] = await Promise.all([
-                    getDocs(top30Query), getDocs(thaiDubQuery), getDocs(latestQuery), getDocs(bannerQuery)
+                // ✅ ใช้วิธี Promise.allSettled เพื่อความเสถียร (อันไหนพัง อันอื่นยังรอด)
+                const results = await Promise.allSettled([
+                    getDocs(top30Query), 
+                    getDocs(thaiDubQuery), 
+                    getDocs(latestQuery), 
+                    getDocs(bannerQuery)
                 ]);
 
-                allBanners = bannerSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                top30Shows = top30Snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                thaiDubShows = thaiDubSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                latestShows = latestSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Helper: ดึงข้อมูลถ้าสำเร็จ ถ้าไม่สำเร็จให้คืนค่า Array ว่าง
+                const getData = (result, name) => {
+                    if (result.status === 'fulfilled') {
+                        return result.value.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        console.warn(`⚠️ Failed to load ${name}:`, result.reason);
+                        return [];
+                    }
+                };
 
+                top30Shows = getData(results[0], 'Top 30');
+                thaiDubShows = getData(results[1], 'Thai Dub');
+                latestShows = getData(results[2], 'Latest Updates');
+                allBanners = getData(results[3], 'Banners');
+
+                // Render UI (แม้ข้อมูลจะมาไม่ครบ ก็ยังแสดงส่วนที่มาครบได้)
                 renderHeroBanner('hero-swiper', allBanners, historyItems, userId);
                 renderOptimizedSections(top30Shows, thaiDubShows, latestShows);
 
             } catch (error) {
-                console.error("Error fetching data:", error);
-                if(sectionsContainer) sectionsContainer.innerHTML = `<p class="text-center text-red-500 py-10">เกิดข้อผิดพลาด: ${error.message}</p>`;
+                console.error("Critical Error fetching data:", error);
+                if(sectionsContainer) sectionsContainer.innerHTML = `<p class="text-center text-red-500 py-10">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error.message}</p>`;
             }
         }
         
@@ -259,11 +272,11 @@
             const latestEl = renderLatestUpdatesSection(latestShows, historyItems);
             if (latestEl) sectionsContainer.appendChild(latestEl);
             
-            if(top30Shows.length === 0) { 
-                sectionsContainer.innerHTML = `<p class="text-center text-gray-400 py-10">ยังไม่มีข้อมูลอนิเมะในระบบ</p>`;
+            if(top30Shows.length === 0 && latestShows.length === 0) { 
+                sectionsContainer.innerHTML = `<p class="text-center text-gray-400 py-10">ไม่สามารถโหลดข้อมูลได้ในขณะนี้</p>`;
             }
 
-            // ✅ เรียกใช้ Lazy Load Observer ตรงนี้! เพื่อให้เริ่มทำงานกับรูปที่เพิ่ง Render
+            // Lazy Load Observer
             observeImages(sectionsContainer);
         }
         
