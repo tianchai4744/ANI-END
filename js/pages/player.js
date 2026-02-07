@@ -1,5 +1,8 @@
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { doc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// js/pages/player.js
+
+// ✅ แก้ไข Import ตรงนี้
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, setLogLevel } from "firebase/firestore";
 import { db, auth, appId } from "../config/db-config.js";
 
 // Core Modules
