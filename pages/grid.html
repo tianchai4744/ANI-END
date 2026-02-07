@@ -5,15 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="ANI-END - เว็บไซต์ดูอนิเมะออนไลน์ รวบรวมอนิเมะจีน อนิเมะพากย์ไทย และอนิเมะยอดนิยม อัปเดตตอนใหม่ทุกวัน">
     <title>ANI-END - รายการอนิเมะและผลการค้นหา</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    
+    <link rel="stylesheet" href="../style.css">
+
     <style>
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #111; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
-        body { background-color: #111; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
-        main { flex: 1; }
         #grid-view-title { scroll-margin-top: 80px; }
         .scroll-to-top { transition: all 0.3s; visibility: hidden; opacity: 0; transform: translateY(20px); }
         .scroll-to-top.visible { visibility: visible; opacity: 1; transform: translateY(0); }
@@ -31,8 +26,8 @@
     <div id="navbar-placeholder"></div>
 
     <script type="module">
-        import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { onSnapshot, collection, query, limit, orderBy, where, getDocs, startAfter, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+        import { onSnapshot, collection, query, limit, orderBy, where, getDocs, startAfter, setLogLevel } from "firebase/firestore";
         import { db, auth, appId } from "../js/config/db-config.js";
         import { createAnimeCard } from "../js/modules/card.js";
         import { setupSearchSystem } from "../js/modules/search.js";
@@ -339,5 +334,3 @@
     </footer>
 </body>
 </html>
-
-
