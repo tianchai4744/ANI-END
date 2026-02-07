@@ -3,10 +3,10 @@ export default {
   content: [
     "./index.html",
     "./pages/**/*.html",
+    "./public/**/*.html",  
     "./components/**/*.html",
-    "./admin/**/*.html",
     "./js/**/*.js",
-    "./admin/scripts/**/*.js"
+    "./src/**/*.{js,ts,jsx,tsx}"
   ],
   theme: {
     extend: {},
