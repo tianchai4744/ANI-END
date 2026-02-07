@@ -6,20 +6,13 @@
     <title>ANI-END - กำลังโหลด...</title>
     <meta name="description" content="ดูอนิเมะออนไลน์ อนิเมะจีน อนิเมะพากย์ไทย อัปเดตตอนใหม่ทุกวัน">
     
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+    <link rel="stylesheet" href="../style.css">
+
     <style>
-        body { background-color: #111; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .video-aspect-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; background-color: #000; }
         #video-player-embed { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; display: flex; align-items: center; justify-content: center; }
         #video-player-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
         .ep-button.active { background-color: #16a34a !important; color: #fff !important; pointer-events: none; }
-        
-        /* Custom Scrollbar */
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
         
         /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
