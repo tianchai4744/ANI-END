@@ -53,6 +53,12 @@
 <body class="bg-black text-gray-100">
 
     <script type="module">
+        // ✅ เพิ่มส่วนนี้: Import CSS สำหรับ Vite
+        import 'remixicon/fonts/remixicon.css';
+        import 'swiper/css';
+        import 'swiper/css/navigation';
+        import 'swiper/css/pagination';
+
         import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
         import { onSnapshot, collection, query, limit, orderBy, where, getDocs } from "firebase/firestore";
 
