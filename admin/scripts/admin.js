@@ -1,5 +1,8 @@
-import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getCountFromServer, setLogLevel, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// admin/scripts/admin.js
+
+// ✅ แก้ไข Import ทั้งหมดตรงนี้
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
+import { getCountFromServer, setLogLevel, doc, getDoc } from "firebase/firestore";
 import { db, auth, appId } from "../../js/config/db-config.js";
 import { getCollectionRef, showToast, showConfirmModal } from "./utils.js";
 
@@ -55,11 +58,10 @@ async function fetchDashboardStats() {
 
 window.fetchDashboardStats = fetchDashboardStats;
 
-// --- AUTHENTICATION LOGIC (SECURITY FIXED) ---
+// --- AUTHENTICATION LOGIC ---
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        // [FIXED] ตรวจสอบสิทธิ์จาก Firestore แทนการ Hardcode Email
         try {
             const userRef = doc(db, `artifacts/${appId}/users/${user.uid}`);
             const userSnap = await getDoc(userRef);
@@ -79,11 +81,16 @@ onAuthStateChanged(auth, async (user) => {
                 
                 setInterval(fetchDashboardStats, 60000);
                 
-                document.getElementById('btn-logout')?.addEventListener('click', () => {
-                    showConfirmModal('ออกจากระบบ', 'ยืนยัน?', async() => { await signOut(auth); window.location.reload(); });
-                });
+                const logoutBtn = document.getElementById('btn-logout');
+                if(logoutBtn) {
+                    // ใช้ replaceWith เพื่อลบ Event Listener เก่าที่อาจซ้อนทับกัน
+                    const newBtn = logoutBtn.cloneNode(true);
+                    logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
+                    newBtn.addEventListener('click', () => {
+                        showConfirmModal('ออกจากระบบ', 'ยืนยัน?', async() => { await signOut(auth); window.location.reload(); });
+                    });
+                }
             } else {
-                // กรณีล็อกอินแล้ว แต่ไม่ใช่ Admin
                 showToast("บัญชีของคุณไม่มีสิทธิ์ Admin", "error");
                 await signOut(auth);
                 showLoginOverlay();
@@ -133,4 +140,3 @@ function removeLoginOverlay() {
     const overlay = document.getElementById('admin-login-overlay');
     if (overlay) overlay.remove();
 }
-
