@@ -7,7 +7,7 @@ import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import 'swiper/css/effect-creative';
 
-// --- CSS เสริม (คงเดิม) ---
+// --- CSS เสริม (ปรับแต่งปุ่มและ Animation) ---
 const style = document.createElement('style');
 style.innerHTML = `
     @keyframes ken-burns {
@@ -18,6 +18,7 @@ style.innerHTML = `
         animation: ken-burns 20s ease-out infinite alternate;
         will-change: transform;
     }
+    /* ปรับปุ่มให้กดง่ายขึ้นและไม่บังสายตา */
     .custom-swiper-button {
         width: 40px !important;
         height: 40px !important;
@@ -27,7 +28,7 @@ style.innerHTML = `
         border: 1px solid rgba(255, 255, 255, 0.05);
         color: rgba(255, 255, 255, 0.7) !important;
         transition: all 0.3s ease;
-        z-index: 50; /* เพิ่ม Z-Index เพื่อให้แน่ใจว่าปุ่มอยู่บนสุด */
+        z-index: 50; /* สำคัญ: ต้องอยู่เหนือ Link Overlay */
     }
     .custom-swiper-button:hover {
         background: rgba(0, 0, 0, 0.5);
@@ -38,7 +39,7 @@ style.innerHTML = `
 `;
 document.head.appendChild(style);
 
-// ส่วนแสดงผลโครงร่างรอโหลด (คงเดิม)
+// ส่วนแสดงผลโครงร่างรอโหลด (Skeleton)
 export function renderHeroSkeleton(containerId) {
     const container = document.getElementById(containerId);
     if (container) {
@@ -52,31 +53,42 @@ export function renderHeroSkeleton(containerId) {
     }
 }
 
-// [FIXED] ปรับปรุงฟังก์ชันสร้าง HTML: เปลี่ยนโครงสร้างเพื่อแก้ปัญหาลิงก์กดไม่ได้
+// ฟังก์ชันสร้าง HTML ของแต่ละสไลด์
 function createSlideHTML(banner, historyItems = []) {
-    // 1. ตรวจสอบ ID ให้แน่ใจว่ามีค่า
-    if (!banner.id) return ''; 
+    if (!banner) return '';
 
-    // 2. คำนวณลิงก์ปลายทาง
+    // --- ส่วนที่ 1: คำนวณลิงก์ (Resume Logic) ---
+    // ตรวจสอบประวัติการดูของเรื่องนี้
     const history = historyItems.find(h => h.showId === banner.id);
+    
+    // ถ้าเคยดูแล้ว ให้ใช้เลขตอนล่าสุด ถ้าไม่เคย ให้เริ่มตอนที่ 1
     const epNumber = history?.latestEpisodeNumber || 1;
     const epId = history?.lastWatchedEpisodeId || '';
 
-    // สร้าง Path ให้รองรับทั้งการเข้าจากหน้า Index และหน้าอื่นๆ (Best Practice)
-    // ตรวจสอบว่าปัจจุบันอยู่ใน folder pages หรือไม่ ถ้าใช่ให้ถอยกลับ
-    let targetUrl = `pages/player.html?id=${banner.id}`;
+    // ตรวจสอบ Path ว่าเราอยู่หน้าไหน (เผื่อใช้ในหน้าอื่นที่ไม่ใช่ index)
+    const isPages = window.location.pathname.includes('/pages/');
+    const basePath = isPages ? 'player.html' : 'pages/player.html';
+
+    // สร้าง URL ปลายทาง
+    let targetUrl = `${basePath}?id=${banner.id}`;
+    
+    // ถ้ามีประวัติการดู ให้ต่อท้ายด้วยข้อมูลตอนเดิม (Resume)
     if (history && epId) {
         targetUrl += `&ep=${epNumber}&ep_id=${epId}`;
     }
 
     const imgUrl = banner.bannerImageUrl || 'https://placehold.co/1920x1080/111/fff?text=No+Image';
 
+    // Badge แสดงสถานะ "ดูต่อ"
     const statusLabel = history 
-        ? `<span class="text-[10px] text-green-400 font-medium tracking-wide drop-shadow-md bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm"><i class="ri-play-circle-line"></i> ดูต่อ EP.${epNumber}</span>` 
+        ? `<span class="inline-flex items-center gap-1 text-[11px] font-medium text-green-400 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full border border-green-500/30 mb-2">
+             <i class="ri-play-circle-line"></i> ดูต่อ EP.${epNumber}
+           </span>` 
         : ``; 
 
-    // [CHANGE] เปลี่ยนจาก <a class="swiper-slide"> เป็น <div class="swiper-slide">
-    // แล้วใส่ <a> ไว้ข้างในสุดแบบ Absolute Overlay (z-30) เพื่อคลุมทุกอย่าง
+    // --- ส่วนที่ 2: สร้าง HTML (Structure Fix) ---
+    // เปลี่ยนจาก <a class="swiper-slide"> เป็น <div> เพื่อแก้บั๊ก Swiper
+    // แล้วใช้ <a> แบบ absolute (Overlay) คลุมทับแทน
     return `
         <div class="swiper-slide relative w-full h-full overflow-hidden bg-black group block">
             
@@ -97,26 +109,27 @@ function createSlideHTML(banner, historyItems = []) {
             <div class="absolute inset-0 container mx-auto px-4 sm:px-6 flex items-end pb-8 sm:pb-10 z-20 pointer-events-none">
                 <div class="w-full" data-swiper-parallax="-200">
                     
-                    <div class="mb-2 opacity-90">
+                    <div class="opacity-90 transform transition-transform duration-500 group-hover:translate-y-[-4px]">
                         ${statusLabel}
                     </div>
 
-                    <h2 class="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight drop-shadow-lg tracking-tight transition-transform duration-500 group-hover:-translate-y-1 line-clamp-2">
+                    <h2 class="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight drop-shadow-lg tracking-tight line-clamp-2">
                         ${banner.title}
                     </h2>
                     
-                    <div class="w-12 h-1 bg-green-500 rounded-full mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
+                    <div class="w-12 h-1 bg-green-500 rounded-full mt-4 opacity-0 group-hover:opacity-100 transition-all duration-500 shadow-[0_0_15px_rgba(34,197,94,0.6)] translate-y-4 group-hover:translate-y-0"></div>
                 </div>
             </div>
         </div>
     `;
 }
 
+// ฟังก์ชันหลัก Render Banner
 export function renderHeroBanner(containerId, banners, historyItems, userId) {
     const swiperContainer = document.getElementById(containerId);
     if (!swiperContainer) return;
     
-    // สร้างโครงสร้าง (เพิ่ม z-index ให้ปุ่ม Navigation อยู่เหนือ Link Overlay)
+    // สร้างโครงสร้าง Swiper
     if (!swiperContainer.querySelector('.swiper-wrapper')) {
         swiperContainer.innerHTML = `
             <div class="swiper-wrapper"></div>
@@ -134,6 +147,7 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
         return;
     }
 
+    // Render สไลด์
     wrapper.innerHTML = banners.map(banner => createSlideHTML(banner, historyItems)).join('');
 
     // Config Swiper
@@ -144,10 +158,9 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
         speed: 1000,
         parallax: true,
         
-        // [KEY FIX] ป้องกันการคลิกมั่ว แต่ยอมให้คลิก Link ได้
+        // Settings สำคัญ: อนุญาตให้คลิกได้ และไม่ขัดขวางการทำงานของ Link
         preventClicks: false,
         preventClicksPropagation: false,
-        touchStartPreventDefault: false,
         
         effect: 'creative',
         creativeEffect: {
