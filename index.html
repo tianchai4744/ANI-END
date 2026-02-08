@@ -9,24 +9,9 @@
 
     <style>
         /* --- Styles --- */
-        .swiper-button-next, .swiper-button-prev { 
-            color: #ffffff !important; 
-            background-color: rgba(0,0,0,0.3); 
-            width: 48px !important; height: 48px !important; 
-            border-radius: 50%;
-            backdrop-filter: blur(4px);
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .swiper-button-next:hover, .swiper-button-prev:hover {
-            background-color: #00b87c !important; 
-            transform: scale(1.1);
-            box-shadow: 0 0 15px rgba(0, 184, 124, 0.5);
-            border-color: #00b87c;
-        }
-        .swiper-button-next::after, .swiper-button-prev::after { 
-            font-size: 20px !important; font-weight: bold; 
-        }
+        /* Custom Swiper Buttons & Styles */
+        .swiper-button-next, .swiper-button-prev { display: none !important; } /* ซ่อนปุ่ม Default */
+        
         .swiper-pagination-bullet { 
             background: #fff !important; opacity: 0.4 !important; 
             width: 8px !important; height: 8px !important; transition: all 0.3s !important;
@@ -36,11 +21,31 @@
             width: 24px !important; border-radius: 4px !important;
         }
         
+        /* Ken Burns Effect */
+        @keyframes ken-burns {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.15); }
+        }
+        .animate-ken-burns {
+            animation: ken-burns 15s ease-out infinite alternate;
+            will-change: transform;
+        }
+
+        /* Slide Up Animation */
+        @keyframes slide-up-fade {
+            0% { opacity: 0; transform: translateY(30px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up {
+            animation: slide-up-fade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
         a { cursor: pointer; }
         .nav-link { transition: color 0.2s, background-color 0.2s; }
         .nav-link.active { color: #00b87c; } 
         #mobile-search-bar { display: none; }
         
+        /* History Card */
         .history-card {
             display: flex; align-items: center; gap: 10px; padding: 8px; 
             border-radius: 8px; background-color: transparent; 
@@ -237,28 +242,25 @@
             if (!sectionsContainer) return;
             sectionsContainer.innerHTML = ''; 
 
-            // 1. ✅ Top 10 Section (Full Width Container)
+            // 1. ✅ Top 10 Section (แบบ Full Width ตามที่ขอ)
             const top10Element = renderTop10Section(top30Shows, historyItems);
             if (top10Element) {
-                // สร้าง Wrapper ให้มั่นใจว่า w-full
-                const wrapper = document.createElement('div');
-                wrapper.className = 'w-full mb-10 overflow-hidden'; // overflow-hidden กัน Swiper ทะลุ
-                wrapper.appendChild(top10Element);
-                sectionsContainer.appendChild(wrapper);
+                sectionsContainer.appendChild(top10Element);
             }
             
-            // 2. Recommended
+            // 2. Recommended (ยังอยู่ครบ)
             const recommendedEl = renderRecommendedSection(top30Shows, historyItems);
             if (recommendedEl) sectionsContainer.appendChild(recommendedEl);
 
-            // 3. Thai Dub
+            // 3. Thai Dub (ยังอยู่ครบ)
             const thaiDubEl = renderThaiDubSection(thaiDubShows, historyItems);
             if (thaiDubEl) sectionsContainer.appendChild(thaiDubEl);
 
-            // 4. Latest
+            // 4. Latest Updates (ยังอยู่ครบ)
             const latestEl = renderLatestUpdatesSection(latestShows, historyItems);
             if (latestEl) sectionsContainer.appendChild(latestEl);
             
+            // Fallback กรณีไม่มีข้อมูล
             if(top30Shows.length === 0 && latestShows.length === 0) { 
                 sectionsContainer.innerHTML = `<p class="text-center text-gray-400 py-10">ไม่สามารถโหลดข้อมูลได้ในขณะนี้</p>`;
             }
@@ -283,8 +285,6 @@
                 <section id="hero-banner-container" class="lg:col-span-3 relative h-[240px] sm:h-[360px] lg:h-[480px] rounded-2xl overflow-hidden bg-gray-900 shadow-2xl group ring-1 ring-gray-800">
                     <div id="hero-swiper" class="swiper w-full h-full">
                         <div class="swiper-wrapper"></div>
-                        <div class="swiper-button-prev hidden md:flex items-center justify-center"></div>
-                        <div class="swiper-button-next hidden md:flex items-center justify-center"></div>
                         <div class="swiper-pagination"></div>
                     </div>
                 </section>
