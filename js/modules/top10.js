@@ -7,7 +7,7 @@ import 'swiper/css/free-mode';
 export function renderTop10Section(shows, historyItems) {
     if (!shows || shows.length === 0) return null;
 
-    // สร้าง Container หลัก (w-full เพื่อให้เต็มความกว้าง)
+    // สร้าง Section หลักกำหนดให้กว้างเต็ม (w-full)
     const section = document.createElement('section');
     section.className = 'w-full mb-12 animate-fade-in-up';
 
@@ -63,7 +63,7 @@ export function renderTop10Section(shows, historyItems) {
                                         </button>
                                     </div>
                                     
-                                    <div class="absolute top-2 left-2 z-20">
+                                    <div class="absolute top-2 left-2 z-20 md:hidden">
                                        <div class="w-8 h-8 bg-black/50 backdrop-blur rounded-full flex items-center justify-center border border-white/10 text-white font-bold text-sm">
                                          ${rank}
                                        </div>
@@ -87,13 +87,13 @@ export function renderTop10Section(shows, historyItems) {
         </div>
     `;
 
-    // Initialize Swiper
+    // เริ่มการทำงานของ Swiper
     setTimeout(() => {
         new Swiper(section.querySelector('.top10-swiper'), {
             modules: [Navigation, FreeMode],
-            slidesPerView: 'auto', // ให้คำนวณความกว้างอัตโนมัติตาม CSS (!w-[...])
-            spaceBetween: 20,      // ระยะห่างระหว่างการ์ด
-            freeMode: true,        // ให้เลื่อนแบบอิสระได้ (ไม่ล็อกทีละภาพ)
+            slidesPerView: 'auto', // คำนวณความกว้างตามเนื้อหา (ทำให้การ์ดเรียงต่อกันสวยงาม)
+            spaceBetween: 20,      // ระยะห่าง
+            freeMode: true,        // เลื่อนแบบอิสระ
             navigation: {
                 nextEl: section.querySelector('.top10-next'),
                 prevEl: section.querySelector('.top10-prev'),
