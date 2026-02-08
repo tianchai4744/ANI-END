@@ -7,7 +7,7 @@ import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import 'swiper/css/effect-creative';
 
-// --- CSS เสริมสำหรับ Animation และ Play Icon ---
+// --- CSS เสริม (Ken Burns Effect & Minimal Nav) ---
 const style = document.createElement('style');
 style.innerHTML = `
     @keyframes ken-burns {
@@ -18,33 +18,23 @@ style.innerHTML = `
         animation: ken-burns 20s ease-out infinite alternate;
         will-change: transform;
     }
-    /* Play Icon ที่จะโผล่มาตรงกลางเมื่อเอาเมาส์ชี้ */
-    .play-overlay {
-        opacity: 0;
-        transition: all 0.4s ease;
-        transform: scale(0.8);
-    }
-    .swiper-slide:hover .play-overlay {
-        opacity: 1;
-        transform: scale(1);
-    }
-    /* ปรับปุ่มลูกศรข้างๆ ให้ดูคลีน */
+    /* ปรับปุ่มลูกศรให้เล็กและจางที่สุด เพื่อไม่ให้กวนสายตา */
     .custom-swiper-button {
-        width: 50px !important;
-        height: 50px !important;
-        background: rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(4px);
+        width: 40px !important;
+        height: 40px !important;
+        background: rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(2px);
         border-radius: 50%;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: white !important;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.7) !important;
         transition: all 0.3s ease;
     }
     .custom-swiper-button:hover {
-        background: rgba(0, 184, 124, 0.9);
-        border-color: #00b87c;
-        transform: scale(1.1);
+        background: rgba(0, 0, 0, 0.5);
+        color: white !important;
+        border-color: rgba(255, 255, 255, 0.2);
     }
-    .custom-swiper-button::after { font-size: 20px !important; font-weight: bold; }
+    .custom-swiper-button::after { font-size: 16px !important; }
 `;
 document.head.appendChild(style);
 
@@ -62,67 +52,49 @@ export function renderHeroSkeleton(containerId) {
     }
 }
 
-// ฟังก์ชันสร้าง HTML ของแต่ละสไลด์ (แบบคลีน ไม่มีปุ่ม)
+// ฟังก์ชันสร้าง HTML ของแต่ละสไลด์ (Ultra Minimal)
 function createSlideHTML(banner, historyItems = []) {
-    // 1. คำนวณลิงก์ปลายทาง (ฉลาดเลือก)
+    // คำนวณลิงก์ปลายทาง (ระบบจำตอนที่ดูค้างไว้)
     const history = historyItems.find(h => h.showId === banner.id);
     const epNumber = history?.latestEpisodeNumber || 1;
     const epId = history?.lastWatchedEpisodeId || '';
 
     let targetUrl = `pages/player.html?id=${banner.id}`;
-    // ถ้ามีประวัติ ให้กระโดดไปตอนที่ดูค้างเลย
     if (history && epId) {
         targetUrl += `&ep=${epNumber}&ep_id=${epId}`;
     }
 
-    // รูปภาพ
     const imgUrl = banner.bannerImageUrl || 'https://placehold.co/1920x1080/111/fff?text=No+Image';
 
-    // Badge สถานะ
-    const statusBadge = history 
-        ? `<span class="bg-green-500 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow-lg flex items-center gap-1"><i class="ri-play-circle-fill"></i> ดูต่อ EP.${epNumber}</span>`
-        : `<span class="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md border border-white/20">NEW</span>`;
+    // Badge สถานะเล็กจิ๋ว (ถ้ามีประวัติให้โชว์ว่าดูถึงไหน ถ้าไม่มีก็ปล่อยว่างเลยเพื่อให้ภาพเด่นสุด)
+    const statusLabel = history 
+        ? `<span class="text-[10px] text-green-400 font-medium tracking-wide drop-shadow-md"><i class="ri-play-circle-line"></i> ดูต่อ EP.${epNumber}</span>` 
+        : ``; 
 
-    // 2. ใช้ <a> ครอบทั้งหมดแทน div
     return `
         <a href="${targetUrl}" class="swiper-slide relative w-full h-full overflow-hidden bg-black group block cursor-pointer">
             
             <div class="absolute inset-0 w-full h-full overflow-hidden" data-swiper-parallax="50%">
                  <img src="${imgUrl}" 
                      alt="${banner.title}" 
-                     class="w-full h-full object-cover animate-ken-burns opacity-80 group-hover:opacity-60 transition-opacity duration-700"
+                     class="w-full h-full object-cover animate-ken-burns opacity-90 transition-opacity duration-700"
                      loading="lazy">
             </div>
 
-            <div class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-                <div class="play-overlay w-20 h-20 rounded-full bg-green-500/90 text-white flex items-center justify-center shadow-[0_0_40px_rgba(34,197,94,0.6)] backdrop-blur-sm">
-                    <i class="ri-play-fill text-5xl ml-1"></i>
-                </div>
-            </div>
+            <div class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none"></div>
 
-            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-90 pointer-events-none"></div>
-
-            <div class="absolute inset-0 container mx-auto px-4 sm:px-8 flex items-end pb-10 sm:pb-14 z-10 pointer-events-none">
-                <div class="w-full max-w-4xl pointer-events-auto" data-swiper-parallax="-300" data-swiper-parallax-opacity="0">
+            <div class="absolute inset-0 container mx-auto px-4 sm:px-6 flex items-end pb-8 sm:pb-10 z-10 pointer-events-none">
+                <div class="w-full pointer-events-auto" data-swiper-parallax="-200">
                     
-                    <div class="flex items-center gap-3 mb-3">
-                        ${statusBadge}
-                        <div class="flex items-center gap-1 text-yellow-400 text-sm font-bold drop-shadow-md">
-                            <i class="ri-star-fill"></i> ${banner.rating || 'N/A'}
-                        </div>
-                        <span class="text-gray-400 text-xs font-medium border border-gray-700 px-1.5 py-0.5 rounded">
-                            ${banner.type || 'TV'}
-                        </span>
+                    <div class="mb-1 opacity-80">
+                        ${statusLabel}
                     </div>
 
-                    <h2 class="text-4xl sm:text-6xl md:text-7xl font-black text-white leading-none mb-2 drop-shadow-2xl tracking-tighter transition-transform duration-500 group-hover:-translate-y-2" 
-                        style="text-shadow: 0 4px 20px rgba(0,0,0,0.8);">
+                    <h2 class="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight drop-shadow-lg tracking-tight transition-transform duration-500 group-hover:-translate-y-1">
                         ${banner.title}
                     </h2>
-
-                    <p class="text-gray-400 text-sm sm:text-lg line-clamp-1 max-w-2xl opacity-80 group-hover:text-white transition-colors">
-                        ${banner.synopsis || 'กดเพื่อรับชมทันที'}
-                    </p>
+                    
+                    <div class="w-12 h-1 bg-green-500 rounded-full mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
                 </div>
             </div>
         </a>
@@ -134,12 +106,14 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
     const swiperContainer = document.getElementById(containerId);
     if (!swiperContainer) return;
     
-    // สร้างโครงสร้างพื้นฐาน
+    // สร้างโครงสร้าง
     if (!swiperContainer.querySelector('.swiper-wrapper')) {
         swiperContainer.innerHTML = `
             <div class="swiper-wrapper"></div>
-            <div class="swiper-button-prev custom-swiper-button hidden md:flex"></div>
-            <div class="swiper-button-next custom-swiper-button hidden md:flex"></div>
+            <div class="absolute bottom-6 right-6 z-20 flex gap-2 hidden sm:flex">
+                <div class="swiper-button-prev custom-swiper-button flex items-center justify-center cursor-pointer"></div>
+                <div class="swiper-button-next custom-swiper-button flex items-center justify-center cursor-pointer"></div>
+            </div>
             <div class="swiper-pagination"></div>
         `;
     }
@@ -157,14 +131,16 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
         modules: [Navigation, Pagination, Autoplay, EffectCreative, Parallax],
         
         loop: true,
-        speed: 1200,
+        speed: 1500, // เปลี่ยนภาพช้าลงอีกนิดเพื่อให้ดู Cinematic
         parallax: true,
         
+        // Effect แบบ Creative ที่นุ่มนวล
         effect: 'creative',
         creativeEffect: {
             prev: {
                 shadow: true,
                 translate: ['-20%', 0, -1],
+                opacity: 0.6, // ให้ภาพเก่าจางลงตอนเลื่อน
             },
             next: {
                 translate: ['100%', 0, 0],
@@ -172,7 +148,7 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
         },
         
         autoplay: {
-            delay: 6000,
+            delay: 7000, // โชว์ภาพนานขึ้น (7 วิ)
             disableOnInteraction: false,
             pauseOnMouseEnter: true
         },
