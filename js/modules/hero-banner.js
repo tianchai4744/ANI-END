@@ -1,13 +1,13 @@
 import Swiper from 'swiper';
 import { Navigation, Pagination, Autoplay, EffectCreative, Parallax } from 'swiper/modules';
 
-// Import CSS ให้ครบ
+// Import CSS
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import 'swiper/css/effect-creative';
 
-// --- ส่วนเสริม: สร้าง CSS Animation (Ken Burns) อัตโนมัติ โดยไม่ต้องไปแก้ไฟล์ CSS ---
+// --- CSS เสริมสำหรับ Animation และ Play Icon ---
 const style = document.createElement('style');
 style.innerHTML = `
     @keyframes ken-burns {
@@ -18,26 +18,33 @@ style.innerHTML = `
         animation: ken-burns 20s ease-out infinite alternate;
         will-change: transform;
     }
-    /* ปรับปุ่มกดให้ดู Minimal */
+    /* Play Icon ที่จะโผล่มาตรงกลางเมื่อเอาเมาส์ชี้ */
+    .play-overlay {
+        opacity: 0;
+        transition: all 0.4s ease;
+        transform: scale(0.8);
+    }
+    .swiper-slide:hover .play-overlay {
+        opacity: 1;
+        transform: scale(1);
+    }
+    /* ปรับปุ่มลูกศรข้างๆ ให้ดูคลีน */
     .custom-swiper-button {
         width: 50px !important;
         height: 50px !important;
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.3);
         backdrop-filter: blur(4px);
         border-radius: 50%;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         color: white !important;
         transition: all 0.3s ease;
     }
     .custom-swiper-button:hover {
-        background: rgba(0, 184, 124, 0.8);
+        background: rgba(0, 184, 124, 0.9);
         border-color: #00b87c;
         transform: scale(1.1);
     }
-    .custom-swiper-button::after {
-        font-size: 20px !important;
-        font-weight: bold;
-    }
+    .custom-swiper-button::after { font-size: 20px !important; font-weight: bold; }
 `;
 document.head.appendChild(style);
 
@@ -55,72 +62,70 @@ export function renderHeroSkeleton(containerId) {
     }
 }
 
-// ฟังก์ชันสร้างปุ่ม Action (ปรับดีไซน์ให้โปร่งแสง ไม่บังรูป)
-function createActionButtons(showId, epId, epNumber, isHistory) {
-    if (isHistory) {
-        return `
-            <a href="pages/player.html?id=${showId}&ep=${epNumber}&ep_id=${epId}" 
-               class="group relative inline-flex items-center gap-2 bg-white/10 hover:bg-green-500 text-white backdrop-blur-md border border-white/20 hover:border-green-500 px-6 py-2 rounded-full font-bold transition-all duration-300 shadow-lg overflow-hidden">
-                <span class="relative z-10 flex items-center gap-2"><i class="ri-play-fill text-xl"></i> ดูต่อ EP.${epNumber}</span>
-            </a>
-        `;
-    }
-    return `
-        <a href="pages/player.html?id=${showId}" 
-           class="group relative inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black px-8 py-2.5 rounded-full font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,197,94,0.4)] hover:shadow-[0_0_30px_rgba(34,197,94,0.6)] hover:-translate-y-1">
-            <i class="ri-play-fill text-2xl"></i> <span class="tracking-wide">ดูเลย</span>
-        </a>
-    `;
-}
-
-// ฟังก์ชันสร้าง HTML ของแต่ละสไลด์
+// ฟังก์ชันสร้าง HTML ของแต่ละสไลด์ (แบบคลีน ไม่มีปุ่ม)
 function createSlideHTML(banner, historyItems = []) {
+    // 1. คำนวณลิงก์ปลายทาง (ฉลาดเลือก)
     const history = historyItems.find(h => h.showId === banner.id);
-    const isHistory = !!history;
     const epNumber = history?.latestEpisodeNumber || 1;
     const epId = history?.lastWatchedEpisodeId || '';
+
+    let targetUrl = `pages/player.html?id=${banner.id}`;
+    // ถ้ามีประวัติ ให้กระโดดไปตอนที่ดูค้างเลย
+    if (history && epId) {
+        targetUrl += `&ep=${epNumber}&ep_id=${epId}`;
+    }
 
     // รูปภาพ
     const imgUrl = banner.bannerImageUrl || 'https://placehold.co/1920x1080/111/fff?text=No+Image';
 
+    // Badge สถานะ
+    const statusBadge = history 
+        ? `<span class="bg-green-500 text-black text-[10px] font-bold px-2 py-0.5 rounded shadow-lg flex items-center gap-1"><i class="ri-play-circle-fill"></i> ดูต่อ EP.${epNumber}</span>`
+        : `<span class="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md border border-white/20">NEW</span>`;
+
+    // 2. ใช้ <a> ครอบทั้งหมดแทน div
     return `
-        <div class="swiper-slide relative w-full h-full overflow-hidden bg-black">
+        <a href="${targetUrl}" class="swiper-slide relative w-full h-full overflow-hidden bg-black group block cursor-pointer">
+            
             <div class="absolute inset-0 w-full h-full overflow-hidden" data-swiper-parallax="50%">
                  <img src="${imgUrl}" 
                      alt="${banner.title}" 
-                     class="w-full h-full object-cover animate-ken-burns"
+                     class="w-full h-full object-cover animate-ken-burns opacity-80 group-hover:opacity-60 transition-opacity duration-700"
                      loading="lazy">
             </div>
 
-            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90 pointer-events-none"></div>
+            <div class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                <div class="play-overlay w-20 h-20 rounded-full bg-green-500/90 text-white flex items-center justify-center shadow-[0_0_40px_rgba(34,197,94,0.6)] backdrop-blur-sm">
+                    <i class="ri-play-fill text-5xl ml-1"></i>
+                </div>
+            </div>
+
+            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-90 pointer-events-none"></div>
 
             <div class="absolute inset-0 container mx-auto px-4 sm:px-8 flex items-end pb-10 sm:pb-14 z-10 pointer-events-none">
                 <div class="w-full max-w-4xl pointer-events-auto" data-swiper-parallax="-300" data-swiper-parallax-opacity="0">
                     
                     <div class="flex items-center gap-3 mb-3">
-                        <span class="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-lg shadow-red-900/50">
-                            Anime
-                        </span>
+                        ${statusBadge}
                         <div class="flex items-center gap-1 text-yellow-400 text-sm font-bold drop-shadow-md">
                             <i class="ri-star-fill"></i> ${banner.rating || 'N/A'}
                         </div>
+                        <span class="text-gray-400 text-xs font-medium border border-gray-700 px-1.5 py-0.5 rounded">
+                            ${banner.type || 'TV'}
+                        </span>
                     </div>
 
-                    <h2 class="text-4xl sm:text-6xl md:text-7xl font-black text-white leading-none mb-6 drop-shadow-2xl tracking-tighter" 
+                    <h2 class="text-4xl sm:text-6xl md:text-7xl font-black text-white leading-none mb-2 drop-shadow-2xl tracking-tighter transition-transform duration-500 group-hover:-translate-y-2" 
                         style="text-shadow: 0 4px 20px rgba(0,0,0,0.8);">
                         ${banner.title}
                     </h2>
 
-                    <div class="flex items-center gap-4">
-                        ${createActionButtons(banner.id, epId, epNumber, isHistory)}
-                        
-                        <button class="w-12 h-12 rounded-full border border-white/30 flex items-center justify-center text-white hover:bg-white hover:text-black transition-all duration-300 backdrop-blur-sm group">
-                            <i class="ri-add-line text-2xl group-hover:rotate-90 transition-transform duration-300"></i>
-                        </button>
-                    </div>
+                    <p class="text-gray-400 text-sm sm:text-lg line-clamp-1 max-w-2xl opacity-80 group-hover:text-white transition-colors">
+                        ${banner.synopsis || 'กดเพื่อรับชมทันที'}
+                    </p>
                 </div>
             </div>
-        </div>
+        </a>
     `;
 }
 
@@ -129,7 +134,7 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
     const swiperContainer = document.getElementById(containerId);
     if (!swiperContainer) return;
     
-    // สร้างโครงสร้างพื้นฐาน (เพิ่ม Class ให้ปุ่ม Navigation)
+    // สร้างโครงสร้างพื้นฐาน
     if (!swiperContainer.querySelector('.swiper-wrapper')) {
         swiperContainer.innerHTML = `
             <div class="swiper-wrapper"></div>
@@ -147,23 +152,22 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
 
     wrapper.innerHTML = banners.map(banner => createSlideHTML(banner, historyItems)).join('');
 
-    // ✅ CONFIG: ความหวือหวาระดับ Cinematic
+    // Config Swiper
     new Swiper(`#${containerId}`, {
         modules: [Navigation, Pagination, Autoplay, EffectCreative, Parallax],
         
         loop: true,
-        speed: 1200,                // เปลี่ยนภาพช้าๆ นุ่มๆ (1.2 วิ)
-        parallax: true,             // เปิดใช้งาน Parallax (เลื่อนมิติ)
+        speed: 1200,
+        parallax: true,
         
-        // 🔥 เอฟเฟกต์ CREATIVE (หวือหวากว่า Fade ปกติ)
         effect: 'creative',
         creativeEffect: {
             prev: {
                 shadow: true,
-                translate: ['-20%', 0, -1], // ภาพเก่าถอยหลังไปนิดนึง
+                translate: ['-20%', 0, -1],
             },
             next: {
-                translate: ['100%', 0, 0],  // ภาพใหม่พุ่งมาจากขวา
+                translate: ['100%', 0, 0],
             },
         },
         
