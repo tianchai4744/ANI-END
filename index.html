@@ -9,9 +9,10 @@
 
     <style>
         /* --- Styles --- */
-        /* Custom Swiper Buttons & Styles */
-        .swiper-button-next, .swiper-button-prev { display: none !important; } /* ซ่อนปุ่ม Default */
+        /* ซ่อนปุ่ม Swiper เดิม */
+        .swiper-button-next, .swiper-button-prev { display: none !important; }
         
+        /* Pagination Styling */
         .swiper-pagination-bullet { 
             background: #fff !important; opacity: 0.4 !important; 
             width: 8px !important; height: 8px !important; transition: all 0.3s !important;
@@ -61,9 +62,10 @@
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .skeleton { background-color: #374151; animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; border-radius: 0.5rem; }
     </style>
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#0f172a">
-    <link rel="apple-touch-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="./favicon.ico">
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
 </head>
 <body class="bg-black text-gray-100">
 
@@ -206,16 +208,18 @@
             }
         }
         
+        // ฟังก์ชัน Render ประวัติ (ลงใน HTML โดยตรง ไม่สร้างใหม่)
         function renderHistorySection() {
-            let htmlContent = renderHistorySectionHTML(historyItems, userId);
-            const container = document.getElementById('main-history-container');
+            const htmlContent = renderHistorySectionHTML(historyItems, userId);
             
+            const container = document.getElementById('main-history-container');
             if (container) {
-                htmlContent = htmlContent.replace(
+                 // ปรับ HTML ให้ Scroll ได้
+                const adjustedHtml = htmlContent.replace(
                     'class="space-y-2"', 
                     'class="space-y-2 flex-1 custom-scrollbar-y pr-2 overflow-y-auto"'
                 );
-                container.innerHTML = `<div class="h-full flex flex-col">${htmlContent}</div>`;
+                container.innerHTML = `<div class="h-full flex flex-col">${adjustedHtml}</div>`;
             }
         }
 
@@ -242,25 +246,24 @@
             if (!sectionsContainer) return;
             sectionsContainer.innerHTML = ''; 
 
-            // 1. ✅ Top 10 Section (แบบ Full Width ตามที่ขอ)
+            // 1. Top 10 (Full Width)
             const top10Element = renderTop10Section(top30Shows, historyItems);
             if (top10Element) {
                 sectionsContainer.appendChild(top10Element);
             }
             
-            // 2. Recommended (ยังอยู่ครบ)
+            // 2. Recommended
             const recommendedEl = renderRecommendedSection(top30Shows, historyItems);
             if (recommendedEl) sectionsContainer.appendChild(recommendedEl);
 
-            // 3. Thai Dub (ยังอยู่ครบ)
+            // 3. Thai Dub
             const thaiDubEl = renderThaiDubSection(thaiDubShows, historyItems);
             if (thaiDubEl) sectionsContainer.appendChild(thaiDubEl);
 
-            // 4. Latest Updates (ยังอยู่ครบ)
+            // 4. Latest
             const latestEl = renderLatestUpdatesSection(latestShows, historyItems);
             if (latestEl) sectionsContainer.appendChild(latestEl);
             
-            // Fallback กรณีไม่มีข้อมูล
             if(top30Shows.length === 0 && latestShows.length === 0) { 
                 sectionsContainer.innerHTML = `<p class="text-center text-gray-400 py-10">ไม่สามารถโหลดข้อมูลได้ในขณะนี้</p>`;
             }
@@ -286,7 +289,7 @@
                     <div id="hero-swiper" class="swiper w-full h-full">
                         <div class="swiper-wrapper"></div>
                         <div class="swiper-pagination"></div>
-                    </div>
+                        </div>
                 </section>
 
                 <section id="main-history-container" class="lg:col-span-1 h-auto lg:h-[480px] bg-gray-900/60 backdrop-blur-md rounded-2xl p-5 border border-gray-800 shadow-xl flex flex-col">
@@ -326,7 +329,10 @@
     </footer>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js'); });
+        window.addEventListener('load', () => {
+          // ✅ แก้ไข Path เป็น ./sw.js ให้หาเจอในโฟลเดอร์เดียวกัน
+          navigator.serviceWorker.register('./sw.js');
+        });
       }
     </script>
 </body>
