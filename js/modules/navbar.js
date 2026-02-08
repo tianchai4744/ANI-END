@@ -3,9 +3,6 @@ import {
     logoutUser, monitorUserAuth, getAuthErrorMessage 
 } from "../services/auth.js";
 
-import { collection, getDocs, limit, query } from "firebase/firestore";
-import { db, appId } from "../config/db-config.js";
-
 // Import Modules
 import { initRandomButton } from "./random-service.js";
 import { initNotificationSystem } from "./notification-service.js";
@@ -67,11 +64,8 @@ function setUIStateLoggedOut() {
     document.getElementById('mobile-user-profile')?.classList.add('hidden');
 }
 
-/**
- * ฟังก์ชันช่วย Render HTML และผูก Event (แยกออกมาเพื่อเรียกใช้ซ้ำ)
- */
 async function renderNavbarHTML(placeholder, rawHtml, pathPrefix) {
-    // แทนที่ Path ต่างๆ ให้ถูกต้องตามตำแหน่งไฟล์
+    // แทนที่ Path
     let html = rawHtml.replace(/href="([^"]*)"/g, (match, href) => {
         if (href.startsWith('#') || href.startsWith('http') || href.startsWith('mailto')) return match;
         const cleanHref = href.startsWith('/') ? href.substring(1) : href;
@@ -85,7 +79,7 @@ async function renderNavbarHTML(placeholder, rawHtml, pathPrefix) {
 
     placeholder.innerHTML = html;
     
-    // ตั้งค่า User Profile
+    // ตั้งค่า User
     const cachedUser = localStorage.getItem('ani_user_cache');
     if (cachedUser) {
         try { setUIStateLoggedIn(JSON.parse(cachedUser)); } 
@@ -94,7 +88,7 @@ async function renderNavbarHTML(placeholder, rawHtml, pathPrefix) {
         setUIStateLoggedOut();
     }
 
-    // เริ่มการทำงานระบบต่างๆ
+    // เริ่มระบบ
     setupNavbarEvents();
     setupAuthEvents();     
     setupAuthModalLogic();
@@ -105,37 +99,27 @@ export async function loadNavbar(pathPrefix = '.') {
     const placeholder = document.getElementById('navbar-placeholder');
     if (!placeholder) return;
 
-    // 1. บังคับใส่ Style พื้นฐานทันทีเพื่อจองพื้นที่ (ป้องกัน Layout Shift)
-    // ตรงนี้จะทำงานคู่กับการแก้ HTML ในขั้นตอนที่ 2
-    placeholder.style.minHeight = '64px';
-    placeholder.classList.add('block', 'w-full', 'sticky', 'top-0', 'z-50');
-
-    // 2. ลองโหลดจาก Cache ในเครื่องก่อน (Instant Load)
+    // Load from Cache (Instant)
     const cachedHtml = localStorage.getItem(NAVBAR_CACHE_KEY);
     let isRenderedFromCache = false;
 
     if (cachedHtml) {
         await renderNavbarHTML(placeholder, cachedHtml, pathPrefix);
-        isRenderedFromCache = true; // จำไว้ว่าเราโชว์ของเก่าไปแล้ว
+        isRenderedFromCache = true;
     }
 
-    // 3. โหลดไฟล์ล่าสุดจาก Server (Background Update)
+    // Load from Network (Background Update)
     try {
         const response = await fetch(`${pathPrefix}/components/navbar.html`);
         if (!response.ok) throw new Error(`Failed to load navbar`);
         
         const rawHtml = await response.text();
-        
-        // บันทึกของใหม่ลง Cache
         localStorage.setItem(NAVBAR_CACHE_KEY, rawHtml);
 
-        // ถ้ายังไม่ได้ Render (คือไม่มี Cache หรือมาครั้งแรก) ให้แสดงผลเลย
         if (!isRenderedFromCache) {
             await renderNavbarHTML(placeholder, rawHtml, pathPrefix);
         } else {
-            // ถ้า Render จาก Cache ไปแล้ว เราจะไม่ Render ทับเพื่อไม่ให้ UI กระตุก
-            // ผู้ใช้จะเห็นเวอร์ชันใหม่ในการรีโหลดหน้าครั้งถัดไป
-            console.log('Navbar loaded from cache. Updated version saved for next visit.');
+            console.log('Navbar loaded from cache. Updated version saved.');
         }
 
     } catch (error) {
@@ -143,6 +127,7 @@ export async function loadNavbar(pathPrefix = '.') {
     }
 }
 
+// ... (ส่วน Logic เดิมด้านล่างนี้คงไว้เหมือนเดิม ไม่ต้องแก้ไข) ...
 function setupAuthModalLogic() {
     const modal = document.getElementById('auth-modal');
     const content = document.getElementById('auth-modal-content');
@@ -171,7 +156,6 @@ function setupAuthModalLogic() {
 
     const updateUI = () => {
         if(!nameInput || !passwordInput) return;
-
         nameInput.required = (mode === 'register');
         passwordInput.required = (mode !== 'forgot');
 
@@ -280,8 +264,6 @@ function setupAuthEvents() {
             const userData = { name, photo };
             localStorage.setItem('ani_user_cache', JSON.stringify(userData));
             setUIStateLoggedIn(userData);
-            
-            // เริ่มระบบแจ้งเตือนเมื่อ Login
             initNotificationSystem(user.uid); 
         } else {
             localStorage.removeItem('ani_user_cache');
@@ -319,7 +301,6 @@ function setupNavbarEvents() {
         if (mSearchBar && isVisible(mSearchBar) && !mSearchBar.contains(e.target) && !mSearchBtn.contains(e.target)) hide(mSearchBar);
     });
 
-    // เริ่มระบบปุ่มสุ่ม
     initRandomButton();
 }
 
