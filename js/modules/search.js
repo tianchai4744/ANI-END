@@ -9,6 +9,12 @@ export function setupSearchSystem() {
     setupInput('mobile-search-input', 'mobile-search-dropdown');
 }
 
+// ฟังก์ชันช่วยคำนวณ Path (เพิ่มใหม่เพื่อแก้ปัญหา Link Error)
+function getPathPrefix() {
+    // ถ้า URL ปัจจุบันมีคำว่า /pages/ แสดงว่าอยู่ข้างในโฟลเดอร์แล้ว ไม่ต้องเติม pages/ นำหน้า
+    return window.location.pathname.includes('/pages/') ? '' : 'pages/';
+}
+
 function setupInput(inputId, dropdownId) {
     const searchInput = document.getElementById(inputId);
     const searchDropdown = document.getElementById(dropdownId);
@@ -48,7 +54,10 @@ function setupInput(inputId, dropdownId) {
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             const val = e.target.value.trim();
-            if (val) window.location.href = `pages/grid.html?search=${encodeURIComponent(val)}`;
+            if (val) {
+                // แก้ไข: ใช้ getPathPrefix() เพื่อระบุตำแหน่งไฟล์ให้ถูกต้อง
+                window.location.href = `${getPathPrefix()}grid.html?search=${encodeURIComponent(val)}`;
+            }
         }
     });
 }
@@ -58,6 +67,9 @@ function renderDropdown(results, container, queryText) {
     // ล้าง Style เดิมและใส่ Style ใหม่ให้ Container
     // ใช้สีพื้นหลังเข้มและ Border บางๆ เพื่อความทันสมัย
     container.className = "absolute left-0 right-0 mt-2 w-full bg-[#1a1c22] border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden hidden";
+    
+    // คำนวณ Path สำหรับลิ้งค์
+    const pathPrefix = getPathPrefix();
 
     if (results.length === 0) {
         container.innerHTML = `
@@ -71,8 +83,9 @@ function renderDropdown(results, container, queryText) {
                            ? item.posterUrl 
                            : 'https://placehold.co/40x60/333/999?text=No+Img';
 
+            // แก้ไข: ใช้ pathPrefix นำหน้า player.html
             return `
-            <a href="pages/player.html?id=${item.id}" 
+            <a href="${pathPrefix}player.html?id=${item.id}" 
                class="flex items-center gap-3 p-3 border-b border-gray-800 hover:bg-[#252830] transition-colors group">
                 
                 <div class="relative flex-shrink-0 w-10 h-14 overflow-hidden rounded bg-gray-800 shadow-lg">
@@ -99,8 +112,9 @@ function renderDropdown(results, container, queryText) {
             `;
         }).join('');
 
+        // แก้ไข: ใช้ pathPrefix นำหน้า grid.html
         const viewAllHtml = `
-            <a href="pages/grid.html?search=${encodeURIComponent(queryText)}" 
+            <a href="${pathPrefix}grid.html?search=${encodeURIComponent(queryText)}" 
                class="block py-3 text-center text-xs font-bold text-green-400 bg-[#16181d] hover:bg-gray-800 transition-colors hover:text-green-300 uppercase tracking-wider">
                 ดูผลการค้นหาทั้งหมด
             </a>
