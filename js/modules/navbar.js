@@ -39,21 +39,33 @@ window.triggerLogin = () => {
 const NAVBAR_CACHE_KEY = 'ani_navbar_html_v1';
 
 function setUIStateLoggedIn(userData) {
+    // ป้องกันกรณี userData ไม่มีค่า
+    if (!userData) return;
+
     const { name, photo } = userData;
     document.getElementById('btn-login-google')?.classList.add('hidden');
     const profile = document.getElementById('user-profile');
     if (profile) {
         profile.classList.remove('hidden');
-        document.getElementById('user-avatar').src = photo;
-        document.getElementById('user-name').textContent = name;
-        if(document.getElementById('user-name-dropdown')) document.getElementById('user-name-dropdown').textContent = name;
+        const avatar = document.getElementById('user-avatar');
+        if(avatar) avatar.src = photo;
+        
+        const nameEl = document.getElementById('user-name');
+        if(nameEl) nameEl.textContent = name;
+        
+        const dropdownName = document.getElementById('user-name-dropdown');
+        if(dropdownName) dropdownName.textContent = name;
     }
+    
     document.getElementById('btn-login-google-mobile')?.classList.add('hidden');
     const mProfile = document.getElementById('mobile-user-profile');
     if (mProfile) {
         mProfile.classList.remove('hidden');
-        document.getElementById('mobile-user-avatar').src = photo;
-        document.getElementById('mobile-user-name').textContent = name;
+        const mAvatar = document.getElementById('mobile-user-avatar');
+        if(mAvatar) mAvatar.src = photo;
+        
+        const mName = document.getElementById('mobile-user-name');
+        if(mName) mName.textContent = name;
     }
 }
 
@@ -82,7 +94,15 @@ async function renderNavbarHTML(placeholder, rawHtml, pathPrefix) {
     // ตั้งค่า User
     const cachedUser = localStorage.getItem('ani_user_cache');
     if (cachedUser) {
-        try { setUIStateLoggedIn(JSON.parse(cachedUser)); } 
+        try { 
+            const userData = JSON.parse(cachedUser);
+            if(userData && userData.name) {
+                setUIStateLoggedIn(userData); 
+            } else {
+                localStorage.removeItem('ani_user_cache');
+                setUIStateLoggedOut();
+            }
+        } 
         catch(e) { localStorage.removeItem('ani_user_cache'); setUIStateLoggedOut(); }
     } else {
         setUIStateLoggedOut();
@@ -127,7 +147,7 @@ export async function loadNavbar(pathPrefix = '.') {
     }
 }
 
-// ... (ส่วน Logic เดิมด้านล่างนี้คงไว้เหมือนเดิม ไม่ต้องแก้ไข) ...
+// ... (ส่วน Logic Modal เดิมคงไว้) ...
 function setupAuthModalLogic() {
     const modal = document.getElementById('auth-modal');
     const content = document.getElementById('auth-modal-content');
@@ -259,7 +279,12 @@ function setupAuthEvents() {
 
     monitorUserAuth((user) => {
         if (user) {
-            const name = user.displayName || user.email.split('@')[0];
+            // [FIXED] ตรวจสอบว่ามีอีเมลหรือไม่ ก่อนเรียกใช้ .split()
+            // ถ้าเป็น Anonymous user (ไม่มีอีเมล) ให้ใช้ 'Guest' แทน
+            const displayName = user.displayName;
+            const emailName = user.email ? user.email.split('@')[0] : 'Guest';
+            const name = displayName || emailName;
+
             const photo = user.photoURL || `https://ui-avatars.com/api/?name=${name}&background=random`;
             const userData = { name, photo };
             localStorage.setItem('ani_user_cache', JSON.stringify(userData));
