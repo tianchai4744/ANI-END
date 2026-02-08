@@ -62,7 +62,7 @@ function setupInput(inputId, dropdownId) {
     });
 }
 
-// 🎨 ฟังก์ชันวาดหน้าตา DropDown
+// 🎨 ฟังก์ชันวาดหน้าตา DropDown (ส่วนสำคัญที่ทำให้มีรูปปก!)
 function renderDropdown(results, container, queryText) {
     if (results.length === 0) {
         container.innerHTML = `
@@ -74,10 +74,10 @@ function renderDropdown(results, container, queryText) {
         const listHtml = results.map(item => `
             <a href="pages/player.html?id=${item.id}" class="group flex items-start gap-3 p-3 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/50 transition-all cursor-pointer">
                 <div class="relative flex-shrink-0">
-                    <img src="${item.posterUrl}" 
+                    <img src="${item.posterUrl || 'https://placehold.co/40x60?text=No+Img'}" 
                          class="w-10 h-14 object-cover rounded shadow-md group-hover:scale-105 transition-transform duration-200 bg-gray-800"
                          loading="lazy"
-                         onerror="this.src='https://placehold.co/40x60?text=No+Img'">
+                         onerror="this.src='https://placehold.co/40x60?text=Error'">
                     ${item.rating ? `
                         <div class="absolute -bottom-1 -right-1 bg-gray-900/90 text-[8px] px-1 rounded text-yellow-500 border border-gray-700 font-bold">
                             <i class="ri-star-fill"></i> ${parseFloat(item.rating).toFixed(1)}
