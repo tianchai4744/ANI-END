@@ -1,4 +1,3 @@
-// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
 import { collection, addDoc, query, where, orderBy, limit, getDocs, serverTimestamp, startAfter } from "firebase/firestore";
 import { db, appId } from "../config/db-config.js";
 import { formatTimestamp } from "../utils/tools.js";
@@ -13,39 +12,74 @@ let currentEpisodeNum = null;
 let lastCommentCursor = null; 
 let isCommentsLoading = false;
 
-// XSS Protection: ฟังก์ชันป้องกันการฝัง Script
-function escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return unsafe;
-    return unsafe
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
+// ฟังก์ชันสร้าง Element อย่างปลอดภัย (ป้องกัน XSS 100%)
+function createCommentElement(c) {
+    const div = document.createElement('div');
+    div.className = "group flex gap-3 mb-4 border-b border-gray-800 pb-4 last:border-0 hover:bg-gray-800/30 p-2 rounded-lg transition-colors";
+
+    // ส่วนรูปภาพ
+    const img = document.createElement('img');
+    img.src = c.userPhoto || 'https://placehold.co/40x40?text=?';
+    img.className = "w-10 h-10 rounded-full bg-gray-700 object-cover flex-shrink-0 shadow-sm";
+    
+    // ส่วนเนื้อหา
+    const contentDiv = document.createElement('div');
+    contentDiv.className = "flex-1 min-w-0";
+
+    // ส่วนหัว (ชื่อ + เวลา)
+    const header = document.createElement('div');
+    header.className = "flex items-center flex-wrap gap-y-1 mb-1";
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.className = "font-bold text-sm text-green-400 mr-2";
+    nameSpan.textContent = c.userName || 'Guest'; // textContent ปลอดภัยเสมอ
+    
+    const dateSpan = document.createElement('span');
+    dateSpan.className = "text-xs text-gray-500";
+    dateSpan.textContent = c.createdAt ? formatTimestamp(c.createdAt) : 'เมื่อสักครู่';
+
+    header.appendChild(nameSpan);
+    header.appendChild(dateSpan);
+
+    // Badge บอกตอน (กรณีดูรวมทั้งเรื่อง)
+    if (activeTab === 'show' && c.episodeNum) {
+        const epBadge = document.createElement('span');
+        epBadge.className = "bg-gray-700 text-gray-300 text-[10px] px-1.5 py-0.5 rounded ml-2";
+        epBadge.textContent = `Ep.${c.episodeNum}`;
+        header.appendChild(epBadge);
+    }
+
+    // ส่วนข้อความคอมเมนต์
+    const p = document.createElement('p');
+    p.className = "text-sm text-gray-200 whitespace-pre-line leading-relaxed";
+    p.textContent = c.text; // textContent จะจัดการ escape html ให้เองอัตโนมัติ
+
+    contentDiv.appendChild(header);
+    contentDiv.appendChild(p);
+    
+    div.appendChild(img);
+    div.appendChild(contentDiv);
+    
+    return div;
 }
 
-// ฟังก์ชันเริ่มต้นระบบ (เรียกใช้เมื่อเปลี่ยนตอน หรือโหลดหน้าใหม่)
+// ฟังก์ชันเริ่มต้นระบบ
 export function initCommentSystem(showId, episodeId, episodeNum) {
     currentShowId = showId;
     currentEpisodeId = episodeId;
     currentEpisodeNum = episodeNum;
     
-    // รีเซ็ตแท็บและ Cursor ทุกครั้งที่เปลี่ยนตอน
     activeTab = 'episode';
     lastCommentCursor = null;
     
     setupTabs();
-    
-    // โหลดคอมเมนต์ครั้งแรก (Reset = true)
     loadComments(true);
 
-    // ผูก Event ปุ่มโหลดเพิ่ม
     const btnMore = document.getElementById('btn-load-more-comments');
     if(btnMore) {
-        // ใช้ cloneNode เพื่อล้าง Event Listener เก่ากันเบิ้ล
         const newBtn = btnMore.cloneNode(true);
         btnMore.parentNode.replaceChild(newBtn, btnMore);
-        newBtn.onclick = () => loadComments(false); // false = โหลดต่อ
+        newBtn.onclick = () => loadComments(false);
     }
 }
 
@@ -72,7 +106,7 @@ function setupTabs() {
     tabEpisode.onclick = () => {
         if (activeTab !== 'episode') {
             activeTab = 'episode';
-            lastCommentCursor = null; // รีเซ็ตเมื่อเปลี่ยนแท็บ
+            lastCommentCursor = null;
             updateTabUI();
             loadComments(true);
         }
@@ -81,7 +115,7 @@ function setupTabs() {
     tabShow.onclick = () => {
         if (activeTab !== 'show') {
             activeTab = 'show';
-            lastCommentCursor = null; // รีเซ็ตเมื่อเปลี่ยนแท็บ
+            lastCommentCursor = null;
             updateTabUI();
             loadComments(true);
         }
@@ -90,7 +124,7 @@ function setupTabs() {
     updateTabUI();
 }
 
-// โหลดและแสดงรายการคอมเมนต์
+// โหลดและแสดงรายการคอมเมนต์ (Refactored)
 export async function loadComments(isReset = false) {
     const container = document.getElementById('comments-list');
     const btnMore = document.getElementById('btn-load-more-comments');
@@ -99,7 +133,6 @@ export async function loadComments(isReset = false) {
     if (isCommentsLoading) return;
     isCommentsLoading = true;
 
-    // UI Loading State
     if (isReset) {
         container.innerHTML = `
             <div class="flex flex-col items-center justify-center py-8 text-gray-500 animate-pulse">
@@ -139,14 +172,12 @@ export async function loadComments(isReset = false) {
 
         let finalQuery = query(baseQuery, limit(20));
         
-        // ถ้าเป็นการโหลดต่อ (Pagination)
         if (!isReset && lastCommentCursor) {
             finalQuery = query(baseQuery, startAfter(lastCommentCursor), limit(20));
         }
 
         const snapshot = await getDocs(finalQuery);
         
-        // Handle Empty State (เฉพาะโหลดครั้งแรก)
         if(isReset && snapshot.empty) {
             const msg = activeTab === 'episode' ? 'ยังไม่มีใครคุยเกี่ยวกับตอนนี้เลย' : 'ยังไม่มีการพูดคุยในภาพรวม';
             container.innerHTML = `
@@ -163,37 +194,13 @@ export async function loadComments(isReset = false) {
         
         if(isReset) container.innerHTML = '';
         
-        let html = '';
+        // ใช้ DocumentFragment เพื่อประสิทธิภาพสูงสุด (Render ทีเดียว)
+        const fragment = document.createDocumentFragment();
         snapshot.forEach(doc => {
-            const c = doc.data();
-            const date = c.createdAt ? formatTimestamp(c.createdAt) : 'เมื่อสักครู่';
-            const epBadge = (activeTab === 'show' && c.episodeNum) 
-                ? `<span class="bg-gray-700 text-gray-300 text-[10px] px-1.5 py-0.5 rounded ml-2">Ep.${c.episodeNum}</span>` 
-                : '';
-
-            // ใช้ escapeHtml หุ้มข้อมูลจาก User เพื่อป้องกัน XSS
-            const safeUserName = escapeHtml(c.userName || 'Guest');
-            const safeUserPhoto = escapeHtml(c.userPhoto) || 'https://placehold.co/40x40?text=?';
-            const safeText = escapeHtml(c.text); 
-
-            html += `
-                <div class="group flex gap-3 mb-4 border-b border-gray-800 pb-4 last:border-0 hover:bg-gray-800/30 p-2 rounded-lg transition-colors">
-                    <img src="${safeUserPhoto}" class="w-10 h-10 rounded-full bg-gray-700 object-cover flex-shrink-0 shadow-sm">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center flex-wrap gap-y-1 mb-1">
-                            <span class="font-bold text-sm text-green-400 mr-2">${safeUserName}</span>
-                            <span class="text-xs text-gray-500">${date}</span>
-                            ${epBadge}
-                        </div>
-                        <p class="text-sm text-gray-200 whitespace-pre-line leading-relaxed">${safeText}</p>
-                    </div>
-                </div>
-            `;
+            fragment.appendChild(createCommentElement(doc.data()));
         });
-        
-        container.insertAdjacentHTML('beforeend', html);
+        container.appendChild(fragment);
 
-        // จัดการปุ่ม Load More
         if (snapshot.docs.length < 20) {
             lastCommentCursor = null;
             if(btnMore) btnMore.classList.add('hidden');
@@ -247,7 +254,7 @@ export async function postComment(user) {
             userId: user.uid,
             userName: user.displayName || 'User',
             userPhoto: user.photoURL || '',
-            text: text, // บันทึก Raw text ลง DB (เราจะ Sanitize ตอนแสดงผลแทน เพื่อความยืดหยุ่น)
+            text: text, 
             createdAt: serverTimestamp(),
             showId: currentShowId,
             episodeId: currentEpisodeId || null,
@@ -258,7 +265,7 @@ export async function postComment(user) {
         await addDoc(collection(db, `artifacts/${appId}/public/data/comments`), commentData);
         
         input.value = '';
-        lastCommentCursor = null; // รีเซ็ตเมื่อโพสต์ใหม่
+        lastCommentCursor = null; 
         await loadComments(true); 
         
     } catch(e) {
