@@ -8,53 +8,62 @@
     <link rel="stylesheet" href="./style.css">
 
     <style>
-        /* CSS เฉพาะหน้าที่ยังคงไว้ */
+        /* --- CSS ปรับแต่งปุ่ม Swiper ให้พรีเมียม --- */
         .swiper-button-next, .swiper-button-prev { 
-            color: #ffffff; 
-            background-color: rgba(0,0,0,0.5); 
-            width: 44px; height: 44px; border-radius: 50%;
-            cursor: pointer; backdrop-filter: blur(2px); transition: all 0.2s; z-index: 20;
+            color: #ffffff !important; 
+            background-color: rgba(0,0,0,0.3); 
+            width: 48px !important; height: 48px !important; 
+            border-radius: 50%;
+            backdrop-filter: blur(4px);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.1);
         }
         .swiper-button-next:hover, .swiper-button-prev:hover {
-            background-color: rgba(0,184,124,0.9); transform: scale(1.1);
+            background-color: #00b87c !important; 
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(0, 184, 124, 0.5);
+            border-color: #00b87c;
         }
-        .swiper-button-next:after, .swiper-button-prev:after { font-size: 20px; font-weight: 900; }
-        .swiper-pagination-bullet { background: #fff; opacity: 0.5; transition: all 0.3s; }
-        .swiper-pagination-bullet-active { background: #00b87c; opacity: 1; width: 20px; border-radius: 4px; }
+        .swiper-button-next::after, .swiper-button-prev::after { 
+            font-size: 20px !important; font-weight: bold; 
+        }
+
+        /* จุดไข่ปลา (Pagination) */
+        .swiper-pagination-bullet { 
+            background: #fff !important; 
+            opacity: 0.4 !important; 
+            width: 8px !important; height: 8px !important;
+            transition: all 0.3s !important;
+        }
+        .swiper-pagination-bullet-active { 
+            background: #00b87c !important; 
+            opacity: 1 !important; 
+            width: 24px !important; /* ยืดเป็นแท่งยาวเมื่อเลือก */
+            border-radius: 4px !important;
+        }
         
+        /* สไตล์อื่นๆ */
         a { cursor: pointer; }
         .nav-link { transition: color 0.2s, background-color 0.2s; }
         .nav-link.active { color: #00b87c; } 
         #mobile-search-bar { display: none; }
         
-        .search-dropdown {
-            position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
-            background-color: #1f2937; border-radius: 0 0 8px 8px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5); max-height: 400px; overflow-y: auto;
-        }
-        .search-dropdown-item:hover { background-color: #374151; }
-     
+        /* History Card Style */
         .history-card {
-            display: flex; align-items: center; gap: 8px; padding: 8px; 
-            border-radius: 8px; background-color: #1f2937; transition: background-color 0.15s;
-            border: 1px solid transparent;
+            display: flex; align-items: center; gap: 10px; padding: 8px; 
+            border-radius: 8px; background-color: transparent; 
+            transition: background-color 0.2s; border: 1px solid transparent;
         }
-        .history-card:hover { background-color: #374151; border-color: #374151; }
+        .history-card:hover { background-color: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
         .history-thumb { width: 50px; height: 70px; aspect-ratio: 3/4; object-fit: cover; flex-shrink: 0; border-radius: 6px; }
-        
-        .banner-overlay {
-            position: absolute; bottom: 0; left: 0; right: 0; height: 50%;
-            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); pointer-events: none;
-        }
 
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .skeleton { background-color: #374151; animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; border-radius: 0.5rem; }
-
-        /* Custom Scrollbar for History Box */
-        .custom-scrollbar-y { overflow-y: auto; }
+        /* Custom Scrollbar */
         .custom-scrollbar-y::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar-y::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
         .custom-scrollbar-y::-webkit-scrollbar-track { background: transparent; }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .skeleton { background-color: #374151; animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; border-radius: 0.5rem; }
     </style>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -68,7 +77,7 @@
         import 'swiper/css/navigation';
         import 'swiper/css/pagination';
 
-        import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+        import { onAuthStateChanged } from "firebase/auth";
         import { onSnapshot, collection, query, limit, orderBy, where, getDocs } from "firebase/firestore";
 
         import { db, auth, appId } from "./js/config/db-config.js";
@@ -117,18 +126,8 @@
                     }
 
                     if (!isSearchInitialized) {
-                        const input = document.getElementById('search-input');
-                        if (input) {
-                            setupSearchSystem(historyItems);
-                            isSearchInitialized = true;
-                        } else {
-                            setTimeout(() => {
-                                if(!isSearchInitialized) {
-                                    setupSearchSystem(historyItems);
-                                    isSearchInitialized = true;
-                                }
-                            }, 500);
-                        }
+                        setupSearchSystem(historyItems);
+                        isSearchInitialized = true;
                     }
                     setupHistoryListener();
                 } else {
@@ -213,20 +212,18 @@
             }
         }
         
+        // ฟังก์ชันอัปเดตกล่องประวัติ (Render ลงในกล่อง #main-history-container โดยตรง)
         function renderHistorySection() {
-            // ดึง HTML มา
             let htmlContent = renderHistorySectionHTML(historyItems, userId);
             const container = document.getElementById('main-history-container');
             
             if (container) {
-                // ปรับแต่ง HTML เล็กน้อยเพื่อให้ลิสต์เลื่อนได้ (Scrollable) ภายในกล่อง
-                // โดยการแทรก class เข้าไปใน div ที่เป็น container ของการ์ด
+                // ปรับแต่ง HTML ให้ Scroll ได้
                 htmlContent = htmlContent.replace(
                     'class="space-y-2"', 
                     'class="space-y-2 flex-1 custom-scrollbar-y pr-2 overflow-y-auto"'
                 );
-                
-                // ห่อด้วย Flex Column เพื่อให้เต็มความสูง
+                // ห่อด้วย Flex เพื่อให้เต็มความสูง
                 container.innerHTML = `<div class="h-full flex flex-col">${htmlContent}</div>`;
             }
         }
@@ -240,7 +237,6 @@
             if (!userId) return;
             if (historyUnsubscribe) historyUnsubscribe();
 
-            // เพิ่ม limit เพื่อให้พอดีกับกล่อง (ประมาณ 5-6 เรื่อง)
             const historyQuery = query(getHistoryCollectionRef(), orderBy("watchedAt", "desc"), limit(10));
             historyUnsubscribe = onSnapshot(historyQuery, (snapshot) => {
                 historyItems.length = 0; 
@@ -255,8 +251,7 @@
             if (!sectionsContainer) return;
             sectionsContainer.innerHTML = ''; 
 
-            // 1. Top 10 (ตอนนี้เต็มความกว้าง เพราะประวัติย้ายไปข้างบนแล้ว)
-            // สร้าง Wrapper เพื่อให้ดูเป็นสัดส่วน
+            // 1. Top 10 Section (Wrapper)
             const top10Container = document.createElement('div');
             top10Container.className = 'mb-10';
             const top10Element = renderTop10Section(top30Shows, historyItems);
@@ -311,10 +306,9 @@
                     <div class="h-full flex flex-col animate-pulse">
                         <div class="h-8 w-1/2 bg-gray-800 rounded mb-4"></div>
                         <div class="flex-1 space-y-3">
-                            <div class="h-20 bg-gray-800 rounded-lg"></div>
-                            <div class="h-20 bg-gray-800 rounded-lg"></div>
-                            <div class="h-20 bg-gray-800 rounded-lg"></div>
-                            <div class="h-20 bg-gray-800 rounded-lg"></div>
+                            <div class="h-16 bg-gray-800 rounded-lg"></div>
+                            <div class="h-16 bg-gray-800 rounded-lg"></div>
+                            <div class="h-16 bg-gray-800 rounded-lg"></div>
                         </div>
                     </div>
                 </section>
@@ -328,7 +322,6 @@
                         <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
                         <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
                         <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
-                        <div class="bg-gray-800 rounded-lg aspect-[2/3]"></div>
                     </div>
                 </div>
             </div>
@@ -338,19 +331,15 @@
     <footer class="bg-gray-900 border-t border-gray-800 mt-8 py-8">
         <div class="container mx-auto px-4 text-center">
             <p class="text-gray-400 text-sm mb-2">© 2024 ANI-END. All rights reserved.</p>
-            <p class="text-gray-500 text-xs">เว็บไซต์นี้จัดทำขึ้นเพื่อการศึกษาและการเรียนรู้เท่านั้น</p>
             <div class="flex justify-center gap-4 mt-4">
                 <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="ri-facebook-fill text-xl"></i></a>
                 <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="ri-twitter-x-fill text-xl"></i></a>
-                <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="ri-discord-fill text-xl"></i></a>
             </div>
         </div>
     </footer>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
-        });
+        window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js'); });
       }
     </script>
 </body>
