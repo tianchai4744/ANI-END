@@ -6,7 +6,7 @@ import { getCountFromServer, setLogLevel, doc, getDoc, query, orderBy, limit, ge
 // ไม่ต้อง Import Chart เพราะใช้ Script Tag แล้ว
 import { db, auth, appId } from "../../js/config/db-config.js";
 import { getCollectionRef, showToast, showConfirmModal } from "./utils.js";
-import { formatTimestamp } from "../../js/utils/tools.js"; // ใช้ตัวนี้จัดรูปแบบเวลา
+import { formatTimestamp } from "../../js/utils/tools.js"; 
 
 // Import Sub-Modules
 import { initShowModule } from "./shows.js";
@@ -14,6 +14,12 @@ import { initEpisodeModule } from "./episodes.js";
 import { initBannerModule } from "./banners.js";
 import { initTagModule } from "./tags.js";
 import { initReportModule } from "./reports.js";
+
+// ==========================================
+// ⚠️ ตั้งค่า: ใส่อีเมล Admin หลักของคุณที่นี่
+// ==========================================
+const MAIN_ADMIN_EMAIL = 'YOUR_EMAIL@GMAIL.COM'; 
+// ==========================================
 
 setLogLevel('silent');
 
@@ -47,9 +53,8 @@ async function fetchDashboardStats() {
         document.getElementById('stat-total-episodes').innerText = e.data().count;
         document.getElementById('stat-total-reports').innerText = r.data().count;
         
-        // --- Badge Logic (แจ้งเตือนแดงๆ) ---
-        const reportCount = r.data().count;
-        updateBadges(reportCount);
+        // --- Badge Logic ---
+        updateBadges(r.data().count);
 
         // Render Charts & Recent List
         renderCharts();
@@ -59,20 +64,18 @@ async function fetchDashboardStats() {
 }
 
 function updateBadges(count) {
-    // 1. Badge ที่เมนู Sidebar
     const sidebarBadge = document.getElementById('sidebar-report-badge');
     if (sidebarBadge) {
         sidebarBadge.innerText = count;
         if (count > 0) {
             sidebarBadge.classList.remove('hidden');
-            sidebarBadge.classList.add('badge-pulse'); // เพิ่ม Animation เด้งๆ
+            sidebarBadge.classList.add('badge-pulse');
         } else {
             sidebarBadge.classList.add('hidden');
             sidebarBadge.classList.remove('badge-pulse');
         }
     }
 
-    // 2. Badge ที่กล่อง Dashboard
     const dashBadge = document.getElementById('dashboard-report-badge');
     if (dashBadge) {
         if (count > 0) {
@@ -84,13 +87,11 @@ function updateBadges(count) {
     }
 }
 
-// ฟังก์ชันดึง "การเคลื่อนไหวล่าสุด" (ใช้อนิเมะที่เพิ่งอัปเดต)
 async function fetchRecentActivity() {
     const list = document.getElementById('recent-activity-list');
     if (!list) return;
 
     try {
-        // ดึง 5 เรื่องล่าสุดที่เพิ่งมีการอัปเดต (updatedAt desc)
         const q = query(getCollectionRef("shows"), orderBy("updatedAt", "desc"), limit(5));
         const snapshot = await getDocs(q);
 
@@ -126,7 +127,7 @@ async function fetchRecentActivity() {
 function renderCharts() {
     if (typeof window.Chart === 'undefined') return;
 
-    // 1. Episodes Chart
+    // Episodes Chart
     const ctxEp = document.getElementById('chart-episodes');
     if (ctxEp) {
         if (epChart) epChart.destroy();
@@ -136,7 +137,7 @@ function renderCharts() {
                 labels: ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์', 'อาทิตย์'],
                 datasets: [{
                     label: 'ตอนที่เพิ่มใหม่',
-                    data: [12, 19, 3, 5, 2, 3, 10], // Mock Data
+                    data: [12, 19, 3, 5, 2, 3, 10], 
                     borderColor: '#6366f1',
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
                     borderWidth: 3,
@@ -157,7 +158,7 @@ function renderCharts() {
         });
     }
 
-    // 2. Tags Chart
+    // Tags Chart
     const ctxTag = document.getElementById('chart-tags');
     if (ctxTag) {
         if (tagChart) tagChart.destroy();
@@ -166,7 +167,7 @@ function renderCharts() {
             data: {
                 labels: ['Action', 'Romance', 'Fantasy', 'Isekai', 'Drama'],
                 datasets: [{
-                    data: [35, 20, 25, 15, 5], // Mock Data
+                    data: [35, 20, 25, 15, 5],
                     backgroundColor: ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'],
                     borderWidth: 0,
                     hoverOffset: 10
@@ -186,53 +187,83 @@ function renderCharts() {
 
 window.fetchDashboardStats = fetchDashboardStats;
 
-// --- AUTHENTICATION LOGIC ---
+// --- AUTHENTICATION & SECURITY LOGIC (IMPROVED) ---
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        // ✅ 1. ตรวจสอบอีเมลหลักทันที (เร็วที่สุด + ปลอดภัย + ประหยัด Quota)
+        if (user.email === MAIN_ADMIN_EMAIL) {
+            grantAdminAccess(user);
+            return;
+        }
+
         try {
+            // ✅ 2. ตรวจสอบ Custom Claims (ถ้ามีการตั้งค่าไว้)
+            const token = await user.getIdTokenResult();
+            if (token.claims.role === 'admin') {
+                grantAdminAccess(user);
+                return;
+            }
+
+            // ✅ 3. ตรวจสอบ Firestore Database (Fallback สุดท้าย)
             const userRef = doc(db, `artifacts/${appId}/users/${user.uid}`);
             const userSnap = await getDoc(userRef);
 
             if (userSnap.exists() && userSnap.data().role === 'admin') {
-                console.log("Admin Logged In:", user.email);
-                removeLoginOverlay();
-
-                fetchDashboardStats(); // เรียกครั้งแรกเพื่ออัปเดต Badge และ Recent List
-                
-                initShowModule();
-                initEpisodeModule();
-                initBannerModule();
-                initTagModule();
-                initReportModule();
-                
-                setInterval(fetchDashboardStats, 60000); // อัปเดตทุกนาที
-                
-                const logoutBtn = document.getElementById('btn-logout');
-                if(logoutBtn) {
-                    const newBtn = logoutBtn.cloneNode(true);
-                    logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
-                    newBtn.addEventListener('click', () => {
-                        showConfirmModal('ออกจากระบบ', 'ยืนยัน?', async() => { await signOut(auth); window.location.reload(); });
-                    });
-                }
-                
-                switchTab('dashboard');
-
+                grantAdminAccess(user);
             } else {
-                showToast("บัญชีของคุณไม่มีสิทธิ์ Admin", "error");
-                await signOut(auth);
-                showLoginOverlay();
+                // ⛔ ไม่ใช่ Admin: ดีดออกไปหน้าแรก
+                handleUnauthorized();
             }
         } catch (error) {
             console.error("Admin check error:", error);
-            showToast("เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์", "error");
-            showLoginOverlay();
+            handleUnauthorized();
         }
     } else {
         showLoginOverlay();
     }
 });
+
+function grantAdminAccess(user) {
+    console.log("Admin Access Granted:", user.email);
+    removeLoginOverlay();
+
+    // เริ่มต้นโหลดข้อมูล (Load เมื่อผ่านสิทธิ์เท่านั้น เพื่อ Performance)
+    fetchDashboardStats(); 
+    initShowModule();
+    initEpisodeModule();
+    initBannerModule();
+    initTagModule();
+    initReportModule();
+    
+    // Auto Refresh Dashboard ทุก 1 นาที
+    setInterval(fetchDashboardStats, 60000); 
+    
+    // ตั้งค่าปุ่ม Logout
+    const logoutBtn = document.getElementById('btn-logout');
+    if(logoutBtn) {
+        const newBtn = logoutBtn.cloneNode(true);
+        logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
+        newBtn.addEventListener('click', () => {
+            showConfirmModal('ออกจากระบบ', 'ยืนยัน?', async() => { 
+                await signOut(auth); 
+                window.location.reload(); 
+            });
+        });
+    }
+    
+    switchTab('dashboard');
+}
+
+async function handleUnauthorized() {
+    showToast("คุณไม่มีสิทธิ์เข้าถึงหน้านี้", "error");
+    await signOut(auth);
+    
+    // รอ 1.5 วินาทีแล้วดีดกลับหน้าเว็บหลัก
+    setTimeout(() => {
+        window.location.href = "/";
+    }, 1500);
+}
 
 function showLoginOverlay() {
     if (document.getElementById('admin-login-overlay')) return;
@@ -244,10 +275,10 @@ function showLoginOverlay() {
         <div class="bg-[#1e293b] p-8 rounded-3xl shadow-2xl border border-slate-700 max-w-sm w-full text-center relative overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
             <h1 class="text-3xl font-bold text-white mb-2 tracking-tight">ANI-END Admin</h1>
-            <p class="text-slate-400 mb-8 text-sm">เข้าสู่ระบบเพื่อจัดการเนื้อหาเว็บไซต์</p>
+            <p class="text-slate-400 mb-8 text-sm">ระบบจัดการหลังบ้านสำหรับผู้ดูแล</p>
             
             <button id="btn-admin-login" class="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-bold py-3.5 px-6 rounded-xl transition-all transform hover:-translate-y-1 shadow-lg">
-                <i class="fab fa-google text-xl text-rose-600"></i>
+                <i class="ri-google-fill text-xl text-rose-600"></i>
                 เข้าสู่ระบบด้วย Google
             </button>
             <p class="mt-8 text-xs text-slate-500">สำหรับผู้ดูแลระบบที่มีสิทธิ์เท่านั้น</p>
