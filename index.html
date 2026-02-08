@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="./style.css">
 
     <style>
-        /* --- CSS ปรับแต่งปุ่ม Swiper ให้พรีเมียม --- */
+        /* --- Styles --- */
         .swiper-button-next, .swiper-button-prev { 
             color: #ffffff !important; 
             background-color: rgba(0,0,0,0.3); 
@@ -27,28 +27,20 @@
         .swiper-button-next::after, .swiper-button-prev::after { 
             font-size: 20px !important; font-weight: bold; 
         }
-
-        /* จุดไข่ปลา (Pagination) */
         .swiper-pagination-bullet { 
-            background: #fff !important; 
-            opacity: 0.4 !important; 
-            width: 8px !important; height: 8px !important;
-            transition: all 0.3s !important;
+            background: #fff !important; opacity: 0.4 !important; 
+            width: 8px !important; height: 8px !important; transition: all 0.3s !important;
         }
         .swiper-pagination-bullet-active { 
-            background: #00b87c !important; 
-            opacity: 1 !important; 
-            width: 24px !important; /* ยืดเป็นแท่งยาวเมื่อเลือก */
-            border-radius: 4px !important;
+            background: #00b87c !important; opacity: 1 !important; 
+            width: 24px !important; border-radius: 4px !important;
         }
         
-        /* สไตล์อื่นๆ */
         a { cursor: pointer; }
         .nav-link { transition: color 0.2s, background-color 0.2s; }
         .nav-link.active { color: #00b87c; } 
         #mobile-search-bar { display: none; }
         
-        /* History Card Style */
         .history-card {
             display: flex; align-items: center; gap: 10px; padding: 8px; 
             border-radius: 8px; background-color: transparent; 
@@ -57,7 +49,6 @@
         .history-card:hover { background-color: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
         .history-thumb { width: 50px; height: 70px; aspect-ratio: 3/4; object-fit: cover; flex-shrink: 0; border-radius: 6px; }
 
-        /* Custom Scrollbar */
         .custom-scrollbar-y::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar-y::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
         .custom-scrollbar-y::-webkit-scrollbar-track { background: transparent; }
@@ -84,12 +75,10 @@
         import { setupSearchSystem } from "./js/modules/search.js";
         import { loadNavbar } from "./js/modules/navbar.js";
         
-        // --- Imported Modules ---
         import { renderHeroBanner, renderHeroSkeleton } from "./js/modules/hero-banner.js";
         import { renderTop10Section } from "./js/modules/top10.js";
         import { renderHistorySectionHTML } from "./js/modules/history-section.js";
         
-        // Section Modules
         import { renderRecommendedSection } from "./js/modules/recommended.js";
         import { renderThaiDubSection } from "./js/modules/thai-dub.js";
         import { renderLatestUpdatesSection } from "./js/modules/latest-updates.js";
@@ -212,18 +201,15 @@
             }
         }
         
-        // ฟังก์ชันอัปเดตกล่องประวัติ (Render ลงในกล่อง #main-history-container โดยตรง)
         function renderHistorySection() {
             let htmlContent = renderHistorySectionHTML(historyItems, userId);
             const container = document.getElementById('main-history-container');
             
             if (container) {
-                // ปรับแต่ง HTML ให้ Scroll ได้
                 htmlContent = htmlContent.replace(
                     'class="space-y-2"', 
                     'class="space-y-2 flex-1 custom-scrollbar-y pr-2 overflow-y-auto"'
                 );
-                // ห่อด้วย Flex เพื่อให้เต็มความสูง
                 container.innerHTML = `<div class="h-full flex flex-col">${htmlContent}</div>`;
             }
         }
@@ -251,13 +237,14 @@
             if (!sectionsContainer) return;
             sectionsContainer.innerHTML = ''; 
 
-            // 1. Top 10 Section (Wrapper)
-            const top10Container = document.createElement('div');
-            top10Container.className = 'mb-10';
+            // 1. ✅ Top 10 Section (Full Width Container)
             const top10Element = renderTop10Section(top30Shows, historyItems);
             if (top10Element) {
-                top10Container.appendChild(top10Element);
-                sectionsContainer.appendChild(top10Container);
+                // สร้าง Wrapper ให้มั่นใจว่า w-full
+                const wrapper = document.createElement('div');
+                wrapper.className = 'w-full mb-10 overflow-hidden'; // overflow-hidden กัน Swiper ทะลุ
+                wrapper.appendChild(top10Element);
+                sectionsContainer.appendChild(wrapper);
             }
             
             // 2. Recommended
@@ -291,7 +278,7 @@
     <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div id="home-view">
             
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-10">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-12">
                 
                 <section id="hero-banner-container" class="lg:col-span-3 relative h-[240px] sm:h-[360px] lg:h-[480px] rounded-2xl overflow-hidden bg-gray-900 shadow-2xl group ring-1 ring-gray-800">
                     <div id="hero-swiper" class="swiper w-full h-full">
@@ -314,7 +301,7 @@
                 </section>
             </div>
 
-            <div id="sections-container">
+            <div id="sections-container" class="w-full">
                 <div class="animate-pulse">
                     <div class="h-6 w-32 bg-gray-800 rounded mb-4"></div>
                     <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
