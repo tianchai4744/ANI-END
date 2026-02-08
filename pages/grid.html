@@ -82,20 +82,20 @@
         import { createAnimeCard } from "../js/modules/card.js";
         import { observeImages } from "../js/utils/tools.js";
         
-        // Import ระบบค้นหาใหม่
+        // Import ระบบค้นหา
         import { searchAnime, loadSearchIndex } from "../js/services/search-index.js";
+        import { setupSearchSystem } from "../js/modules/search.js"; // <--- [เพิ่มบรรทัดนี้]
         
-        // Import Firebase (สำหรับโหมดปกติและ Tag)
+        // Import Firebase
         import { db, appId } from "../js/config/db-config.js";
         import { collection, query, orderBy, limit, getDocs, where, startAfter } from "firebase/firestore";
         
         // --- State Management ---
         const ITEMS_PER_PAGE = 24;
-        let currentMode = 'latest'; // 'latest', 'search', 'tag'
+        let currentMode = 'latest'; 
         let currentTag = '';
-        let lastDoc = null; // สำหรับ Firebase Pagination
+        let lastDoc = null; 
         
-        // สำหรับ Search Mode (Client-side Pagination)
         let searchResultsBuffer = []; 
         let currentSearchPage = 0;
 
@@ -113,8 +113,13 @@
 
         // --- Initialization ---
         async function initPage() {
+            // โหลด Navbar ก่อน
             await loadNavbar('../');
             
+            // [เพิ่มบรรทัดนี้] สั่งให้ช่องค้นหาทำงาน (ดักจับ Enter และ Dropdown)
+            setupSearchSystem(); 
+
+            // ตรวจสอบ URL เพื่อดูว่าจะแสดงโหมดไหน
             const urlParams = new URLSearchParams(window.location.search);
             const searchQuery = urlParams.get('search');
             const tagQuery = urlParams.get('tag');
@@ -137,22 +142,22 @@
             }
         }
 
-        // --- Mode 1: Search (ใช้ Logic ใหม่ + Client Side Pagination) ---
+        // --- Mode 1: Search ---
         async function handleSearchMode(term) {
             pageTitle.innerHTML = `ผลการค้นหา: "<span class="text-green-400">${term}</span>"`;
             clearBtn.classList.remove('hidden');
             resultCount.textContent = "กำลังค้นหาข้อมูล...";
 
             try {
-                await loadSearchIndex(); // โหลด Index
-                searchResultsBuffer = searchAnime(term); // ค้นหาทีเดียวได้ทั้งหมด
+                await loadSearchIndex(); 
+                searchResultsBuffer = searchAnime(term); 
                 
                 resultCount.textContent = `พบทั้งหมด ${searchResultsBuffer.length} เรื่อง`;
                 
                 if (searchResultsBuffer.length === 0) {
                     showNoResults();
                 } else {
-                    renderSearchBatch(); // แสดงผลหน้าแรก
+                    renderSearchBatch(); 
                 }
             } catch (error) {
                 console.error("Search Error:", error);
@@ -177,7 +182,7 @@
             }
         }
 
-        // --- Mode 2: Tag Filter (Logic เดิมที่หายไป) ---
+        // --- Mode 2: Tag Filter ---
         async function handleTagMode(tag) {
             pageTitle.innerText = `หมวดหมู่: ${tag}`;
             clearBtn.classList.add('hidden');
@@ -191,7 +196,7 @@
             );
         }
 
-        // --- Mode 3: Latest Updates (Logic เดิม) ---
+        // --- Mode 3: Latest Updates ---
         async function handleLatestMode() {
             pageTitle.innerText = "อัปเดตล่าสุด";
             clearBtn.classList.add('hidden');
@@ -248,7 +253,6 @@
                 isLoading = false;
                 loadMoreBtn.disabled = false;
                 loadMoreBtn.innerText = "โหลดเพิ่มเติม";
-                // ลบ Skeleton ถ้ามี
                 const skeletons = gridContainer.querySelectorAll('.skeleton');
                 skeletons.forEach(el => el.remove());
             }
@@ -256,7 +260,6 @@
 
         // --- UI Helpers ---
         function renderCards(items) {
-            // ลบ Skeleton ก่อนเริ่มวาดการ์ดจริง (ถ้าเป็น Lot แรก)
             if (gridContainer.querySelector('.skeleton')) {
                 gridContainer.innerHTML = '';
             }
@@ -278,7 +281,6 @@
             gridContainer.classList.add('hidden');
             noResults.classList.remove('hidden');
             loadMoreBtn.classList.add('hidden');
-            // ลบ Skeleton
             const skeletons = gridContainer.querySelectorAll('.skeleton');
             skeletons.forEach(el => el.remove());
         }
@@ -309,13 +311,11 @@
             }
         });
 
-        // Scroll Logic
         scrollToTopBtn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
         window.addEventListener('scroll', () => {
             scrollToTopBtn.classList.toggle('visible', window.scrollY > 300);
         });
 
-        // Start
         document.addEventListener('DOMContentLoaded', initPage);
 
     </script>
