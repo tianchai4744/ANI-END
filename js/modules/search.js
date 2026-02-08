@@ -55,7 +55,8 @@ function setupInput(inputId, dropdownId) {
 
 // 🎨 ฟังก์ชันวาดหน้าตา DropDown ระดับมืออาชีพ
 function renderDropdown(results, container, queryText) {
-    // ล้าง Style เดิมและใส่ Style ใหม่ให้ Container (เผื่อใน HTML ไม่ได้ใส่)
+    // ล้าง Style เดิมและใส่ Style ใหม่ให้ Container
+    // ใช้สีพื้นหลังเข้มและ Border บางๆ เพื่อความทันสมัย
     container.className = "absolute left-0 right-0 mt-2 w-full bg-[#1a1c22] border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden hidden";
 
     if (results.length === 0) {
@@ -64,16 +65,22 @@ function renderDropdown(results, container, queryText) {
                 <p class="text-sm text-gray-400">ไม่พบผลลัพธ์สำหรับ "<span class="text-white">${queryText}</span>"</p>
             </div>`;
     } else {
-        const listHtml = results.map(item => `
+        const listHtml = results.map(item => {
+            // เช็คว่ามีรูปหรือไม่ ถ้าไม่มีใช้รูป Default
+            const poster = item.posterUrl && item.posterUrl.trim() !== '' 
+                           ? item.posterUrl 
+                           : 'https://placehold.co/40x60/333/999?text=No+Img';
+
+            return `
             <a href="pages/player.html?id=${item.id}" 
                class="flex items-center gap-3 p-3 border-b border-gray-800 hover:bg-[#252830] transition-colors group">
                 
                 <div class="relative flex-shrink-0 w-10 h-14 overflow-hidden rounded bg-gray-800 shadow-lg">
-                    <img src="${item.posterUrl}" 
+                    <img src="${poster}" 
                          alt="${item.title}"
                          class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                          loading="lazy"
-                         onerror="this.src='https://placehold.co/40x60/333/999?text=N/A'">
+                         onerror="this.src='https://placehold.co/40x60/333/999?text=Error'">
                 </div>
                 
                 <div class="flex-1 min-w-0">
@@ -89,7 +96,8 @@ function renderDropdown(results, container, queryText) {
 
                 <i class="ri-arrow-right-s-line text-gray-600 group-hover:text-white transition-colors"></i>
             </a>
-        `).join('');
+            `;
+        }).join('');
 
         const viewAllHtml = `
             <a href="pages/grid.html?search=${encodeURIComponent(queryText)}" 
