@@ -2,7 +2,7 @@ import { db, appId } from "../config/db-config.js";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 
 // 🚀 เปลี่ยนชื่อตัวแปรนี้เพื่อบังคับให้เครื่องโหลดข้อมูลชุดใหม่ที่มีรูปภาพ
-const CACHE_KEY = 'ani_search_index_v3_images'; 
+const CACHE_KEY = 'ani_search_index_v3_images_fixed'; 
 const CACHE_DURATION = 1000 * 60 * 60 * 24; // เก็บไว้ 24 ชม.
 
 let miniSearch = null;
@@ -51,7 +51,7 @@ export async function loadSearchIndex() {
         // 2. ถ้าไม่มี Cache หรือเก่าแล้ว ให้ดึงจาก Server (Firebase)
         console.log("☁️ Fetching fresh search index from Firestore...");
         
-        // ดึงข้อมูลล่าสุด (จำกัด 500-1000 เรื่องเพื่อให้โหลดไม่หนักเกินไป ถ้าเว็บใหญ่มาก)
+        // ดึงข้อมูลล่าสุด (สามารถเพิ่ม limit(1000) หากเว็บเริ่มช้า)
         const q = query(
             collection(db, `artifacts/${appId}/public/data/shows`), 
             orderBy('updatedAt', 'desc')
@@ -62,14 +62,16 @@ export async function loadSearchIndex() {
         // แปลงข้อมูลให้อยู่ในรูปแบบที่เล็กลงเพื่อความเร็ว
         const data = snapshot.docs.map(doc => {
             const d = doc.data();
+            // 🛠️ แก้ไข: เช็คหลายฟิลด์เผื่อ Database ใช้ชื่อต่างกัน (cover, image, posterUrl)
+            const img = d.posterUrl || d.image || d.cover || d.coverImage || '';
+            
             return {
                 id: doc.id,
                 title: d.title || 'Unknown Title',
                 altTitle: d.altTitle || '',
                 tags: Array.isArray(d.tags) ? d.tags.join(' ') : '',
                 studio: d.studio || '',
-                // เช็คหลายฟิลด์เผื่อ Database ใช้ชื่อต่างกัน
-                posterUrl: d.posterUrl || d.image || d.cover || 'https://placehold.co/40x60/222/999?text=No+Img', 
+                posterUrl: img, // เก็บค่ารูปลงตัวแปรนี้
                 releaseYear: d.releaseYear || '',
                 rating: d.averageRating || 0,
                 type: d.type || 'TV'
