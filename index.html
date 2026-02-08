@@ -46,15 +46,7 @@
         .nav-link.active { color: #00b87c; } 
         #mobile-search-bar { display: none; }
         
-        /* History Card */
-        .history-card {
-            display: flex; align-items: center; gap: 10px; padding: 8px; 
-            border-radius: 8px; background-color: transparent; 
-            transition: background-color 0.2s; border: 1px solid transparent;
-        }
-        .history-card:hover { background-color: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
-        .history-thumb { width: 50px; height: 70px; aspect-ratio: 3/4; object-fit: cover; flex-shrink: 0; border-radius: 6px; }
-
+        /* Custom Scrollbar for History */
         .custom-scrollbar-y::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar-y::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
         .custom-scrollbar-y::-webkit-scrollbar-track { background: transparent; }
@@ -84,6 +76,7 @@
         
         import { renderHeroBanner, renderHeroSkeleton } from "./js/modules/hero-banner.js";
         import { renderTop10Section } from "./js/modules/top10.js";
+        // Import ฟังก์ชันเดิมแต่เป็นเวอร์ชันปรับปรุงแล้ว
         import { renderHistorySectionHTML } from "./js/modules/history-section.js";
         
         import { renderRecommendedSection } from "./js/modules/recommended.js";
@@ -208,18 +201,19 @@
             }
         }
         
-        // ฟังก์ชัน Render ประวัติ (ลงใน HTML โดยตรง ไม่สร้างใหม่)
+        // ฟังก์ชัน Render ประวัติ (ปรับปรุงให้รองรับ Scroll)
         function renderHistorySection() {
             const htmlContent = renderHistorySectionHTML(historyItems, userId);
             
             const container = document.getElementById('main-history-container');
             if (container) {
-                 // ปรับ HTML ให้ Scroll ได้
-                const adjustedHtml = htmlContent.replace(
-                    'class="space-y-2"', 
-                    'class="space-y-2 flex-1 custom-scrollbar-y pr-2 overflow-y-auto"'
-                );
-                container.innerHTML = `<div class="h-full flex flex-col">${adjustedHtml}</div>`;
+                container.innerHTML = `
+                    <div class="h-full flex flex-col">
+                        <div class="flex-1 overflow-y-auto custom-scrollbar-y pr-1">
+                            ${htmlContent}
+                        </div>
+                    </div>
+                `;
             }
         }
 
@@ -292,7 +286,7 @@
                         </div>
                 </section>
 
-                <section id="main-history-container" class="lg:col-span-1 h-auto lg:h-[480px] bg-gray-900/60 backdrop-blur-md rounded-2xl p-5 border border-gray-800 shadow-xl flex flex-col">
+                <section id="main-history-container" class="lg:col-span-1 h-auto lg:h-[480px] bg-gray-900/80 backdrop-blur-md rounded-2xl p-4 border border-gray-800 shadow-xl flex flex-col overflow-hidden">
                     <div class="h-full flex flex-col animate-pulse">
                         <div class="h-8 w-1/2 bg-gray-800 rounded mb-4"></div>
                         <div class="flex-1 space-y-3">
@@ -330,7 +324,6 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // ✅ แก้ไข Path เป็น ./sw.js ให้หาเจอในโฟลเดอร์เดียวกัน
           navigator.serviceWorker.register('./sw.js');
         });
       }
