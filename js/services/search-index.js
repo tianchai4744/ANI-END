@@ -5,7 +5,9 @@ import { collection, getDocs } from "firebase/firestore";
 // ตั้งค่า MiniSearch (เอาไว้ช่วยเรื่องพิมพ์ผิด และค้นหาแบบ Prefix)
 let miniSearch = new MiniSearch({
     fields: ['title', 'alternativeTitles'], // ฟิลด์ที่จะค้นหา
-    storeFields: ['id', 'title', 'posterUrl', 'type', 'releaseYear', 'rating', 'alternativeTitles'], // ฟิลด์ที่จะส่งกลับไปแสดงผล
+    // [KEY FIX 1] เพิ่ม 'thumbnailUrl' เข้าไปใน storeFields ด้วย 
+    // ไม่งั้น MiniSearch จะไม่ส่งค่านี้กลับมา ทำให้การ์ดไม่มีรูป
+    storeFields: ['id', 'title', 'posterUrl', 'thumbnailUrl', 'type', 'releaseYear', 'rating', 'alternativeTitles'], 
     searchOptions: {
         boost: { title: 2 }, // ให้ความสำคัญกับชื่อเรื่องหลักมากกว่า
         fuzzy: 0.2,          // ยอมให้พิมพ์ผิดได้นิดหน่อย (เช่น Titan -> Titna)
@@ -28,11 +30,18 @@ export async function loadSearchIndex() {
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             
+            // เตรียมรูปภาพ (รองรับทั้ง 2 ชื่อตัวแปรจาก Database)
+            const img = data.posterUrl || data.thumbnailUrl || '';
+
             // เตรียมข้อมูลให้สะอาดที่สุด
             const item = {
                 id: doc.id,
                 title: data.title || "Unknown Title",
-                posterUrl: data.posterUrl || data.thumbnailUrl || '', // รองรับทั้ง 2 ชื่อตัวแปร
+                
+                // [KEY FIX 2] ใส่ทั้ง posterUrl และ thumbnailUrl เพื่อให้รองรับทั้ง Dropdown และ Card
+                posterUrl: img,      // สำหรับ Dropdown (search.js ใช้)
+                thumbnailUrl: img,   // สำหรับ Card (card.js ใช้)
+                
                 type: data.type || 'TV',
                 releaseYear: data.releaseDate ? new Date(data.releaseDate).getFullYear() : '-',
                 rating: data.rating || 0,
