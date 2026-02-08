@@ -1,91 +1,113 @@
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
-import { db, appId } from "../config/db-config.js";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../config/db-config.js";
+/**
+ * js/modules/history-section.js
+ * จัดการส่วนแสดงผล "ประวัติการรับชม" (History Section)
+ */
 
-export async function initHistorySection() {
-    const historyList = document.getElementById('history-list');
-    const historySection = document.getElementById('history-section');
+// Helper: จัดรูปแบบเวลา
+function formatDateTime(timestamp) {
+    if (!timestamp || !timestamp.toDate) return 'N/A';
+    const date = timestamp.toDate();
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
     
-    // ถ้าไม่มี Element ในหน้า Index ให้หยุดทำงาน (ป้องกัน Error ในหน้าอื่น)
-    if (!historyList || !historySection) return;
+    const timeStr = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+    
+    if (isToday) {
+        return `วันนี้ ${timeStr}`;
+    } else {
+        return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) + ' ' + timeStr;
+    }
+}
 
-    onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-            historySection.classList.add('hidden');
-            return;
-        }
+// สร้าง HTML การ์ดแต่ละใบ (ปรับปรุง UI ใหม่ตรงนี้)
+function createHistoryCard(history) {
+    const showId = history.showId; 
+    const episodeId = history.lastWatchedEpisodeId; 
+    const title = history.showTitle;
+    const episodeTitle = history.lastWatchedEpisodeTitle || `ตอนที่ ${history.latestEpisodeNumber || 'N/A'}`; 
+    const thumbnail = history.showThumbnail || 'https://placehold.co/200x300/333/fff?text=No+Image'; 
+    const watchedTime = formatDateTime(history.watchedAt);
 
-        try {
-            // ดึงข้อมูลประวัติการดู 10 รายการล่าสุด
-            const historyRef = collection(db, `artifacts/${appId}/users/${user.uid}/viewHistory`);
-            const q = query(historyRef, orderBy("watchedAt", "desc"), limit(10));
-            const snapshot = await getDocs(q);
+    const targetUrl = `pages/player.html?id=${showId}${episodeId ? `&ep_id=${episodeId}` : ''}`;
 
-            if (snapshot.empty) {
-                historySection.classList.add('hidden');
-                return;
-            }
-
-            historySection.classList.remove('hidden');
-            
-            let html = '';
-            snapshot.forEach(doc => {
-                const data = doc.data();
+    // ✅ ปรับปรุง: ใช้ Flexbox และกำหนดขนาดรูปภาพด้วย Tailwind (w-16 h-24) เพื่อให้เป็นสัดส่วน 2:3 เสมอ
+    return `
+        <a href="${targetUrl}" class="flex gap-3 p-2 rounded-xl hover:bg-gray-800/50 transition-all group border border-transparent hover:border-gray-700">
+            <div class="relative w-16 h-24 flex-shrink-0">
+                <img src="${thumbnail}" 
+                     alt="${title}" 
+                     class="w-full h-full object-cover rounded-lg shadow-md bg-gray-700 group-hover:brightness-75 transition-all"
+                     onerror="this.src='https://placehold.co/64x96?text=N/A'">
                 
-                // ✅ ปรับปรุง UI:
-                // 1. ใช้ aspect-[2/3] ล็อกสัดส่วนรูปภาพ
-                // 2. ใช้ object-cover เพื่อให้ภาพเต็มกรอบเสมอ
-                // 3. เพิ่ม Overlay ไล่เฉดสีเพื่อให้ตัวหนังสืออ่านง่าย
-                html += `
-                    <div class="flex-shrink-0 w-32 sm:w-40 snap-start transition-transform hover:-translate-y-1 duration-300">
-                        <a href="pages/player.html?id=${data.showId}&ep_id=${data.lastWatchedEpisodeId}" 
-                           class="block group relative overflow-hidden rounded-xl shadow-lg border border-gray-800 hover:border-green-500/50 transition-colors">
-                            
-                            <div class="aspect-[2/3] w-full overflow-hidden bg-gray-800 relative">
-                                <img src="${data.showThumbnail}" 
-                                     alt="${data.showTitle}" 
-                                     class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
-                                     onerror="this.src='https://placehold.co/200x300?text=No+Image'">
-                                     
-                                <div class="absolute bottom-0 left-0 right-0 h-1 bg-gray-700/50 backdrop-blur">
-                                    <div class="h-full bg-green-500" style="width: ${data.isCompleted ? '100%' : '40%'}"></div>
-                                </div>
-                            </div>
-                            
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-100">
-                                <div class="absolute bottom-0 left-0 right-0 p-3">
-                                    <p class="text-[10px] text-green-400 font-bold mb-0.5 uppercase tracking-wider">
-                                        ตอนที่ ${data.lastWatchedEpisodeNumber}
-                                    </p>
-                                    <h3 class="text-sm font-bold text-white truncate leading-tight drop-shadow-md">
-                                        ${data.showTitle}
-                                    </h3>
-                                    
-                                    <div class="mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
-                                        <span class="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
-                                            <i class="ri-play-fill"></i> ดูต่อ
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                                <div class="w-10 h-10 bg-green-500/90 rounded-full flex items-center justify-center shadow-xl backdrop-blur-sm transform scale-50 group-hover:scale-100 transition-transform duration-300">
-                                    <i class="ri-play-fill text-white text-xl ml-0.5"></i>
-                                </div>
-                            </div>
-                        </a>
-                    </div>
-                `;
-            });
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <i class="ri-play-circle-fill text-3xl text-green-500 drop-shadow-lg"></i>
+                </div>
+            </div>
 
-            historyList.innerHTML = html;
+            <div class="flex-grow min-w-0 py-1 flex flex-col justify-center">
+                <h4 class="font-bold text-sm text-white truncate group-hover:text-green-400 transition-colors">${title}</h4>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="text-[10px] bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30">
+                        ${episodeTitle}
+                    </span>
+                </div>
+                <p class="text-[10px] text-gray-500 mt-auto flex items-center gap-1">
+                    <i class="ri-time-line"></i> ${watchedTime}
+                </p>
+            </div>
+        </a>
+    `;
+}
 
-        } catch (error) {
-            console.error("Error loading history:", error);
-            // ถ้าโหลดไม่ได้ให้ซ่อน Section ไปเลย
-            historySection.classList.add('hidden');
-        }
-    });
+/**
+ * สร้าง HTML สำหรับส่วนประวัติ
+ */
+export function renderHistorySectionHTML(historyItems, userId) {
+    // 1. กรณีไม่ได้ Login -> แสดงปุ่ม Login
+    if (!userId) {
+        return `
+            <div class="flex justify-between items-center mb-4 px-2">
+                <h3 class="text-xl font-bold flex items-center gap-2">
+                    <i class="ri-history-line text-green-500"></i> ประวัติ
+                </h3>
+            </div>
+            <div class="bg-gray-800/50 rounded-xl p-6 text-center border border-dashed border-gray-700 flex flex-col items-center justify-center h-[300px]">
+                <div class="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                    <i class="ri-lock-2-line text-3xl text-gray-500"></i>
+                </div>
+                <p class="text-gray-300 font-medium mb-1">เข้าสู่ระบบเพื่อดูประวัติ</p>
+                <p class="text-xs text-gray-500 mb-6 max-w-[200px] mx-auto">ติดตามอนิเมะที่คุณดูค้างไว้ได้ทุกที่ ทุกเวลา</p>
+                <button onclick="window.triggerLogin()" class="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-6 py-2.5 rounded-full text-sm font-bold transition-all shadow-lg hover:shadow-green-500/20 transform hover:-translate-y-0.5 flex items-center gap-2">
+                    <i class="ri-login-circle-line text-lg"></i> เข้าสู่ระบบ
+                </button>
+            </div>
+        `;
+    }
+
+    // 2. กรณี Login แล้ว -> แสดงรายการ
+    let cardsHtml = '';
+    if (historyItems && historyItems.length > 0) {
+        historyItems.forEach(item => { cardsHtml += createHistoryCard(item); });
+    } else {
+         cardsHtml = `
+            <div class="h-[200px] flex flex-col items-center justify-center text-gray-500 opacity-70">
+                <i class="ri-film-line text-4xl mb-2"></i>
+                <p class="text-sm">ยังไม่มีประวัติการรับชม</p>
+                <a href="pages/grid.html" class="text-xs text-green-500 mt-2 hover:underline">เริ่มดูอนิเมะเลย!</a>
+            </div>`;
+    }
+
+    return `
+        <div class="flex justify-between items-center mb-4 px-2">
+            <h3 class="text-xl font-bold flex items-center gap-2">
+                <i class="ri-history-line text-green-500"></i> ประวัติล่าสุด
+            </h3>
+            <a href="pages/history.html" class="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1 bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded-md">
+                ดูทั้งหมด <i class="ri-arrow-right-s-line"></i>
+            </a>
+        </div>
+        <div class="space-y-1 pr-1"> 
+            ${cardsHtml} 
+        </div>
+    `;
 }
