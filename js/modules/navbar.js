@@ -35,11 +35,10 @@ window.triggerLogin = () => {
     }
 };
 
-// --- Caching Logic ---
-const NAVBAR_CACHE_KEY = 'ani_navbar_html_v1';
+// [KEY FIX] เปลี่ยนชื่อ Cache Key เพื่อบังคับให้เครื่องผู้ใช้โหลดใหม่ทันที
+const NAVBAR_CACHE_KEY = 'ani_navbar_html_v2_fixed_slashes'; 
 
 function setUIStateLoggedIn(userData) {
-    // ป้องกันกรณี userData ไม่มีค่า
     if (!userData) return;
 
     const { name, photo } = userData;
@@ -77,16 +76,28 @@ function setUIStateLoggedOut() {
 }
 
 async function renderNavbarHTML(placeholder, rawHtml, pathPrefix) {
-    // แทนที่ Path
+    // [KEY FIX] ระบบจัดการ Path อัจฉริยะ (แก้ปัญหา //////)
     let html = rawHtml.replace(/href="([^"]*)"/g, (match, href) => {
         if (href.startsWith('#') || href.startsWith('http') || href.startsWith('mailto')) return match;
+        
+        // ลบเครื่องหมาย / ด้านหน้าลิงก์ออก (เช่น "/index.html" -> "index.html")
         const cleanHref = href.startsWith('/') ? href.substring(1) : href;
-        return `href="${pathPrefix}/${cleanHref}"`;
+        
+        // ลบเครื่องหมาย / ด้านหลัง Prefix ออก (เช่น "../" -> "..")
+        const cleanPrefix = pathPrefix.endsWith('/') ? pathPrefix.slice(0, -1) : pathPrefix;
+        
+        // เชื่อมกันด้วย / ตัวเดียวเสมอ
+        return `href="${cleanPrefix}/${cleanHref}"`;
     });
+
+    // ทำแบบเดียวกันกับ src (รูปภาพ)
     html = html.replace(/src="([^"]*)"/g, (match, src) => {
          if (src.startsWith('http') || src.startsWith('data:')) return match;
+         
          const cleanSrc = src.startsWith('/') ? src.substring(1) : src;
-         return `src="${pathPrefix}/${cleanSrc}"`;
+         const cleanPrefix = pathPrefix.endsWith('/') ? pathPrefix.slice(0, -1) : pathPrefix;
+         
+         return `src="${cleanPrefix}/${cleanSrc}"`;
     });
 
     placeholder.innerHTML = html;
@@ -147,7 +158,7 @@ export async function loadNavbar(pathPrefix = '.') {
     }
 }
 
-// ... (ส่วน Logic Modal เดิมคงไว้) ...
+// ... (ส่วน Logic Modal และ Event เดิมด้านล่างคงไว้เหมือนเดิม ไม่ต้องเปลี่ยนแปลง) ...
 function setupAuthModalLogic() {
     const modal = document.getElementById('auth-modal');
     const content = document.getElementById('auth-modal-content');
@@ -279,8 +290,6 @@ function setupAuthEvents() {
 
     monitorUserAuth((user) => {
         if (user) {
-            // [FIXED] ตรวจสอบว่ามีอีเมลหรือไม่ ก่อนเรียกใช้ .split()
-            // ถ้าเป็น Anonymous user (ไม่มีอีเมล) ให้ใช้ 'Guest' แทน
             const displayName = user.displayName;
             const emailName = user.email ? user.email.split('@')[0] : 'Guest';
             const name = displayName || emailName;
