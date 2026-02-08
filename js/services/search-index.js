@@ -1,5 +1,6 @@
 import { db, appId } from "../config/db-config.js";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import MiniSearch from 'minisearch';
 
 // 🚀 เปลี่ยนชื่อตัวแปรนี้เพื่อบังคับให้เครื่องโหลดข้อมูลชุดใหม่ที่มีรูปภาพ
 const CACHE_KEY = 'ani_search_index_v3_images_fixed'; 
@@ -9,11 +10,6 @@ let miniSearch = null;
 
 // ตั้งค่า Search Engine
 function initMiniSearch(data) {
-    if (typeof MiniSearch === 'undefined') {
-        console.error("❌ MiniSearch library not loaded!");
-        return;
-    }
-    
     // กำหนดฟิลด์ที่จะใช้ค้นหา และฟิลด์ที่จะเก็บไว้แสดงผล
     miniSearch = new MiniSearch({
         idField: 'id',
