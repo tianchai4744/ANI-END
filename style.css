@@ -17,4 +17,17 @@ body {
     background-color: #111;
     color: #fff;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+} /* <--- ต้องปิดปีกกาของ body ตรงนี้ก่อนครับ */
+
+/* --- Navbar Placeholder Setup --- */
+/* บังคับให้ div ที่มี id นี้ จองพื้นที่และสีรอไว้ทันทีทุกหน้า */
+#navbar-placeholder {
+    display: block;
+    width: 100%;
+    min-height: 64px; /* ความสูงมาตรฐานของ Navbar */
+    background-color: rgba(17, 24, 39, 0.95); /* สี gray-900 แบบโปร่งแสงนิดๆ */
+    border-bottom: 1px solid #1f2937; /* เส้นขอบ gray-800 */
+    position: sticky; /* สั่งให้ติดขอบบน */
+    top: 0;
+    z-index: 50; /* อยู่ชั้นบนสุด */
 }
