@@ -31,3 +31,56 @@ body {
     top: 0;
     z-index: 50; /* อยู่ชั้นบนสุด */
 }
+/* --- Global Utilities & Animations (ย้ายมาจาก HTML) --- */
+
+/* Swiper Customization */
+.swiper-button-next, .swiper-button-prev { display: none !important; }
+.swiper-pagination-bullet { 
+    background: #fff !important; opacity: 0.4 !important; 
+    width: 8px !important; height: 8px !important; transition: all 0.3s !important;
+}
+.swiper-pagination-bullet-active { 
+    background: #00b87c !important; opacity: 1 !important; 
+    width: 24px !important; border-radius: 4px !important;
+}
+
+/* Animations */
+@keyframes ken-burns {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.15); }
+}
+.animate-ken-burns {
+    animation: ken-burns 15s ease-out infinite alternate;
+    will-change: transform;
+}
+@keyframes pulse-custom { 
+    0%, 100% { opacity: 1; } 
+    50% { opacity: 0.5; } 
+}
+.skeleton { 
+    background-color: #374151; 
+    animation: pulse-custom 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+    border-radius: 0.5rem; 
+}
+
+/* Loading Spinner (Player) */
+.spinner {
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-left-color: #22c55e;
+    border-radius: 50%;
+    width: 40px; height: 40px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Scrollbar Helpers */
+.custom-scrollbar-y::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar-y::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+.custom-scrollbar-y::-webkit-scrollbar-track { background: transparent; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Scroll to Top Button */
+.scroll-to-top { transition: all 0.3s; visibility: hidden; opacity: 0; transform: translateY(20px); }
+.scroll-to-top.visible { visibility: visible; opacity: 1; transform: translateY(0); }
