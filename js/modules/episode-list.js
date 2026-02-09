@@ -25,7 +25,7 @@ const EpisodeService = {
             const snapshot = await getDocs(q);
             const episodes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            // Update Cache logic could go here
+            // เก็บลง Cache (เผื่ออนาคตอยากใช้)
             this.cache = [...this.cache, ...episodes];
             return episodes;
         } catch (error) {
@@ -166,7 +166,6 @@ const EpisodeUI = {
 
     hasButtonFor(episodeNum) {
         if (!this.container) return false;
-        // Check textContent (Simple check)
         return Array.from(this.container.children).some(btn => btn.textContent == episodeNum);
     },
 
@@ -215,7 +214,6 @@ export async function findNextPrevEpisode(currentNum, direction, _unusedShowData
 }
 
 export async function checkAndLoadEpisodeBatch(episodeNumber, onEpisodeSelect) {
-    // Logic การคำนวณ Batch ยังอยู่ที่นี่เพราะเป็น Business Logic ของการแสดงผล
     const EPISODES_PER_BATCH = 50;
     const rangeStart = Math.floor((episodeNumber - 1) / EPISODES_PER_BATCH) * EPISODES_PER_BATCH + 1;
     const rangeEnd = rangeStart + EPISODES_PER_BATCH - 1;
