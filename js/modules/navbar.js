@@ -6,6 +6,7 @@ import {
 
 import { initRandomButton } from "./random-service.js";
 import { initNotificationSystem } from "./notification-service.js";
+import { initGlobalErrorLogging } from "./logger.js";
 
 // --- 🧠 SERVICE LAYER (Logic: ข้อมูล, Cache, Path) ---
 const NavbarService = {
@@ -188,6 +189,8 @@ const NavbarUI = {
 
 // --- 🎮 CONTROLLER (Main Entry) ---
 export async function loadNavbar(pathPrefix = '.') {
+    initGlobalErrorLogging(); // ✅ เพิ่มบรรทัดนี้: เปิดระบบดักจับ Error ทันทีที่โหลด Navbar
+    
     NavbarUI.init();
     if (!NavbarUI.placeholder) return;
 
