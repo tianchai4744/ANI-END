@@ -104,19 +104,27 @@ export function formatTimestamp(timestamp) {
 }
 export const formatDate = formatTimestamp; 
 
-// --- 5. Video Player Utility (แก้ไข 404 และ จอเล็ก) ---
+// --- 5. Video Player Utility (ฉบับแก้ไขบั๊ก iframe ซ้อน iframe) ---
 
 export function generateVideoEmbed(inputUrl) {
-    // 1. กัน Error 404 จากลิงก์ว่าง
+    // 1. กรองค่าว่าง
     if (!inputUrl || inputUrl === 'undefined' || inputUrl === 'null') return "";
-    
     let url = inputUrl.trim();
     if (!url) return "";
 
-    // Style บังคับเต็มจอ (แก้ปัญหาจอเล็ก)
+    // Style บังคับเต็มจอ 100% (Responsive)
     const responsiveStyle = 'class="absolute inset-0 w-full h-full border-0" allowfullscreen webkitallowfullscreen mozallowfullscreen allow="autoplay; encrypted-media; fullscreen; picture-in-picture"';
 
-    // 1. YouTube
+    // 2. ถ้าเป็น iframe Code มาอยู่แล้ว (เช่น Embed จาก OK.RU ที่ก๊อปมา)
+    if (url.toLowerCase().startsWith('<iframe')) {
+        // ลบ width/height เดิมออกเพื่อไม่ให้ตีกัน
+        let cleanTag = url.replace(/width\s*=\s*["'][^"']*["']/gi, '')
+                          .replace(/height\s*=\s*["'][^"']*["']/gi, '');
+        // แทรก Class เต็มจอเข้าไป
+        return cleanTag.replace(/<iframe/i, `<iframe ${responsiveStyle}`);
+    }
+
+    // 3. YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
         let videoId = '';
         if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0];
@@ -125,38 +133,36 @@ export function generateVideoEmbed(inputUrl) {
         return videoId ? `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0" ${responsiveStyle}></iframe>` : '';
     }
 
-    // 2. OK.RU (แก้ลิงก์ให้เป็น Embed)
+    // 4. OK.RU (แปลง Link ธรรมดาเป็น Embed)
     if (url.includes('ok.ru')) {
         if (!url.startsWith('http')) url = 'https:' + url;
         if (url.includes('/video/')) url = url.replace('/video/', '/videoembed/');
         return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
     }
 
-    // 3. Archive.org (แก้ลิงก์ให้เป็น Embed)
+    // 5. Archive.org (แปลง Link เป็น Embed)
     if (url.includes('archive.org')) {
         if (url.includes('/details/')) url = url.replace('/details/', '/embed/');
         return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
     }
 
-    // 4. Dailymotion
+    // 6. Dailymotion
     if (url.includes('dailymotion.com')) {
         let videoId = url.split('/video/')[1]?.split('?')[0];
         return `<iframe src="https://www.dailymotion.com/embed/video/${videoId}?autoplay=1" ${responsiveStyle}></iframe>`;
     }
 
-    // 5. Google Drive
+    // 7. Google Drive
     if (url.includes('drive.google.com')) {
         url = url.replace('/view', '/preview');
         return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
     }
 
-    // 6. Generic Fallback
-    // ถ้าเป็น iframe มาแล้ว ให้แก้ width/height เป็นเต็มจอ
-    if (url.startsWith('<iframe')) {
-        return url.replace(/width="[^"]*"/g, '').replace(/height="[^"]*"/g, '')
-                  .replace('<iframe', `<iframe ${responsiveStyle}`);
+    // 8. Fallback (เฉพาะถ้าเป็น URL จริงๆ เท่านั้น ถึงจะใส่ iframe ครอบ)
+    if (url.startsWith('http') || url.startsWith('//')) {
+        return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
     }
 
-    // ถ้าเป็นลิงก์ทั่วไป ให้ใส่ iframe ครอบ
-    return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
+    // ถ้าไม่ใช่ URL และไม่ใช่ iframe (เช่น ขยะข้อมูล) ให้ส่งกลับเป็นค่าว่าง
+    return "";
 }
