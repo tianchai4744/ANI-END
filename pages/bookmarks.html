@@ -16,7 +16,7 @@
 
     <div id="navbar-placeholder"></div>
 
-    <script type="module">
+    <script type="module" src="../js/pages/bookmarks.js"></script>
         import { onAuthStateChanged } from "firebase/auth";
         import { onSnapshot, collection, query, orderBy, getDocs, doc, deleteDoc, setLogLevel } from "firebase/firestore";
         import { db, auth, appId } from "../js/config/db-config.js";
