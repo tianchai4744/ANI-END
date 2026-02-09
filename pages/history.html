@@ -22,7 +22,7 @@
 
     <div id="navbar-placeholder"></div>
 
-    <script type="module">
+    <script type="module" src="../js/pages/history.js"></script>
         import { onAuthStateChanged } from "firebase/auth";
         import { onSnapshot, collection, query, limit, orderBy, deleteDoc, doc, setLogLevel } from "firebase/firestore";
         import { db, auth, appId } from "../js/config/db-config.js";
@@ -215,5 +215,6 @@
     </footer>
 </body>
 </html>
+
 
 
