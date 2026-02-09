@@ -9,8 +9,8 @@ import { db, auth, appId } from "../config/db-config.js";
 import { loadNavbar } from "../modules/navbar.js";
 import { setupSearchSystem } from "../modules/search.js";
 import { observeImages } from "../utils/tools.js";
-import * as PlayerLogic from "../modules/player-core.js"; // 🧠 นำเข้าสมอง (แบบใหม่)
-import { PlayerRenderer } from "../renderers/player-renderer.js"; // 🎨 นำเข้าร่างกาย (แบบใหม่)
+import * as PlayerLogic from "../modules/player-core.js"; // 🧠 นำเข้าสมอง
+import { PlayerRenderer } from "../renderers/player-renderer.js"; // 🎨 นำเข้าร่างกาย
 
 // Sub-Modules (Modules เหล่านี้ใช้เหมือนเดิม)
 import { initEpisodeList, loadEpisodesByRange, highlightActiveEpisode, findNextPrevEpisode, checkAndLoadEpisodeBatch } from "../modules/episode-list.js";
@@ -54,11 +54,11 @@ async function playEpisode(episode) {
     // 3. Update Browser State (URL)
     PlayerLogic.updateUrlState(episode.id);
 
-    // 4. Call External Services (บันทึกประวัติ / ยอดวิว)
+    // 4. Call External Services (บันทึกประวัติ / ยอดวิว / Bookmark / Report / Comments)
     if (currentUser) saveHistory(currentUser.uid, currentShow, episode);
     trackView(currentShow.id);
     
-    // 5. Update Other UI Components (ส่วนประกอบเสริม)
+    // Update Components
     highlightActiveEpisode(episode.id);
     updateReportUI(episode);
     initCommentSystem(currentShow.id, episode.id, episode.number);
@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (top10Container) setTimeout(() => observeImages(top10Container), 500);
 
             // 5. Init Episode List & Play
-            // โหลดรายการตอนทั้งหมดเข้ามาก่อน
+            // โหลดรายการตอนทั้งหมดเข้ามาก่อน (ป้องกันการหาตอนไม่เจอ)
             await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
 
             if (targetEpId) {
@@ -173,11 +173,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (epSnap.exists()) {
                     const epData = { id: epSnap.id, ...epSnap.data() };
                     targetEpNum = epData.number;
-                    // โหลด Batch ที่ตอนนั้นอยู่
+                    // ตรวจสอบและโหลด Batch ถ้าจำเป็น
                     await checkAndLoadEpisodeBatch(targetEpNum, playEpisode);
                     playEpisode(epData);
                 } else {
-                     // ถ้าหาตอนไม่เจอ ให้โหลดตอนที่ 1 มาเตรียมไว้
+                     // ถ้าหาตอนไม่เจอ ให้ลองโหลดตอนที่ 1
                      await checkAndLoadEpisodeBatch(1, playEpisode);
                      PlayerRenderer.renderVideoMessage("ไม่พบตอนที่ระบุ กรุณาเลือกจากรายการด้านล่าง");
                 }
