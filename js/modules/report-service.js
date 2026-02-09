@@ -1,63 +1,101 @@
-// ✅ แก้ไข: เปลี่ยนจาก CDN เป็น npm package
+// js/modules/report-service.js
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db, appId } from "../config/db-config.js";
 
-// รับ currentEpisode แบบ Function Getter เพื่อให้ได้ค่าล่าสุดเสมอ
-export function initReportSystem(user, showData, getCurrentEpisode) {
-    const btn = document.getElementById('report-broken-btn');
-    if (!btn) return;
+// --- 🧠 SERVICE LAYER ---
+const ReportService = {
+    async submitReport(user, showId, episode) {
+        // 1. Create Report Log
+        await addDoc(collection(db, `artifacts/${appId}/public/data/reports`), {
+            episodeId: episode.id,
+            showId: showId,
+            reportedBy: 'user',
+            userId: user.uid,
+            reason: 'Broken Link',
+            createdAt: serverTimestamp()
+        });
 
-    btn.onclick = async () => {
+        // 2. Update Episode Status
+        await updateDoc(doc(db, `artifacts/${appId}/public/data/episodes`, episode.id), { 
+            status: 'user_reported' 
+        });
+        
+        return true;
+    }
+};
+
+// --- 🎨 UI LAYER ---
+const ReportUI = {
+    btn: null,
+    alertDiv: null,
+
+    init() {
+        this.btn = document.getElementById('report-broken-btn');
+        this.alertDiv = document.getElementById('broken-alert');
+    },
+
+    updateState(status) {
+        if (!this.btn) return;
+
+        if (status === 'broken' || status === 'user_reported') {
+            this.btn.disabled = true;
+            this.btn.innerHTML = status === 'broken' ? '<i class="ri-check-line"></i> แจ้งแล้ว (เสีย)' : '<i class="ri-check-line"></i> แจ้งแล้ว (รอตรวจสอบ)';
+            this.btn.className = "flex items-center bg-red-600 text-white text-sm font-medium py-1.5 px-3 rounded-md transition-colors opacity-50 cursor-not-allowed";
+            if (this.alertDiv) this.alertDiv.classList.remove('hidden');
+        } else { 
+            this.btn.disabled = false;
+            this.btn.innerHTML = '<i class="ri-error-warning-line mr-1"></i> แจ้ง (เสีย)';
+            this.btn.className = "flex items-center bg-gray-700 hover:bg-red-600 text-white text-sm font-medium py-1.5 px-3 rounded-md transition-colors cursor-pointer";
+            if (this.alertDiv) this.alertDiv.classList.add('hidden');
+        }
+    },
+
+    setLoading(isLoading) {
+        if (!this.btn) return;
+        this.btn.disabled = isLoading;
+        if (isLoading) this.btn.textContent = 'กำลังแจ้ง...';
+    },
+
+    confirmAction(epNumber) {
+        return confirm(`ยืนยันแจ้งไฟล์เสียสำหรับตอนที่ ${epNumber}?`);
+    }
+};
+
+// --- 🎮 CONTROLLER ---
+export function initReportSystem(user, showData, getCurrentEpisode) {
+    ReportUI.init();
+    if (!ReportUI.btn) return;
+
+    ReportUI.btn.onclick = async () => {
         const currentEp = getCurrentEpisode();
-        if (!user) { alert('กรุณาเข้าสู่ระบบก่อนแจ้งปัญหา'); window.triggerLogin(); return; }
         if (!currentEp) return;
 
-        if(!confirm(`ยืนยันแจ้งไฟล์เสียสำหรับตอนที่ ${currentEp.number}?`)) return;
+        if (!user) { 
+            alert('กรุณาเข้าสู่ระบบก่อนแจ้งปัญหา'); 
+            window.triggerLogin(); 
+            return; 
+        }
 
-        btn.textContent = 'กำลังแจ้ง...';
-        btn.disabled = true;
+        if (!ReportUI.confirmAction(currentEp.number)) return;
+
+        ReportUI.setLoading(true);
 
         try {
-            await addDoc(collection(db, `artifacts/${appId}/public/data/reports`), {
-                episodeId: currentEp.id,
-                showId: showData.id,
-                reportedBy: 'user',
-                userId: user.uid,
-                reason: 'Broken Link',
-                createdAt: serverTimestamp()
-            });
-
-            await updateDoc(doc(db, `artifacts/${appId}/public/data/episodes`, currentEp.id), { 
-                status: 'user_reported' 
-            });
+            await ReportService.submitReport(user, showData.id, currentEp);
             
-            // อัปเดต Object ปัจจุบันและ UI
+            // Update Local State & UI
             currentEp.status = 'user_reported';
-            updateReportUI(currentEp);
+            ReportUI.updateState('user_reported');
 
         } catch(e) { 
             console.error(e); 
-            btn.textContent = 'แจ้งล้มเหลว'; 
-            btn.disabled = false;
+            alert('แจ้งปัญหาล้มเหลว: ' + e.message);
+            ReportUI.updateState(currentEp.status); // Revert
         }
     };
 }
 
 export function updateReportUI(episode) {
-    const btn = document.getElementById('report-broken-btn');
-    const alertDiv = document.getElementById('broken-alert');
-    if(!btn) return;
-
-    const status = episode.status;
-    if (status === 'broken' || status === 'user_reported') {
-        btn.disabled = true;
-        btn.innerHTML = status === 'broken' ? '<i class="ri-check-line"></i> แจ้งแล้ว (เสีย)' : '<i class="ri-check-line"></i> แจ้งแล้ว (รอตรวจสอบ)';
-        btn.className = "flex items-center bg-red-600 text-white text-sm font-medium py-1.5 px-3 rounded-md transition-colors opacity-50 cursor-not-allowed";
-        if(alertDiv) alertDiv.classList.remove('hidden');
-    } else { 
-        btn.disabled = false;
-        btn.innerHTML = '<i class="ri-error-warning-line mr-1"></i> แจ้ง (เสีย)';
-        btn.className = "flex items-center bg-gray-700 hover:bg-red-600 text-white text-sm font-medium py-1.5 px-3 rounded-md transition-colors cursor-pointer";
-        if(alertDiv) alertDiv.classList.add('hidden');
-    }
+    ReportUI.init(); // Re-select elements just in case
+    ReportUI.updateState(episode.status);
 }
