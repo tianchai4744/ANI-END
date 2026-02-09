@@ -16,8 +16,6 @@ import { renderLatestUpdatesSection } from "../modules/latest-updates.js";
 import { initGlobalErrorLogging } from "../modules/logger.js";
 import { observeImages } from "../utils/tools.js";
 
-initGlobalErrorLogging();
-
 let userId;
 let historyItems = []; 
 let allBanners = []; 
