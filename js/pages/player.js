@@ -1,16 +1,18 @@
 // js/pages/player.js
+// 🎮 CONTROLLER: ผู้สั่งการ (เชื่อม Logic เข้ากับ Renderer)
 
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setLogLevel } from "firebase/firestore";
 import { db, auth, appId } from "../config/db-config.js";
 
-// Core Modules
+// Core Modules & Renderers
 import { loadNavbar } from "../modules/navbar.js";
 import { setupSearchSystem } from "../modules/search.js";
-import { observeImages } from "../utils/tools.js"; // ✅ นำเข้า observeImages
+import { observeImages } from "../utils/tools.js";
+import * as PlayerLogic from "../modules/player-core.js"; // 🧠 นำเข้าสมอง (แบบใหม่)
+import { PlayerRenderer } from "../renderers/player-renderer.js"; // 🎨 นำเข้าร่างกาย (แบบใหม่)
 
-// Player Modules
-import { setupPlayerInfo, embedEpisode, updatePlayerMetadata } from "../modules/player-core.js";
+// Sub-Modules (Modules เหล่านี้ยังคงเดิมไว้ก่อน)
 import { initEpisodeList, loadEpisodesByRange, highlightActiveEpisode, findNextPrevEpisode, checkAndLoadEpisodeBatch } from "../modules/episode-list.js";
 import { initBookmarkSystem } from "../modules/bookmark-manager.js";
 import { trackView, saveHistory, loadWatchHistory } from "../modules/watch-service.js";
@@ -26,65 +28,77 @@ let currentEpisode = null;
 let historyItems = []; 
 let isSearchInitialized = false;
 
-// Orchestrator Function
+// --- Orchestrator Function (ฟังก์ชันหลักที่ควบคุมการเล่น) ---
 async function playEpisode(episode) {
-    if (!episode) return;
+    if (!episode) {
+        PlayerRenderer.renderVideoMessage("ไม่พบข้อมูลตอนที่ระบุ", true);
+        return;
+    }
     currentEpisode = episode;
     
-    // 1. UI Updates
-    embedEpisode(episode);
-    updatePlayerMetadata(currentShow, episode);
+    // 1. Prepare Data (ถามสมอง)
+    const embedHtml = PlayerLogic.prepareVideoEmbedHtml(episode);
+    const metaData = PlayerLogic.prepareMetaData(currentShow, episode);
+    const navStatus = PlayerLogic.checkNavStatus(episode.number, currentShow.latestEpisodeNumber);
+
+    // 2. Update UI (สั่งร่างกาย)
+    if (embedHtml) {
+        PlayerRenderer.renderVideoPlayer(embedHtml);
+    } else {
+        PlayerRenderer.renderVideoMessage("ไม่พบลิงก์วิดีโอ", true);
+    }
     
-    // 2. Services
+    PlayerRenderer.updatePageMeta(metaData);
+    PlayerRenderer.updateNavButtons(navStatus.canGoPrev, navStatus.canGoNext);
+    
+    // 3. Update Browser State (URL)
+    PlayerLogic.updateUrlState(episode.id);
+
+    // 4. Call External Services (เรียก service อื่นๆ)
     if (currentUser) saveHistory(currentUser.uid, currentShow, episode);
     trackView(currentShow.id);
     
-    // 3. Components Update
+    // 5. Update Other UI Components
     highlightActiveEpisode(episode.id);
     updateReportUI(episode);
-    updateNavButtons(episode.number);
-    
-    // 4. Comments
     initCommentSystem(currentShow.id, episode.id, episode.number);
     
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function updateNavButtons(currentNum) {
-    const prevBtn = document.getElementById('prev-episode-btn');
-    const nextBtn = document.getElementById('next-episode-btn');
-    const maxEp = currentShow.latestEpisodeNumber || 9999;
-    
-    if(prevBtn) prevBtn.disabled = (currentNum <= 1);
-    if(nextBtn) nextBtn.disabled = (currentNum >= maxEp);
-}
-
-// Navigation Handler
+// --- Navigation Handler ---
 async function navigateEpisode(direction) {
     if (!currentEpisode) return;
     
-    const btn = direction === 'next' ? document.getElementById('next-episode-btn') : document.getElementById('prev-episode-btn');
-    btn.disabled = true; 
+    // ปิดปุ่มชั่วคราวผ่าน Renderer
+    PlayerRenderer.updateNavButtons(false, false);
 
     try {
         const nextEp = await findNextPrevEpisode(currentEpisode.number, direction, currentShow);
-        
         if (nextEp) {
             await checkAndLoadEpisodeBatch(nextEp.number, playEpisode);
             playEpisode(nextEp);
+        } else {
+            // คืนสถานะปุ่มถ้าไปต่อไม่ได้
+            const navStatus = PlayerLogic.checkNavStatus(currentEpisode.number, currentShow.latestEpisodeNumber);
+            PlayerRenderer.updateNavButtons(navStatus.canGoPrev, navStatus.canGoNext);
         }
-    } catch(e) { console.error(e); }
-    finally { btn.disabled = false; }
+    } catch(e) { 
+        console.error(e);
+        // คืนสถานะปุ่มกรณี Error
+        const navStatus = PlayerLogic.checkNavStatus(currentEpisode.number, currentShow.latestEpisodeNumber);
+        PlayerRenderer.updateNavButtons(navStatus.canGoPrev, navStatus.canGoNext);
+    }
 }
 
-// Main Initialization
+// --- Main Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
     setLogLevel('silent');
     await loadNavbar('..');
     
-    const loadingPlayer = document.getElementById('loading-player');
-    const playerContent = document.getElementById('player-content-wrapper');
+    // เริ่มต้นแสดง Loading
+    PlayerRenderer.toggleLoading(true);
     
     // Event Bindings
     document.getElementById('prev-episode-btn').onclick = () => navigateEpisode('prev');
@@ -101,24 +115,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         const epIdFromUrl = urlParams.get('ep_id');
 
         if (!showId) {
-            loadingPlayer.innerHTML = '<p class="text-red-500">URL ไม่ถูกต้อง</p>';
+            PlayerRenderer.toggleLoading(true, "URL ไม่ถูกต้อง (Missing Show ID)");
             return;
         }
 
         try {
             // 1. Fetch Show Data
             const showSnap = await getDoc(doc(db, `artifacts/${appId}/public/data/shows`, showId));
-            if (!showSnap.exists()) throw new Error("ไม่พบข้อมูลอนิเมะ");
+            if (!showSnap.exists()) throw new Error("ไม่พบข้อมูลอนิเมะในระบบ");
             currentShow = { id: showSnap.id, ...showSnap.data() };
 
-            setupPlayerInfo(currentShow);
+            // Render ข้อมูลพื้นฐานทันที
+            PlayerRenderer.renderShowInfo(currentShow);
             
             // 2. Load User History
             if (user) {
                 historyItems = await loadWatchHistory(user.uid);
-                if (!isSearchInitialized) { setupSearchSystem(historyItems); isSearchInitialized = true; }
-            } else {
-                if (!isSearchInitialized) { setupSearchSystem([]); isSearchInitialized = true; }
+            }
+            // Setup Search (ทำครั้งเดียว)
+            if (!isSearchInitialized) { 
+                setupSearchSystem(historyItems || []); 
+                isSearchInitialized = true; 
             }
 
             // 3. Determine Episode to Play
@@ -135,37 +152,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             initReportSystem(user, currentShow, () => currentEpisode); 
             renderRelatedAnime(currentShow, historyItems);
             
-            // ✅ Render Top 10 และเรียก Lazy Load (เพื่อแก้ปัญหา Top 10 ไม่โหลดภาพ)
+            // Render Top 10
             renderPlayerTop10(historyItems);
             setTimeout(() => observeImages(document.getElementById('top10-list-container')), 500);
 
             // 5. Init Episode List & Play
+            await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
+
             if (targetEpId) {
                 const epSnap = await getDoc(doc(db, `artifacts/${appId}/public/data/episodes`, targetEpId));
                 if (epSnap.exists()) {
                     const epData = { id: epSnap.id, ...epSnap.data() };
                     targetEpNum = epData.number;
-                    await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
                     await checkAndLoadEpisodeBatch(targetEpNum, playEpisode);
                     playEpisode(epData);
                 } else {
-                     await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
                      await checkAndLoadEpisodeBatch(1, playEpisode);
+                     // กรณีหาไม่เจอ ให้ลองเล่นตอนที่ 1 แทน (หรือแจ้งเตือน)
+                     // แต่ต้องดึงข้อมูลตอนที่ 1 มาก่อน ซึ่ง logic เดิมอาจจะซับซ้อน
+                     // ในที่นี้เราปล่อยให้ list จัดการ หรือ user กดเลือกเอง
+                     PlayerRenderer.renderVideoMessage("กรุณาเลือกตอนที่จะรับชม");
                 }
             } else {
-                await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
+                // ไม่มี target ID, โหลด list ช่วงแรก แล้วเล่นตอนแรกสุดที่มี
                 const episodes = await loadEpisodesByRange(1, 50, document.getElementById('episode-list-container'), playEpisode);
-                if (episodes.length > 0) playEpisode(episodes[0]);
-                else embedEpisode(null);
+                if (episodes && episodes.length > 0) {
+                    playEpisode(episodes[0]);
+                } else {
+                    PlayerRenderer.renderVideoMessage("ยังไม่มีตอนสำหรับอนิเมะเรื่องนี้");
+                }
             }
 
-            // Reveal UI
-            loadingPlayer.classList.add('hidden');
-            playerContent.classList.remove('hidden');
+            // ปิด Loading แสดงหน้าจอจริง
+            PlayerRenderer.toggleLoading(false);
 
         } catch (error) {
             console.error(error);
-            loadingPlayer.innerHTML = `<p class="text-red-500">เกิดข้อผิดพลาด: ${error.message}</p>`;
+            PlayerRenderer.toggleLoading(true, `เกิดข้อผิดพลาด: ${error.message}`);
         }
     });
 
