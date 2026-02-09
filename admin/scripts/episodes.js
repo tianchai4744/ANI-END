@@ -38,7 +38,11 @@ const EpisodeService = {
                 where("showId", "==", showId), 
                 where("number", "==", parseFloat(searchNumberVal))
             );
-            return { items: (await getDocs(q)).docs.map(d => ({id: d.id, ...d.data()})), isSearch: true };
+            const snapshot = await getDocs(q);
+            return { 
+                items: snapshot.docs.map(d => ({id: d.id, ...d.data()})), 
+                isSearch: true 
+            };
         }
 
         // Mode: Pagination
@@ -96,6 +100,15 @@ const EpisodeService = {
             title: doc.data().title,
             latestEpisodeNumber: doc.data().latestEpisodeNumber || 0 
         }));
+    },
+
+    // ✅ เพิ่มฟังก์ชัน: ดึงชื่อเรื่องจาก ID (กรณีหาใน Dropdown ไม่เจอ)
+    async getShowTitle(id) {
+        if (!id) return "Unknown";
+        try {
+            const snap = await getDoc(doc(getCollectionRef("shows"), id));
+            return snap.exists() ? snap.data().title : "Unknown Show";
+        } catch (e) { return "Error Loading Title"; }
     },
 
     // 3. Helper: Check Duplicate
@@ -245,14 +258,25 @@ const EpisodeUI = {
                  if(!inList) {
                      const cached = this.allShowOptions.find(o => o.id === currentVal);
                      if(cached) {
-                         const opt = document.createElement('option');
-                         opt.value = cached.id; opt.textContent = cached.title; opt.selected = true;
-                         select.appendChild(opt);
+                         this.addOption(id, cached.id, cached.title, true);
                      }
                  }
                  select.value = currentVal;
             }
         });
+    },
+
+    // ✅ เพิ่มฟังก์ชันช่วย: เติม Option เข้า Dropdown
+    addOption(selectId, value, text, isSelected = false) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        if (!select.querySelector(`option[value="${value}"]`)) {
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = text;
+            if (isSelected) opt.selected = true;
+            select.appendChild(opt);
+        }
     },
 
     renderTable(data, onEdit, onDelete) {
@@ -308,58 +332,17 @@ const EpisodeUI = {
         }
     },
 
-    async openModal(id, currentEpisodes, currentShowId) {
+    openModal(id, currentEpisodes, currentShowId) {
         const form = document.getElementById('episode-form');
         form.reset();
         form.dataset.id = id || '';
-        
-        // Reset local search input
         const searchInput = document.getElementById('search-ep-show');
         if(searchInput) searchInput.value = '';
 
-        if (id) {
-            const epData = currentEpisodes.find(e => e.id === id);
-            if (epData) {
-                // Ensure option exists (logic delegated to controller via fetch if needed, but UI tries best)
-                const select = document.getElementById('episode-show-select');
-                if(!select.querySelector(`option[value="${epData.showId}"]`)) {
-                     // Add temporary option if missing from list
-                     const opt = document.createElement('option');
-                     opt.value = epData.showId; 
-                     opt.textContent = "(Loading...)"; // Placeholder
-                     select.appendChild(opt);
-                }
-                select.value = epData.showId;
-                document.getElementById('episode-number').value = epData.number;
-                document.getElementById('episode-title').value = epData.title || '';
-                document.getElementById('episode-url').value = epData.videoUrl || '';
-            }
-        } else if (currentShowId) {
-            const select = document.getElementById('episode-show-select');
-            select.value = currentShowId;
-            select.dispatchEvent(new Event('change'));
-        }
-        
         document.getElementById('episode-modal').classList.remove('hidden');
         document.getElementById('episode-modal').classList.add('flex');
     },
 
-    openBulkModal(currentShowId, nextEpNum) {
-        const form = document.getElementById('bulk-urls');
-        form.value = '';
-        const searchInput = document.getElementById('search-bulk-show');
-        if(searchInput) searchInput.value = '';
-
-        if(currentShowId) {
-            const select = document.getElementById('bulk-episode-show-select');
-            select.value = currentShowId;
-            if(nextEpNum) document.getElementById('bulk-start-ep').value = nextEpNum;
-        }
-        
-        document.getElementById('bulk-episode-modal').classList.remove('hidden');
-        document.getElementById('bulk-episode-modal').classList.add('flex');
-    },
-    
     closeModal(id) {
         const modal = document.getElementById(id);
         modal.classList.add('hidden');
@@ -395,9 +378,9 @@ export function initEpisodeModule() {
 
     // Dropdowns
     EpisodeUI.setupDropdowns((term) => loadShowDropdowns(term));
-    loadShowDropdowns(); // Initial Load
+    loadShowDropdowns(); 
 
-    // Logic: Auto Increment Episode Number
+    // Auto Increment Logic
     const handleShowSelectChange = (e, targetInputId) => {
         const showId = e.target.value;
         const showData = EpisodeUI.allShowOptions.find(s => s.id === showId);
@@ -411,12 +394,48 @@ export function initEpisodeModule() {
     });
     document.getElementById('bulk-episode-show-select')?.addEventListener('change', (e) => handleShowSelectChange(e, 'bulk-start-ep'));
 
-    // Global Access
-    window.openEpisodeModal = (id) => EpisodeUI.openModal(id, currentEpisodesList, currentFilteredShowId);
+    // Global Access (เชื่อมต่อ UI และ Service อย่างสมบูรณ์)
+    window.openEpisodeModal = async (id) => {
+        EpisodeUI.openModal(id, currentEpisodesList, currentFilteredShowId);
+        
+        if (id) {
+            const epData = currentEpisodesList.find(e => e.id === id);
+            if (epData) {
+                // ✅ แก้ไข: ถ้าหา Option ไม่เจอ ให้ดึงชื่อจาก DB มาแสดง
+                const select = document.getElementById('episode-show-select');
+                if (!select.querySelector(`option[value="${epData.showId}"]`)) {
+                    const title = await EpisodeService.getShowTitle(epData.showId);
+                    EpisodeUI.addOption('episode-show-select', epData.showId, title);
+                }
+                select.value = epData.showId;
+                document.getElementById('episode-number').value = epData.number;
+                document.getElementById('episode-title').value = epData.title || '';
+                document.getElementById('episode-url').value = epData.videoUrl || '';
+            }
+        } else if (currentFilteredShowId) {
+            const select = document.getElementById('episode-show-select');
+            select.value = currentFilteredShowId;
+            select.dispatchEvent(new Event('change'));
+        }
+    };
+
     window.openBulkEpisodeModal = () => {
         const showData = EpisodeUI.allShowOptions.find(s => s.id === currentFilteredShowId);
-        EpisodeUI.openBulkModal(currentFilteredShowId, showData ? (showData.latestEpisodeNumber || 0) + 1 : 1);
+        EpisodeUI.openModal('bulk-episode-modal'); // Re-use simpler open logic if possible or separate
+        // Explicit logic for bulk modal to keep it clean
+        const form = document.getElementById('bulk-urls');
+        form.value = '';
+        document.getElementById('search-bulk-show').value = '';
+        
+        if(currentFilteredShowId) {
+            const select = document.getElementById('bulk-episode-show-select');
+            select.value = currentFilteredShowId;
+            if(showData) document.getElementById('bulk-start-ep').value = (showData.latestEpisodeNumber || 0) + 1;
+        }
+        document.getElementById('bulk-episode-modal').classList.remove('hidden');
+        document.getElementById('bulk-episode-modal').classList.add('flex');
     };
+    
     window.deleteEpisode = handleDelete;
 }
 
@@ -487,7 +506,6 @@ async function handleBulkSubmit() {
     showConfirmModal('ยืนยันเพิ่มหลายตอน', `จะเพิ่ม ${rawUrls.length} ตอน เริ่มที่ตอน ${startEp}?`, async () => {
         isSaving = true; toggleLoading(true, "ตรวจสอบ...");
         try {
-            // Check Duplicates Logic
             const colRef = getCollectionRef("episodes");
             const qCheck = query(colRef, where("showId", "==", showId), where("number", ">=", startEp));
             const existingSnaps = await getDocs(qCheck);
