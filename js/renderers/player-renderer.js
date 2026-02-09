@@ -1,5 +1,5 @@
 // js/renderers/player-renderer.js
-// 🎨 PLAYER RENDERER: รับผิดชอบเรื่องหน้าตาและการแสดงผลเท่านั้น (ห้ามมี Logic คำนวณ)
+// 🎨 PLAYER RENDERER: รับผิดชอบเรื่องหน้าตาและการแสดงผล (ห้ามคำนวณ Logic)
 
 export const PlayerRenderer = {
     // 1. จัดการหน้า Loading
@@ -10,9 +10,14 @@ export const PlayerRenderer = {
         if (isLoading) {
             if (loader) {
                 loader.classList.remove('hidden');
-                // ถ้ามี error ให้แสดงข้อความ
-                if (errorMessage) loader.innerHTML = `<p class="text-red-500 text-center mt-4">${errorMessage}</p>`;
-                else loader.innerHTML = `<div class="spinner"></div>`; // หรือใส่ HTML Loading เดิมของคุณ
+                if (errorMessage) {
+                    loader.innerHTML = `<p class="text-red-500 text-center mt-4 bg-black/50 p-2 rounded">${errorMessage}</p>`;
+                } else {
+                    // ใช้ Spinner เดิมที่มีใน HTML หรือ Default
+                    if (!loader.querySelector('.spinner')) {
+                        loader.innerHTML = '<div class="spinner"></div><p class="mt-4 text-gray-400 animate-pulse">กำลังโหลดข้อมูล...</p>';
+                    }
+                }
             }
             if (content) content.classList.add('hidden');
         } else {
@@ -21,7 +26,7 @@ export const PlayerRenderer = {
         }
     },
 
-    // 2. แสดงข้อมูลอนิเมะ (ชื่อ, รายละเอียด)
+    // 2. แสดงข้อมูลอนิเมะ (ชื่อ, คำอธิบาย, ปุ่มย่อ/ขยาย)
     renderShowInfo(show) {
         if (!show) return;
         
@@ -34,26 +39,40 @@ export const PlayerRenderer = {
         if (descEl) {
             descEl.textContent = show.description || "ไม่มีคำอธิบาย";
             
-            // Logic ปุ่มกด "เพิ่มเติม" (ถือเป็น UI Logic ทำที่นี่ได้เลย)
-            if (descEl.scrollHeight > descEl.clientHeight) {
-                if (expandBtn) {
-                    expandBtn.classList.remove('hidden');
-                    // ล้าง Event เดิมก่อนกันเบิ้ล (Best Practice)
-                    const newBtn = expandBtn.cloneNode(true);
-                    expandBtn.parentNode.replaceChild(newBtn, expandBtn);
-                    
-                    newBtn.onclick = () => {
-                        descEl.classList.toggle('line-clamp-2');
-                        newBtn.textContent = descEl.classList.contains('line-clamp-2') ? 'เพิ่มเติม' : 'ย่อ';
-                    };
+            // รีเซ็ต Class พื้นฐานก่อนคำนวณ
+            descEl.className = "text-gray-300 text-sm leading-relaxed line-clamp-2 transition-all duration-300";
+
+            // Logic ปุ่มกด "เพิ่มเติม" (ย้ายมาจาก player-core เดิม)
+            // ใช้ setTimeout เล็กน้อยเพื่อให้ DOM วาดเสร็จก่อนวัดความสูง
+            setTimeout(() => {
+                if (descEl.scrollHeight > descEl.clientHeight) {
+                    if (expandBtn) {
+                        expandBtn.classList.remove('hidden');
+                        expandBtn.textContent = 'เพิ่มเติม';
+                        
+                        // Clone Node เพื่อล้าง Event Listener เก่ากันเบิ้ล
+                        const newBtn = expandBtn.cloneNode(true);
+                        expandBtn.parentNode.replaceChild(newBtn, expandBtn);
+                        
+                        newBtn.onclick = () => {
+                            const isClamped = descEl.classList.contains('line-clamp-2');
+                            if (isClamped) {
+                                descEl.classList.remove('line-clamp-2');
+                                newBtn.textContent = 'ย่อ';
+                            } else {
+                                descEl.classList.add('line-clamp-2');
+                                newBtn.textContent = 'เพิ่มเติม';
+                            }
+                        };
+                    }
+                } else {
+                    if (expandBtn) expandBtn.classList.add('hidden');
                 }
-            } else {
-                if (expandBtn) expandBtn.classList.add('hidden');
-            }
+            }, 50);
         }
     },
 
-    // 3. แสดงวิดีโอ (รับ HTML String มาแปะเลย)
+    // 3. แสดงวิดีโอ (รับ HTML String มาแปะ)
     renderVideoPlayer(embedHtml) {
         const playerEmbedDiv = document.getElementById('video-player-embed');
         if (playerEmbedDiv) {
@@ -61,17 +80,31 @@ export const PlayerRenderer = {
         }
     },
 
-    // 4. อัปเดตชื่อเว็บและ Meta Tags (SEO)
+    // 4. แสดงข้อความในกล่องวิดีโอ (กรณี Error หรือไม่มีตอน)
+    renderVideoMessage(message, isError = false) {
+        const playerEmbedDiv = document.getElementById('video-player-embed');
+        if (playerEmbedDiv) {
+            const colorClass = isError ? 'text-red-500' : 'text-gray-400';
+            playerEmbedDiv.innerHTML = `
+                <div class="w-full h-full flex flex-col items-center justify-center bg-black gap-2">
+                    <i class="${isError ? 'ri-error-warning-line' : 'ri-movie-line'} text-3xl ${colorClass}"></i>
+                    <p class="${colorClass} text-sm">${message}</p>
+                </div>`;
+        }
+    },
+
+    // 5. อัปเดต Meta Tags และ Title Bar
     updatePageMeta(metaData) {
-        // เปลี่ยน Title Bar
+        // อัปเดต Title Bar
         document.title = metaData.title;
 
-        // ฟังก์ชันช่วยอัปเดต tag
-        const setMeta = (prop, content) => {
-            let el = document.querySelector(`meta[property="${prop}"]`) || document.querySelector(`meta[name="${prop}"]`);
+        // ฟังก์ชันช่วยอัปเดต/สร้าง meta tag
+        const setMeta = (property, content) => {
+            let el = document.querySelector(`meta[property="${property}"]`) || document.querySelector(`meta[name="${property}"]`);
             if (!el) {
                 el = document.createElement('meta');
-                el.setAttribute(prop.startsWith('twitter') ? 'name' : 'property', prop);
+                if (property.startsWith('twitter')) el.setAttribute('name', property);
+                else el.setAttribute('property', property);
                 document.head.appendChild(el);
             }
             el.setAttribute('content', content);
@@ -84,28 +117,30 @@ export const PlayerRenderer = {
         setMeta('og:type', 'video.episode');
         setMeta('twitter:card', 'summary_large_image');
         
-        // อัปเดต Title ในหน้าจอ (ถ้ามี)
-        const screenTitle = document.getElementById('show-title');
-        if (screenTitle && metaData.episodeTitle) {
-            screenTitle.textContent = metaData.episodeTitle;
+        // อัปเดตชื่อตอนบน UI (Header ด้านบนวิดีโอ ถ้ามี)
+        const headerTitle = document.getElementById('show-title');
+        if (headerTitle && metaData.episodeTitle) {
+            // เช็คว่า User กำลังดูตอนไหนอยู่เพื่ออัปเดต Title ให้ตรง
+             headerTitle.textContent = metaData.episodeTitle;
         }
     },
 
-    // 5. จัดการปุ่ม ถัดไป/ก่อนหน้า
+    // 6. จัดการสถานะปุ่ม Next/Prev
     updateNavButtons(canGoPrev, canGoNext) {
         const prevBtn = document.getElementById('prev-episode-btn');
         const nextBtn = document.getElementById('next-episode-btn');
         
-        if (prevBtn) prevBtn.disabled = !canGoPrev;
-        if (nextBtn) nextBtn.disabled = !canGoNext;
-    },
-    
-    // 6. ล้าง Error/Message ในกล่องวิดีโอ
-    renderVideoMessage(message, isError = false) {
-        const playerEmbedDiv = document.getElementById('video-player-embed');
-        if (playerEmbedDiv) {
-            const colorClass = isError ? 'text-red-500' : 'text-gray-400';
-            playerEmbedDiv.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-black"><p class="${colorClass} p-4">${message}</p></div>`;
+        if (prevBtn) {
+            prevBtn.disabled = !canGoPrev;
+            // ปรับ Style ปุ่ม disabled ให้ดูจางลง (Optional)
+            prevBtn.style.opacity = canGoPrev ? '1' : '0.5';
+            prevBtn.style.cursor = canGoPrev ? 'pointer' : 'not-allowed';
+        }
+        
+        if (nextBtn) {
+            nextBtn.disabled = !canGoNext;
+            nextBtn.style.opacity = canGoNext ? '1' : '0.5';
+            nextBtn.style.cursor = canGoNext ? 'pointer' : 'not-allowed';
         }
     }
 };
