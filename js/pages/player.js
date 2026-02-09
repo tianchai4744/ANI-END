@@ -24,6 +24,7 @@ import { initCommentSystem, postComment, updateCommentUIState } from "../modules
 
 let currentUser = null;
 let isFirstLoad = true;
+let isSearchInitialized = false; // ✅ 1. เพิ่มตัวแปรป้องกันการโหลดซ้ำ
 
 // --- 1. Main Action: Play Episode ---
 async function handlePlayEpisode(episode) {
@@ -67,10 +68,7 @@ async function handleNavigation(direction) {
         } else {
             // Revert button state if failed
             const state = Core.getState();
-            // Recalculate status manually or ask core
-            // For simplicity, just re-render current state logic
             if (state.currentEpisode) {
-                 // Re-trigger context logic just to get nav status back
                  const context = Core.preparePlaybackContext(state.currentEpisode, currentUser);
                  PlayerRenderer.updateNavButtons(context.navStatus);
             }
@@ -115,7 +113,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (user) {
                 historyItems = await loadWatchHistory(user.uid);
             }
-            setupSearchSystem(historyItems);
+            
+            // ✅ 2. แก้ไข: ครอบด้วย if เพื่อให้โหลด Search แค่ครั้งเดียวเท่านั้น
+            if (!isSearchInitialized) {
+                setupSearchSystem(historyItems || []);
+                isSearchInitialized = true;
+            }
 
             // C. Initialize Side Modules
             initBookmarkSystem(user, show);
@@ -127,7 +130,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             // D. Determine Starting Episode
             let startEpId = epIdParam;
             
-            // ถ้าไม่มี URL Param ให้ดูจากประวัติ
             if (!startEpId && historyItems.length > 0) {
                 const lastWatched = historyItems.find(h => h.showId === showId);
                 if (lastWatched) startEpId = lastWatched.lastWatchedEpisodeId;
@@ -143,12 +145,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await EpListModule.checkAndLoadEpisodeBatch(epData.number, handlePlayEpisode);
                     handlePlayEpisode(epData);
                 } else {
-                    // Fallback to Ep 1
                     await EpListModule.checkAndLoadEpisodeBatch(1, handlePlayEpisode);
                     PlayerRenderer.renderErrorState("ไม่พบตอนที่ระบุ กรุณาเลือกจากรายการ");
                 }
             } else {
-                // First time watch -> Load batch 1 and play first available
                 const episodes = await EpListModule.loadEpisodesByRange(1, 50, document.getElementById('episode-list-container'), handlePlayEpisode);
                 if (episodes?.length > 0) handlePlayEpisode(episodes[0]);
                 else PlayerRenderer.renderErrorState("ยังไม่มีตอนในขณะนี้");
