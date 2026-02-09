@@ -23,9 +23,9 @@ const CommentService = {
         if (this.activeTab !== tab) {
             this.activeTab = tab;
             this.lastCursor = null;
-            return true; // Changed
+            return true; // บอกว่ามีการเปลี่ยนแปลง
         }
-        return false; // No change
+        return false;
     },
 
     async fetchComments(isReset = false) {
@@ -216,7 +216,6 @@ const CommentUI = {
         if(input) input.value = '';
     },
 
-    // Private helper for DOM creation
     _createCommentElement(c, activeTab) {
         const div = document.createElement('div');
         div.className = "group flex gap-3 mb-4 border-b border-gray-800 pb-4 last:border-0 hover:bg-gray-800/30 p-2 rounded-lg transition-colors";
@@ -283,10 +282,9 @@ export function initCommentSystem(showId, episodeId, episodeNum) {
     // Setup Load More Button
     const btnMore = document.getElementById('btn-load-more-comments');
     if(btnMore) {
-        // Clone to clear old events
         const newBtn = btnMore.cloneNode(true);
         btnMore.parentNode.replaceChild(newBtn, btnMore);
-        CommentUI.btnMore = newBtn; // Re-bind to UI
+        CommentUI.btnMore = newBtn; // ✅ Re-bind UI reference (สำคัญมาก)
         newBtn.onclick = () => loadComments(false);
     }
 }
@@ -316,7 +314,7 @@ export async function postComment(user) {
     try {
         await CommentService.post(user, text);
         CommentUI.clearInput();
-        await loadComments(true); // Reload list
+        await loadComments(true);
     } catch(e) {
         console.error("Post Error", e);
         alert("ส่งความคิดเห็นไม่สำเร็จ: " + e.message);
