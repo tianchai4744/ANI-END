@@ -6,34 +6,25 @@
     <title>เครื่องเล่นวิดีโอ - ANI-END</title>
     <link rel="stylesheet" href="../style.css">
     <style>
-        /* บังคับสัดส่วน 16:9 แบบเด็ดขาด */
+        /* บังคับสัดส่วน 16:9 แบบเด็ดขาด (แก้ปัญหาจอดำ/จอเล็ก) */
         .aspect-video-wrapper {
             position: relative;
-            padding-bottom: 56.25%; /* 16:9 */
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
             height: 0;
             background: #000;
             overflow: hidden;
             border-radius: 0.75rem;
+            width: 100%;
         }
+        /* บังคับ iframe ข้างในให้เต็มกล่องเสมอ */
         .aspect-video-wrapper iframe, 
         .aspect-video-wrapper > div {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
         }
-        /* Loader */
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-left-color: #22c55e;
-            border-radius: 50%;
-            width: 40px; height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-[#0f172a] text-gray-100 min-h-screen flex flex-col font-sans">
@@ -50,18 +41,17 @@
         <div id="player-content-wrapper" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             <div class="lg:col-span-2 space-y-6">
-                <div class="aspect-video-wrapper shadow-2xl ring-1 ring-gray-800">
-                    <div id="video-player-embed">
-                        </div>
+                <div class="aspect-video-wrapper shadow-2xl ring-1 ring-gray-800 bg-black">
+                    <div id="video-player-embed"></div>
                 </div>
 
                 <div class="flex items-center justify-between bg-gray-900/80 p-3 rounded-xl border border-gray-800 backdrop-blur">
                     <button id="prev-episode-btn" class="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        <i class="ri-skip-back-line"></i> ตอนก่อนหน้า
+                        <i class="ri-skip-back-line"></i> <span class="hidden sm:inline">ตอนก่อนหน้า</span>
                     </button>
                     <h1 id="show-title" class="text-white font-bold text-sm sm:text-base line-clamp-1 px-2 text-center">...</h1>
                     <button id="next-episode-btn" class="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        ตอนถัดไป <i class="ri-skip-forward-line"></i>
+                        <span class="hidden sm:inline">ตอนถัดไป</span> <i class="ri-skip-forward-line"></i>
                     </button>
                 </div>
 
@@ -72,15 +62,13 @@
                                 <i class="ri-heart-line"></i> รายการโปรด
                             </button>
                             <button id="report-broken-btn" class="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-red-900/20 hover:text-red-400 border border-gray-700 rounded-lg text-xs transition-colors">
-                                <i class="ri-error-warning-line"></i> แจ้งเสีย
+                                <i class="ri-alarm-warning-line"></i> แจ้งเสีย
                             </button>
                         </div>
                     </div>
-                    
                     <div id="broken-alert" class="hidden mt-3 bg-red-900/20 border border-red-900/50 text-red-300 px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                         <i class="ri-alert-line"></i> มีการแจ้งปัญหาไฟล์เสีย ทีมงานกำลังตรวจสอบ
                     </div>
-
                     <p id="show-description" class="mt-4 text-gray-400 text-sm leading-relaxed line-clamp-2">...</p>
                     <button id="expand-desc-btn" class="text-xs text-green-500 hover:text-green-400 mt-1 hidden">เพิ่มเติม</button>
                 </div>
@@ -105,7 +93,7 @@
                             </div>
                         </div>
                         <div id="comments-list" class="space-y-4 mt-4"></div>
-                        <button id="btn-load-more-comments" class="w-full mt-4 py-2 text-xs text-gray-500 hover:text-white bg-gray-800 rounded hidden">โหลดเพิ่มเติม</button>
+                        <button id="btn-load-more-comments" class="w-full mt-4 py-2 text-xs text-gray-500 hover:text-white bg-gray-800 hover:bg-gray-700 rounded hidden">โหลดเพิ่มเติม</button>
                     </div>
                 </div>
             </div>
@@ -136,7 +124,7 @@
     </main>
 
     <footer class="bg-gray-900 border-t border-gray-800 mt-auto py-8 text-center">
-        <p class="text-gray-400 text-sm">© 2024 ANI-END.</p>
+        <p class="text-gray-400 text-sm">© 2024 ANI-END. All rights reserved.</p>
     </footer>
 
     <script type="module" src="../js/pages/player.js"></script>
