@@ -4,23 +4,34 @@
 
 export const PlayerRenderer = {
     // 1. จัดการ Loading Screen
-    toggleLoading(isLoading, message = "กำลังโหลดข้อมูล...") {
-        const loader = document.getElementById('loading-player');
-        const content = document.getElementById('player-content-wrapper');
-        
-        if (isLoading) {
-            if (loader) {
-                loader.classList.remove('hidden');
-                // Simple Text Update
+    // ในไฟล์ js/renderers/player-renderer.js
+
+toggleLoading(isLoading, message = "กำลังโหลดข้อมูล...") {
+    const loader = document.getElementById('loading-player');
+    const content = document.getElementById('player-content-wrapper');
+    
+    if (isLoading) {
+        if (loader) {
+            loader.classList.remove('hidden');
+            
+            // ✅ เพิ่มส่วนนี้: ถ้ายังไม่มี Spinner ให้สร้างใหม่ (เพื่อรักษา Design เดิม)
+            if (!loader.querySelector('.spinner')) {
+                loader.innerHTML = `
+                    <div class="spinner"></div>
+                    <p class="mt-4 text-gray-400 animate-pulse">${message}</p>
+                `;
+            } else {
+                // ถ้ามีแล้ว แค่อัปเดตข้อความ
                 const p = loader.querySelector('p');
                 if (p) p.textContent = message;
             }
-            if (content) content.classList.add('hidden');
-        } else {
-            if (loader) loader.classList.add('hidden');
-            if (content) content.classList.remove('hidden');
         }
-    },
+        if (content) content.classList.add('hidden');
+    } else {
+        if (loader) loader.classList.add('hidden');
+        if (content) content.classList.remove('hidden');
+    }
+},
 
     // 2. แสดงข้อมูล Show Info
     renderShowInfo(show) {
