@@ -104,13 +104,16 @@ export function formatTimestamp(timestamp) {
 }
 export const formatDate = formatTimestamp; 
 
-// --- 5. Video Player Utility (แก้ปัญหาจอเล็กที่นี่!) ---
+// --- 5. Video Player Utility (แก้ไข 404 และ จอเล็ก) ---
 
 export function generateVideoEmbed(inputUrl) {
-    if (!inputUrl) return "";
+    // 1. กัน Error 404 จากลิงก์ว่าง
+    if (!inputUrl || inputUrl === 'undefined' || inputUrl === 'null') return "";
+    
     let url = inputUrl.trim();
+    if (!url) return "";
 
-    // ✅ บังคับให้เต็มจอ: ใส่ style นี้ลงไปในทุก iframe
+    // Style บังคับเต็มจอ (แก้ปัญหาจอเล็ก)
     const responsiveStyle = 'class="absolute inset-0 w-full h-full border-0" allowfullscreen webkitallowfullscreen mozallowfullscreen allow="autoplay; encrypted-media; fullscreen; picture-in-picture"';
 
     // 1. YouTube
@@ -122,14 +125,14 @@ export function generateVideoEmbed(inputUrl) {
         return videoId ? `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0" ${responsiveStyle}></iframe>` : '';
     }
 
-    // 2. OK.RU (แก้ให้ลิงก์ธรรมดากลายเป็น Embed อัตโนมัติ)
+    // 2. OK.RU (แก้ลิงก์ให้เป็น Embed)
     if (url.includes('ok.ru')) {
         if (!url.startsWith('http')) url = 'https:' + url;
         if (url.includes('/video/')) url = url.replace('/video/', '/videoembed/');
         return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
     }
 
-    // 3. Archive.org (แก้ให้ลิงก์ธรรมดากลายเป็น Embed อัตโนมัติ)
+    // 3. Archive.org (แก้ลิงก์ให้เป็น Embed)
     if (url.includes('archive.org')) {
         if (url.includes('/details/')) url = url.replace('/details/', '/embed/');
         return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
@@ -147,12 +150,13 @@ export function generateVideoEmbed(inputUrl) {
         return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
     }
 
-    // 6. Generic Fallback & Existing Iframe Fix
+    // 6. Generic Fallback
+    // ถ้าเป็น iframe มาแล้ว ให้แก้ width/height เป็นเต็มจอ
     if (url.startsWith('<iframe')) {
-        // ถ้าเป็น iframe อยู่แล้ว ให้ลบ width/height เดิมออก แล้วใส่ class เต็มจอแทน
         return url.replace(/width="[^"]*"/g, '').replace(/height="[^"]*"/g, '')
                   .replace('<iframe', `<iframe ${responsiveStyle}`);
     }
 
+    // ถ้าเป็นลิงก์ทั่วไป ให้ใส่ iframe ครอบ
     return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
 }
