@@ -1,3 +1,5 @@
+// js/utils/tools.js
+
 // --- 1. General Utilities ---
 
 // ✅ Debounce: ฟังก์ชันหน่วงเวลา (สำคัญมากสำหรับช่องค้นหา)
@@ -29,7 +31,7 @@ const imageObserver = new IntersectionObserver((entries, observer) => {
             const src = img.getAttribute('data-src');
             
             if (src) {
-                // เทคนิค: โหลดรูปใน Memory ก่อน
+                // เทคนิค: โหลดรูปใน Memory ก่อนเพื่อความลื่นไหล
                 const tempImage = new Image();
                 tempImage.src = src;
                 
@@ -75,7 +77,7 @@ export function observeImages(container = document) {
     });
 }
 
-// --- 3. Text & Search Utilities (ของเดิมที่กู้คืนมา) ---
+// --- 3. Text & Search Utilities ---
 
 export function normalizeThai(text) {
     if (typeof text !== 'string') return text || '';
@@ -131,47 +133,61 @@ export function formatTimestamp(timestamp) {
     }
 }
 
-// Alias: เผื่อบางไฟล์เรียกใช้ชื่อ formatDate
 export const formatDate = formatTimestamp; 
 
-// --- 5. Video Player Utility (ของเดิมที่กู้คืนมา - สำคัญมากสำหรับหน้า Player) ---
+// --- 5. Video Player Utility (ฉบับปรับปรุง Fullscreen & Compatibility) ---
 
 export function generateVideoEmbed(inputUrl) {
     if (!inputUrl) return "";
     let url = inputUrl.trim();
 
-    // กรณีเป็น iframe อยู่แล้ว
-    if (url.startsWith('<iframe')) {
-        if (!url.includes('loading=')) {
-            return url.replace('<iframe', '<iframe loading="lazy"');
+    // Style บังคับเต็มจอ (สำคัญสำหรับหน้า Player ใหม่)
+    const responsiveStyle = 'class="absolute inset-0 w-full h-full border-0" allowfullscreen webkitallowfullscreen mozallowfullscreen allow="autoplay; encrypted-media; fullscreen; picture-in-picture"';
+
+    // 1. YouTube
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        let videoId = '';
+        if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0];
+        else if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].split('?')[0];
+        else if (url.includes('/embed/')) videoId = url.split('/embed/')[1].split('?')[0];
+        
+        return videoId ? `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0" ${responsiveStyle}></iframe>` : '';
+    }
+
+    // 2. OK.RU (Fix: Protocol & Embed Path)
+    if (url.includes('ok.ru')) {
+        if (!url.startsWith('http')) url = 'https:' + url; // บังคับ https
+        if (url.includes('/video/')) url = url.replace('/video/', '/videoembed/'); // แปลงลิงก์ดูเป็นลิงก์ฝัง
+        return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
+    }
+
+    // 3. Archive.org (Fix: Embed Path)
+    if (url.includes('archive.org')) {
+        if (url.includes('/details/')) url = url.replace('/details/', '/embed/');
+        return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
+    }
+
+    // 4. Dailymotion
+    if (url.includes('dailymotion.com')) {
+        let videoId = url.split('/video/')[1]?.split('?')[0];
+        if (videoId) {
+            return `<iframe src="https://www.dailymotion.com/embed/video/${videoId}?autoplay=1" ${responsiveStyle}></iframe>`;
         }
-        return url; 
     }
 
-    // YouTube
-    const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
-    const ytMatch = url.match(ytRegex);
-    if (ytMatch && ytMatch[1]) {
-        const videoId = ytMatch[1];
-        return `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&showinfo=0" 
-                width="100%" height="100%" 
-                frameborder="0" 
-                loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"></iframe>`;
+    // 5. Google Drive
+    if (url.includes('drive.google.com')) {
+        url = url.replace('/view', '/preview');
+        return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
     }
 
-    // Dailymotion
-    const dmRegex = /dailymotion\.com\/video\/([a-zA-Z0-9]+)/i;
-    const dmMatch = url.match(dmRegex);
-    if (dmMatch && dmMatch[1]) {
-        const videoId = dmMatch[1];
-        return `<iframe src="https://www.dailymotion.com/embed/video/${videoId}?autoplay=1" 
-                width="100%" height="100%" 
-                frameborder="0" 
-                loading="lazy"
-                allow="autoplay; fullscreen"></iframe>`;
+    // 6. Generic Fallback (สำหรับเว็บอื่นๆ หรือถ้าเป็น iframe มาอยู่แล้ว)
+    if (url.startsWith('<iframe')) {
+        // ถ้า user แปะโค้ด iframe มาเอง ให้แก้ width/height เป็น class แทน
+        return url.replace(/width="[^"]*"/g, '').replace(/height="[^"]*"/g, '')
+                  .replace('<iframe', `<iframe ${responsiveStyle}`);
     }
 
-    // Default (URL ทั่วไป)
-    return `<iframe src="${url}" width="100%" height="100%" frameborder="0" loading="lazy" allow="autoplay; fullscreen"></iframe>`;
+    // ลิงก์ตรงๆ ทั่วไป
+    return `<iframe src="${url}" ${responsiveStyle}></iframe>`;
 }
