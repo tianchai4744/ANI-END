@@ -4,12 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>รายการอนิเมะ - ANI-END</title>
-    
     <link rel="stylesheet" href="../style.css">
-    
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-
     <style>
         body { font-family: 'Prompt', sans-serif; }
         .skeleton {
@@ -17,10 +14,7 @@
             background-size: 200% 100%;
             animation: loading 1.5s infinite;
         }
-        @keyframes loading {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
+        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         .scroll-to-top { transition: all 0.3s; visibility: hidden; opacity: 0; transform: translateY(20px); }
         .scroll-to-top.visible { visibility: visible; opacity: 1; transform: translateY(0); }
     </style>
@@ -30,7 +24,6 @@
     <div id="navbar-placeholder" class="sticky top-0 z-50"></div>
 
     <main class="flex-grow container mx-auto px-4 py-8 mt-4">
-        
         <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
             <div>
                 <h1 id="page-title" class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500">
@@ -38,7 +31,6 @@
                 </h1>
                 <p id="result-count" class="text-gray-400 text-sm mt-1">กำลังโหลดข้อมูล...</p>
             </div>
-            
             <a href="grid.html" id="clear-search-btn" class="hidden px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors flex items-center gap-2">
                 <i class="ri-close-circle-line"></i> ล้างการค้นหา
             </a>
@@ -64,7 +56,6 @@
             <h3 class="text-xl font-semibold text-gray-400">ไม่พบข้อมูล</h3>
             <p class="text-gray-500 mt-2">ลองเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่อื่น</p>
         </div>
-
     </main>
 
     <button id="scroll-to-top" class="scroll-to-top fixed bottom-8 right-8 bg-green-600 text-white p-3 rounded-full shadow-lg cursor-pointer hover:bg-green-700 z-50">
@@ -78,247 +69,5 @@
     </footer>
 
     <script type="module" src="../js/pages/grid.js"></script>
-        import { loadNavbar } from "../js/modules/navbar.js";
-        import { createAnimeCard } from "../js/modules/card.js";
-        import { observeImages } from "../js/utils/tools.js";
-        
-        // Import ระบบค้นหา
-        import { searchAnime, loadSearchIndex } from "../js/services/search-index.js";
-        import { setupSearchSystem } from "../js/modules/search.js"; // <--- [เพิ่มบรรทัดนี้]
-        
-        // Import Firebase
-        import { db, appId } from "../js/config/db-config.js";
-        import { collection, query, orderBy, limit, getDocs, where, startAfter } from "firebase/firestore";
-        
-        // --- State Management ---
-        const ITEMS_PER_PAGE = 24;
-        let currentMode = 'latest'; 
-        let currentTag = '';
-        let lastDoc = null; 
-        
-        let searchResultsBuffer = []; 
-        let currentSearchPage = 0;
-
-        let hasMore = true;
-        let isLoading = false;
-
-        // UI Elements
-        const gridContainer = document.getElementById('anime-grid');
-        const loadMoreBtn = document.getElementById('load-more-btn');
-        const noResults = document.getElementById('no-results');
-        const pageTitle = document.getElementById('page-title');
-        const resultCount = document.getElementById('result-count');
-        const clearBtn = document.getElementById('clear-search-btn');
-        const scrollToTopBtn = document.getElementById('scroll-to-top');
-
-        // --- Initialization ---
-        async function initPage() {
-            // โหลด Navbar ก่อน
-            await loadNavbar('../');
-            
-            // [เพิ่มบรรทัดนี้] สั่งให้ช่องค้นหาทำงาน (ดักจับ Enter และ Dropdown)
-            setupSearchSystem(); 
-
-            // ตรวจสอบ URL เพื่อดูว่าจะแสดงโหมดไหน
-            const urlParams = new URLSearchParams(window.location.search);
-            const searchQuery = urlParams.get('search');
-            const tagQuery = urlParams.get('tag');
-
-            // Reset UI
-            gridContainer.innerHTML = ''; 
-            loadMoreBtn.classList.add('hidden');
-            renderSkeletons();
-
-            if (searchQuery) {
-                currentMode = 'search';
-                await handleSearchMode(searchQuery);
-            } else if (tagQuery) {
-                currentMode = 'tag';
-                currentTag = decodeURIComponent(tagQuery);
-                await handleTagMode(currentTag);
-            } else {
-                currentMode = 'latest';
-                await handleLatestMode();
-            }
-        }
-
-        // --- Mode 1: Search ---
-        async function handleSearchMode(term) {
-            pageTitle.innerHTML = `ผลการค้นหา: "<span class="text-green-400">${term}</span>"`;
-            clearBtn.classList.remove('hidden');
-            resultCount.textContent = "กำลังค้นหาข้อมูล...";
-
-            try {
-                await loadSearchIndex(); 
-                searchResultsBuffer = searchAnime(term); 
-                
-                resultCount.textContent = `พบทั้งหมด ${searchResultsBuffer.length} เรื่อง`;
-                
-                if (searchResultsBuffer.length === 0) {
-                    showNoResults();
-                } else {
-                    renderSearchBatch(); 
-                }
-            } catch (error) {
-                console.error("Search Error:", error);
-                showError();
-            }
-        }
-
-        function renderSearchBatch() {
-            const start = currentSearchPage * ITEMS_PER_PAGE;
-            const end = start + ITEMS_PER_PAGE;
-            const batch = searchResultsBuffer.slice(start, end);
-
-            renderCards(batch);
-
-            if (end >= searchResultsBuffer.length) {
-                hasMore = false;
-                loadMoreBtn.classList.add('hidden');
-            } else {
-                hasMore = true;
-                currentSearchPage++;
-                loadMoreBtn.classList.remove('hidden');
-            }
-        }
-
-        // --- Mode 2: Tag Filter ---
-        async function handleTagMode(tag) {
-            pageTitle.innerText = `หมวดหมู่: ${tag}`;
-            clearBtn.classList.add('hidden');
-            await fetchFirebaseData(
-                query(
-                    collection(db, `artifacts/${appId}/public/data/shows`),
-                    where("tags", "array-contains", tag),
-                    orderBy("updatedAt", "desc"),
-                    limit(ITEMS_PER_PAGE)
-                )
-            );
-        }
-
-        // --- Mode 3: Latest Updates ---
-        async function handleLatestMode() {
-            pageTitle.innerText = "อัปเดตล่าสุด";
-            clearBtn.classList.add('hidden');
-            await fetchFirebaseData(
-                query(
-                    collection(db, `artifacts/${appId}/public/data/shows`),
-                    orderBy("updatedAt", "desc"),
-                    limit(ITEMS_PER_PAGE)
-                )
-            );
-        }
-
-        // --- Shared Firebase Fetcher ---
-        async function fetchFirebaseData(q) {
-            if (isLoading) return;
-            isLoading = true;
-            loadMoreBtn.disabled = true;
-            loadMoreBtn.innerText = "กำลังโหลด...";
-
-            try {
-                if (lastDoc) {
-                    q = query(q, startAfter(lastDoc));
-                }
-
-                const snapshot = await getDocs(q);
-                const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                if (items.length > 0) {
-                    lastDoc = snapshot.docs[snapshot.docs.length - 1];
-                    renderCards(items);
-                    
-                    if (items.length < ITEMS_PER_PAGE) {
-                        hasMore = false;
-                        loadMoreBtn.classList.add('hidden');
-                    } else {
-                        hasMore = true;
-                        loadMoreBtn.classList.remove('hidden');
-                    }
-                    
-                    if (currentMode === 'tag' || currentMode === 'latest') {
-                        resultCount.textContent = `แสดงรายการที่โหลดแล้ว ${gridContainer.children.length} เรื่อง`;
-                    }
-
-                } else {
-                    hasMore = false;
-                    loadMoreBtn.classList.add('hidden');
-                    if (gridContainer.children.length === 0) showNoResults();
-                }
-
-            } catch (error) {
-                console.error("Firebase Error:", error);
-                showError();
-            } finally {
-                isLoading = false;
-                loadMoreBtn.disabled = false;
-                loadMoreBtn.innerText = "โหลดเพิ่มเติม";
-                const skeletons = gridContainer.querySelectorAll('.skeleton');
-                skeletons.forEach(el => el.remove());
-            }
-        }
-
-        // --- UI Helpers ---
-        function renderCards(items) {
-            if (gridContainer.querySelector('.skeleton')) {
-                gridContainer.innerHTML = '';
-            }
-
-            const html = items.map(show => createAnimeCard(show)).join('');
-            gridContainer.insertAdjacentHTML('beforeend', html);
-            observeImages(gridContainer);
-        }
-
-        function renderSkeletons() {
-            let html = '';
-            for(let i=0; i<12; i++) {
-                html += `<div class="aspect-[2/3] rounded-xl skeleton"></div>`;
-            }
-            gridContainer.innerHTML = html;
-        }
-
-        function showNoResults() {
-            gridContainer.classList.add('hidden');
-            noResults.classList.remove('hidden');
-            loadMoreBtn.classList.add('hidden');
-            const skeletons = gridContainer.querySelectorAll('.skeleton');
-            skeletons.forEach(el => el.remove());
-        }
-
-        function showError() {
-            gridContainer.innerHTML = `<p class="col-span-full text-center text-red-400 py-10">เกิดข้อผิดพลาดในการโหลดข้อมูล โปรดลองใหม่</p>`;
-        }
-
-        // --- Event Listeners ---
-        loadMoreBtn.addEventListener('click', () => {
-            if (currentMode === 'search') {
-                renderSearchBatch();
-            } else if (currentMode === 'tag') {
-                const q = query(
-                    collection(db, `artifacts/${appId}/public/data/shows`),
-                    where("tags", "array-contains", currentTag),
-                    orderBy("updatedAt", "desc"),
-                    limit(ITEMS_PER_PAGE)
-                );
-                fetchFirebaseData(q);
-            } else {
-                const q = query(
-                    collection(db, `artifacts/${appId}/public/data/shows`),
-                    orderBy("updatedAt", "desc"),
-                    limit(ITEMS_PER_PAGE)
-                );
-                fetchFirebaseData(q);
-            }
-        });
-
-        scrollToTopBtn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
-        window.addEventListener('scroll', () => {
-            scrollToTopBtn.classList.toggle('visible', window.scrollY > 300);
-        });
-
-        document.addEventListener('DOMContentLoaded', initPage);
-
-    </script>
 </body>
 </html>
-
