@@ -6,134 +6,128 @@
     <title>เครื่องเล่นวิดีโอ - ANI-END</title>
     <link rel="stylesheet" href="../style.css">
     <style>
-        .aspect-video-container { position: relative; width: 100%; padding-bottom: 56.25%; /* 16:9 Aspect Ratio */ background-color: black; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
-        .aspect-video-container > div, .aspect-video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        /* สไตล์เฉพาะหน้าที่จำเป็นสำหรับการจัดระเบียบ */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #22c55e;
+            border-radius: 50%;
+            width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* ซ่อน Scrollbar */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-[#0f172a] text-gray-100 min-h-screen flex flex-col font-sans">
 
     <div id="navbar-placeholder"></div>
 
-    <main class="flex-grow w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <main class="flex-grow w-full max-w-[1600px] mx-auto px-0 sm:px-4 lg:px-6 py-4 sm:py-6">
         
         <div id="loading-player" class="flex flex-col items-center justify-center min-h-[60vh] text-center">
             <div class="spinner mb-4"></div>
             <p class="text-gray-400 animate-pulse">กำลังโหลดข้อมูล...</p>
         </div>
 
-        <div id="player-content-wrapper" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div id="player-content-wrapper" class="hidden grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             
-            <div class="lg:col-span-8 xl:col-span-9 space-y-6">
-                
-                <div class="aspect-video-container ring-1 ring-gray-800">
-                    <div id="video-player-embed">
+            <div class="lg:col-span-2 xl:col-span-3 space-y-6">
+                <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl ring-1 ring-gray-800 group">
+                    <div id="video-player-embed" class="w-full h-full flex items-center justify-center">
                         </div>
                 </div>
 
-                <div class="flex items-center justify-between bg-gray-900/80 p-4 rounded-xl border border-gray-800 backdrop-blur-sm shadow-lg">
-                    <button id="prev-episode-btn" class="flex items-center gap-2 px-5 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md">
-                        <i class="ri-skip-back-line text-lg"></i> <span class="hidden sm:inline">ตอนก่อนหน้า</span>
+                <div class="flex items-center justify-between bg-gray-900/80 p-3 rounded-lg border border-gray-800 backdrop-blur-sm">
+                    <button id="prev-episode-btn" class="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="ri-skip-back-line"></i> ตอนก่อนหน้า
                     </button>
-                    
-                    <div class="text-center px-4">
-                        <h1 id="show-title" class="text-lg sm:text-xl font-bold text-white line-clamp-1">...</h1>
-                    </div>
-
-                    <button id="next-episode-btn" class="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg shadow-green-900/20">
-                        <span class="hidden sm:inline">ตอนถัดไป</span> <i class="ri-skip-forward-line text-lg"></i>
+                    <span class="text-gray-400 text-xs sm:text-sm hidden sm:block">กดปุ่มเพื่อเปลี่ยนตอน</span>
+                    <button id="next-episode-btn" class="flex items-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 text-white rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        ตอนถัดไป <i class="ri-skip-forward-line"></i>
                     </button>
                 </div>
 
-                <div class="bg-gray-900/50 rounded-xl p-6 border border-gray-800">
-                    <div class="flex justify-between items-start gap-4 mb-4">
-                        <div class="flex gap-3">
-                            <button id="btn-bookmark" class="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-pink-900/30 hover:text-pink-400 border border-gray-700 rounded-full transition-all text-sm group">
-                                <i class="ri-heart-line group-hover:scale-110 transition-transform"></i> รายการโปรด
+                <div class="bg-gray-900/50 rounded-xl p-5 border border-gray-800">
+                    <div class="flex justify-between items-start gap-4">
+                        <h1 id="show-title" class="text-xl sm:text-2xl font-bold text-white leading-tight">...</h1>
+                        <div class="flex gap-2 shrink-0">
+                            <button id="report-broken-btn" class="text-gray-400 hover:text-red-400 p-2 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition-colors" title="แจ้งไฟล์เสีย">
+                                <i class="ri-alarm-warning-line"></i>
                             </button>
-                            <button id="report-broken-btn" class="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-red-900/30 hover:text-red-400 border border-gray-700 rounded-full transition-all text-sm">
-                                <i class="ri-alarm-warning-line"></i> แจ้งเสีย
+                            <button id="btn-bookmark" class="text-gray-400 hover:text-pink-400 p-2 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition-colors" title="เก็บไว้ดูภายหลัง">
+                                <i class="ri-heart-line"></i>
                             </button>
                         </div>
                     </div>
                     
-                    <div id="broken-alert" class="hidden mb-4 bg-red-900/20 border border-red-900/50 text-red-200 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-                        <i class="ri-error-warning-fill"></i> มีการแจ้งปัญหาไฟล์เสียสำหรับตอนนี้
+                    <div id="broken-alert" class="hidden mt-3 bg-red-900/30 border border-red-900/50 text-red-200 px-4 py-3 rounded-lg text-sm flex items-center gap-2 animate-pulse">
+                        <i class="ri-error-warning-fill"></i> มีการแจ้งปัญหาไฟล์เสียสำหรับตอนนี้ ทีมงานกำลังตรวจสอบ
                     </div>
 
-                    <div class="relative">
-                        <p id="show-description" class="text-gray-400 text-sm leading-relaxed line-clamp-2"></p>
-                        <button id="expand-desc-btn" class="text-xs text-green-500 hover:text-green-400 mt-2 hidden font-medium focus:outline-none">อ่านเพิ่มเติม</button>
-                    </div>
+                    <p id="show-description" class="mt-4 text-gray-400 text-sm leading-relaxed line-clamp-2">...</p>
+                    <button id="expand-desc-btn" class="text-xs text-green-500 hover:text-green-400 mt-1 hidden">เพิ่มเติม</button>
                 </div>
 
                 <div class="bg-gray-900/50 rounded-xl border border-gray-800 overflow-hidden">
                     <div class="flex border-b border-gray-800">
-                        <button id="tab-comment-episode" class="flex-1 py-4 text-sm font-bold text-green-400 border-b-2 border-green-500 bg-gray-800/30">
+                        <button id="tab-comment-episode" class="flex-1 py-3 text-sm font-bold text-green-400 border-b-2 border-green-500 bg-gray-800/50">
                             <i class="ri-chat-3-line mr-1"></i> คอมเมนต์ตอนนี้
                         </button>
-                        <button id="tab-comment-show" class="flex-1 py-4 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
-                            <i class="ri-discuss-line mr-1"></i> พูดคุยทั้งเรื่อง
+                        <button id="tab-comment-show" class="flex-1 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
+                            <i class="ri-discuss-line mr-1"></i> คอมเมนต์ทั้งเรื่อง
                         </button>
                     </div>
                     
-                    <div class="p-6">
-                        <div id="comment-login-prompt" class="text-center py-8 bg-gray-800/30 rounded-xl border border-gray-700/50 border-dashed">
-                            <i class="ri-user-voice-line text-4xl text-gray-600 mb-2"></i>
-                            <p class="text-gray-400 text-sm mb-4">เข้าสู่ระบบเพื่อร่วมพูดคุย</p>
-                            <button onclick="window.triggerLogin()" class="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-full text-sm font-medium transition-colors">เข้าสู่ระบบ</button>
-                        </div>
-
-                        <div id="comment-input-area" class="hidden mb-8">
-                            <div class="flex gap-4">
-                                <img id="comment-user-avatar" src="" class="w-10 h-10 rounded-full bg-gray-700 object-cover ring-2 ring-gray-800">
-                                <div class="flex-1">
-                                    <textarea id="comment-input" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-sm text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all resize-none placeholder-gray-500" placeholder="แสดงความคิดเห็นของคุณ..."></textarea>
-                                    <div class="flex justify-end mt-2">
-                                        <button id="btn-post-comment" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-full text-sm font-bold transition-all hover:shadow-lg shadow-green-900/20">โพสต์ความคิดเห็น</button>
-                                    </div>
+                    <div class="p-4 sm:p-6">
+                        <div id="comment-input-area" class="flex gap-3 mb-6 hidden">
+                            <img id="comment-user-avatar" src="" class="w-10 h-10 rounded-full bg-gray-700 object-cover flex-shrink-0">
+                            <div class="flex-1">
+                                <textarea id="comment-input" rows="2" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all resize-none" placeholder="แสดงความคิดเห็นของคุณ..."></textarea>
+                                <div class="flex justify-end mt-2">
+                                    <button id="btn-post-comment" class="bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-colors shadow-lg">โพสต์</button>
                                 </div>
                             </div>
                         </div>
 
-                        <div id="comments-list" class="space-y-6"></div>
+                        <div id="comment-login-prompt" class="text-center py-6 bg-gray-800/30 rounded-lg mb-6 border border-gray-700/50 border-dashed">
+                            <p class="text-gray-400 text-sm mb-3">เข้าสู่ระบบเพื่อแสดงความคิดเห็น</p>
+                            <button onclick="window.triggerLogin()" class="text-green-400 hover:text-green-300 font-bold text-sm underline">คลิกเพื่อเข้าสู่ระบบ</button>
+                        </div>
+
+                        <div id="comments-list" class="space-y-4"></div>
                         
-                        <button id="btn-load-more-comments" class="w-full mt-6 py-3 text-xs text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-800 rounded-xl transition-colors hidden border border-gray-800">
-                            โหลดความคิดเห็นเพิ่มเติม
-                        </button>
+                        <button id="btn-load-more-comments" class="w-full mt-4 py-2 text-xs text-gray-500 hover:text-white bg-gray-800 hover:bg-gray-700 rounded transition-colors hidden">โหลดเพิ่มเติม</button>
                     </div>
                 </div>
             </div>
 
-            <div class="lg:col-span-4 xl:col-span-3 space-y-6">
-                
-                <div class="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg flex flex-col max-h-[600px]">
-                    <div class="p-4 border-b border-gray-800 bg-gray-800/80 backdrop-blur sticky top-0 z-10 flex justify-between items-center">
-                        <h3 class="font-bold flex items-center gap-2 text-white"><i class="ri-list-check text-green-500"></i> เลือกตอน</h3>
+            <div class="space-y-6">
+                <div class="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg flex flex-col max-h-[500px] lg:max-h-[600px]">
+                    <div class="p-4 border-b border-gray-800 bg-gray-800/50 flex justify-between items-center sticky top-0 z-10 backdrop-blur">
+                        <h3 class="font-bold flex items-center gap-2"><i class="ri-list-check"></i> เลือกตอน</h3>
                         <div id="episode-range-container" class="hidden">
-                            <select id="episode-range-select" class="bg-black border border-gray-700 text-xs rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-green-500 outline-none text-gray-300 cursor-pointer hover:bg-gray-800 transition-colors">
+                            <select id="episode-range-select" class="bg-gray-900 border border-gray-700 text-xs rounded px-2 py-1 focus:ring-1 focus:ring-green-500 outline-none text-gray-300">
                                 </select>
                         </div>
                     </div>
                     
-                    <div id="episode-list-container" class="p-3 overflow-y-auto custom-scrollbar-y flex flex-wrap content-start gap-2 bg-gray-900/50 min-h-[200px]">
+                    <div id="episode-list-container" class="p-2 overflow-y-auto custom-scrollbar-y flex flex-wrap content-start gap-2">
                         </div>
                 </div>
 
-                <div class="bg-gray-900/50 rounded-xl border border-gray-800 p-5">
-                    <h3 class="font-bold mb-4 flex items-center gap-2 text-sm text-gray-300 uppercase tracking-wide">
-                        <i class="ri-film-line text-blue-400"></i> อนิเมะที่คล้ายกัน
-                    </h3>
-                    <div id="related-list-container" class="grid grid-cols-2 gap-3"></div>
+                <div class="bg-gray-900/50 rounded-xl border border-gray-800 p-4">
+                    <h3 class="font-bold mb-4 flex items-center gap-2 text-sm text-gray-300"><i class="ri-film-line"></i> อนิเมะที่คล้ายกัน</h3>
+                    <div id="related-list-container" class="grid grid-cols-2 sm:grid-cols-2 gap-3"></div>
                 </div>
 
-                <div class="bg-gray-900/50 rounded-xl border border-gray-800 p-5">
-                    <h3 class="font-bold mb-4 flex items-center gap-2 text-sm text-gray-300 uppercase tracking-wide">
-                        <i class="ri-fire-line text-orange-500"></i> ยอดนิยมสูงสุด
-                    </h3>
-                    <div id="top10-list-container" class="space-y-1"></div>
+                <div class="bg-gray-900/50 rounded-xl border border-gray-800 p-4">
+                    <h3 class="font-bold mb-4 flex items-center gap-2 text-sm text-gray-300"><i class="ri-fire-line text-orange-500"></i> ยอดนิยมสูงสุด</h3>
+                    <div id="top10-list-container"></div>
                 </div>
-
             </div>
+
         </div>
     </main>
 
