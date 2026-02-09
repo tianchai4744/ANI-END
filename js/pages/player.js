@@ -12,7 +12,7 @@ import { observeImages } from "../utils/tools.js";
 import * as PlayerLogic from "../modules/player-core.js"; // 🧠 นำเข้าสมอง (แบบใหม่)
 import { PlayerRenderer } from "../renderers/player-renderer.js"; // 🎨 นำเข้าร่างกาย (แบบใหม่)
 
-// Sub-Modules (Modules เหล่านี้ยังคงเดิมไว้ก่อน)
+// Sub-Modules (Modules เหล่านี้ใช้เหมือนเดิม)
 import { initEpisodeList, loadEpisodesByRange, highlightActiveEpisode, findNextPrevEpisode, checkAndLoadEpisodeBatch } from "../modules/episode-list.js";
 import { initBookmarkSystem } from "../modules/bookmark-manager.js";
 import { trackView, saveHistory, loadWatchHistory } from "../modules/watch-service.js";
@@ -45,7 +45,7 @@ async function playEpisode(episode) {
     if (embedHtml) {
         PlayerRenderer.renderVideoPlayer(embedHtml);
     } else {
-        PlayerRenderer.renderVideoMessage("ไม่พบลิงก์วิดีโอ", true);
+        PlayerRenderer.renderVideoMessage("ไม่พบลิงก์วิดีโอ หรือลิงก์เสีย", true);
     }
     
     PlayerRenderer.updatePageMeta(metaData);
@@ -54,11 +54,11 @@ async function playEpisode(episode) {
     // 3. Update Browser State (URL)
     PlayerLogic.updateUrlState(episode.id);
 
-    // 4. Call External Services (เรียก service อื่นๆ)
+    // 4. Call External Services (บันทึกประวัติ / ยอดวิว)
     if (currentUser) saveHistory(currentUser.uid, currentShow, episode);
     trackView(currentShow.id);
     
-    // 5. Update Other UI Components
+    // 5. Update Other UI Components (ส่วนประกอบเสริม)
     highlightActiveEpisode(episode.id);
     updateReportUI(episode);
     initCommentSystem(currentShow.id, episode.id, episode.number);
@@ -71,21 +71,23 @@ async function playEpisode(episode) {
 async function navigateEpisode(direction) {
     if (!currentEpisode) return;
     
-    // ปิดปุ่มชั่วคราวผ่าน Renderer
+    // ปิดปุ่มชั่วคราวกันกดรัว
     PlayerRenderer.updateNavButtons(false, false);
 
     try {
         const nextEp = await findNextPrevEpisode(currentEpisode.number, direction, currentShow);
+        
         if (nextEp) {
+            // เช็คว่าต้องโหลดตอนชุดใหม่ไหม (Batch Loading)
             await checkAndLoadEpisodeBatch(nextEp.number, playEpisode);
             playEpisode(nextEp);
         } else {
-            // คืนสถานะปุ่มถ้าไปต่อไม่ได้
+            // ถ้าไปต่อไม่ได้ ให้คืนสถานะปุ่มตามจริง
             const navStatus = PlayerLogic.checkNavStatus(currentEpisode.number, currentShow.latestEpisodeNumber);
             PlayerRenderer.updateNavButtons(navStatus.canGoPrev, navStatus.canGoNext);
         }
     } catch(e) { 
-        console.error(e);
+        console.error("Navigation Error:", e);
         // คืนสถานะปุ่มกรณี Error
         const navStatus = PlayerLogic.checkNavStatus(currentEpisode.number, currentShow.latestEpisodeNumber);
         PlayerRenderer.updateNavButtons(navStatus.canGoPrev, navStatus.canGoNext);
@@ -101,9 +103,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     PlayerRenderer.toggleLoading(true);
     
     // Event Bindings
-    document.getElementById('prev-episode-btn').onclick = () => navigateEpisode('prev');
-    document.getElementById('next-episode-btn').onclick = () => navigateEpisode('next');
-    document.getElementById('btn-post-comment')?.addEventListener('click', () => postComment(currentUser));
+    const prevBtn = document.getElementById('prev-episode-btn');
+    const nextBtn = document.getElementById('next-episode-btn');
+    const commentBtn = document.getElementById('btn-post-comment');
+
+    if(prevBtn) prevBtn.onclick = () => navigateEpisode('prev');
+    if(nextBtn) nextBtn.onclick = () => navigateEpisode('next');
+    if(commentBtn) commentBtn.addEventListener('click', () => postComment(currentUser));
 
     // Auth & Data Loading
     onAuthStateChanged(auth, async (user) => {
@@ -152,29 +158,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             initReportSystem(user, currentShow, () => currentEpisode); 
             renderRelatedAnime(currentShow, historyItems);
             
-            // Render Top 10
+            // Render Top 10 (Lazy Load Image)
             renderPlayerTop10(historyItems);
-            setTimeout(() => observeImages(document.getElementById('top10-list-container')), 500);
+            const top10Container = document.getElementById('top10-list-container');
+            if (top10Container) setTimeout(() => observeImages(top10Container), 500);
 
             // 5. Init Episode List & Play
+            // โหลดรายการตอนทั้งหมดเข้ามาก่อน
             await initEpisodeList(showId, currentShow.latestEpisodeNumber, playEpisode);
 
             if (targetEpId) {
+                // กรณีมี ID ตอนระบุมา (จาก URL หรือ History)
                 const epSnap = await getDoc(doc(db, `artifacts/${appId}/public/data/episodes`, targetEpId));
                 if (epSnap.exists()) {
                     const epData = { id: epSnap.id, ...epSnap.data() };
                     targetEpNum = epData.number;
+                    // โหลด Batch ที่ตอนนั้นอยู่
                     await checkAndLoadEpisodeBatch(targetEpNum, playEpisode);
                     playEpisode(epData);
                 } else {
+                     // ถ้าหาตอนไม่เจอ ให้โหลดตอนที่ 1 มาเตรียมไว้
                      await checkAndLoadEpisodeBatch(1, playEpisode);
-                     // กรณีหาไม่เจอ ให้ลองเล่นตอนที่ 1 แทน (หรือแจ้งเตือน)
-                     // แต่ต้องดึงข้อมูลตอนที่ 1 มาก่อน ซึ่ง logic เดิมอาจจะซับซ้อน
-                     // ในที่นี้เราปล่อยให้ list จัดการ หรือ user กดเลือกเอง
-                     PlayerRenderer.renderVideoMessage("กรุณาเลือกตอนที่จะรับชม");
+                     PlayerRenderer.renderVideoMessage("ไม่พบตอนที่ระบุ กรุณาเลือกจากรายการด้านล่าง");
                 }
             } else {
-                // ไม่มี target ID, โหลด list ช่วงแรก แล้วเล่นตอนแรกสุดที่มี
+                // กรณีไม่มี ID ระบุมา (เปิดครั้งแรกแบบไม่มีประวัติ)
                 const episodes = await loadEpisodesByRange(1, 50, document.getElementById('episode-list-container'), playEpisode);
                 if (episodes && episodes.length > 0) {
                     playEpisode(episodes[0]);
@@ -192,5 +200,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Handle Browser Back Button
     window.addEventListener('popstate', () => window.location.reload());
 });
