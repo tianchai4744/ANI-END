@@ -1,23 +1,19 @@
 // js/renderers/player-renderer.js
-// 🎨 PLAYER RENDERER: รับผิดชอบเรื่องหน้าตาและการแสดงผล (Logic Free)
+// 🎨 PLAYER RENDERER: ส่วนแสดงผล (Dumb Component)
+// หน้าที่: รับข้อมูลดิบ -> แปลงเป็น HTML -> แปะลงหน้าเว็บ
 
 export const PlayerRenderer = {
-    // 1. จัดการหน้า Loading
-    toggleLoading(isLoading, errorMessage = null) {
+    // 1. จัดการ Loading Screen
+    toggleLoading(isLoading, message = "กำลังโหลดข้อมูล...") {
         const loader = document.getElementById('loading-player');
         const content = document.getElementById('player-content-wrapper');
         
         if (isLoading) {
             if (loader) {
                 loader.classList.remove('hidden');
-                if (errorMessage) {
-                    loader.innerHTML = `<p class="text-red-500 text-center mt-4 bg-black/50 p-2 rounded">${errorMessage}</p>`;
-                } else {
-                    // ถ้าไม่มี Spinner เดิม ให้สร้างใหม่, ถ้ามีแล้วก็ปล่อยไว้
-                    if (!loader.querySelector('.spinner')) {
-                         loader.innerHTML = '<div class="spinner"></div><p class="mt-4 text-gray-400 animate-pulse">กำลังโหลดข้อมูล...</p>';
-                    }
-                }
+                // Simple Text Update
+                const p = loader.querySelector('p');
+                if (p) p.textContent = message;
             }
             if (content) content.classList.add('hidden');
         } else {
@@ -26,122 +22,99 @@ export const PlayerRenderer = {
         }
     },
 
-    // 2. แสดงข้อมูลอนิเมะ (ชื่อ, คำอธิบาย, ปุ่มย่อ/ขยาย)
+    // 2. แสดงข้อมูล Show Info
     renderShowInfo(show) {
         if (!show) return;
         
-        const titleEl = document.getElementById('show-title');
+        this._setText('show-title', show.title);
+        
         const descEl = document.getElementById('show-description');
         const expandBtn = document.getElementById('expand-desc-btn');
 
-        if (titleEl) titleEl.textContent = show.title;
-        
         if (descEl) {
-            descEl.textContent = show.description || "ไม่มีคำอธิบาย";
+            descEl.textContent = show.description || "-";
+            descEl.classList.add('line-clamp-2'); // Reset state
             
-            // ✅ Fix: มั่นใจว่าเริ่มมาเป็นแบบย่อ (line-clamp-2) โดยไม่ล้าง class อื่นๆ
-            descEl.classList.add('line-clamp-2');
-
-            // Logic ปุ่มกด "เพิ่มเติม" (ย้ายมาจาก player-core เดิม)
-            // ใช้ setTimeout เพื่อรอให้ Browser วาด Text เสร็จก่อนคำนวณความสูงจริง
+            // Check overflow logic (Pure DOM check)
             setTimeout(() => {
-                // เช็คว่าข้อความยาวเกินกล่องหรือไม่
                 if (descEl.scrollHeight > descEl.clientHeight) {
                     if (expandBtn) {
                         expandBtn.classList.remove('hidden');
                         expandBtn.textContent = 'เพิ่มเติม';
-                        
-                        // Clone Node เพื่อล้าง Event Listener เก่า (กันกดเบิ้ล)
-                        const newBtn = expandBtn.cloneNode(true);
-                        expandBtn.parentNode.replaceChild(newBtn, expandBtn);
-                        
-                        newBtn.onclick = () => {
-                            const isClamped = descEl.classList.contains('line-clamp-2');
-                            if (isClamped) {
-                                descEl.classList.remove('line-clamp-2');
-                                newBtn.textContent = 'ย่อ';
-                            } else {
-                                descEl.classList.add('line-clamp-2');
-                                newBtn.textContent = 'เพิ่มเติม';
-                            }
+                        // Simple Toggle Logic injection
+                        expandBtn.onclick = () => {
+                            descEl.classList.toggle('line-clamp-2');
+                            expandBtn.textContent = descEl.classList.contains('line-clamp-2') ? 'เพิ่มเติม' : 'ย่อ';
                         };
                     }
                 } else {
-                    // ถ้าข้อความสั้น ให้ซ่อนปุ่ม
                     if (expandBtn) expandBtn.classList.add('hidden');
                 }
             }, 50);
         }
     },
 
-    // 3. แสดงวิดีโอ (รับ HTML String มาแปะ)
-    renderVideoPlayer(embedHtml) {
-        const playerEmbedDiv = document.getElementById('video-player-embed');
-        if (playerEmbedDiv) {
-            playerEmbedDiv.innerHTML = embedHtml;
+    // 3. แสดง Video Player
+    renderPlayer(embedHtml) {
+        const container = document.getElementById('video-player-embed');
+        if (!container) return;
+
+        if (embedHtml) {
+            container.innerHTML = embedHtml;
+        } else {
+            this.renderErrorState("ไม่พบลิงก์วิดีโอ หรือไฟล์ถูกลบ");
         }
     },
 
-    // 4. แสดงข้อความในกล่องวิดีโอ (กรณี Error หรือไม่มีตอน)
-    renderVideoMessage(message, isError = false) {
-        const playerEmbedDiv = document.getElementById('video-player-embed');
-        if (playerEmbedDiv) {
-            const colorClass = isError ? 'text-red-500' : 'text-gray-400';
-            // ปรับ UI ให้สวยงาม มี Icon และจัดกึ่งกลาง
-            playerEmbedDiv.innerHTML = `
-                <div class="w-full h-full flex flex-col items-center justify-center bg-black gap-2">
-                    <i class="${isError ? 'ri-error-warning-line' : 'ri-movie-line'} text-3xl ${colorClass}"></i>
-                    <p class="${colorClass} text-sm">${message}</p>
+    // 4. แสดง Error หรือ State ว่างเปล่าในกล่องวิดีโอ
+    renderErrorState(message) {
+        const container = document.getElementById('video-player-embed');
+        if (container) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-gray-400 bg-gray-900">
+                    <i class="ri-error-warning-line text-4xl mb-2"></i>
+                    <p>${message}</p>
                 </div>`;
         }
     },
 
-    // 5. อัปเดต Meta Tags และ Title Bar (SEO)
-    updatePageMeta(metaData) {
-        // อัปเดต Title Bar ของ Browser
-        document.title = metaData.title;
+    // 5. Update SEO Meta Tags
+    updateMetaData(meta) {
+        document.title = meta.title;
+        
+        // Update Header Title if exists
+        this._setText('show-title', meta.episodeTitle);
 
-        // ฟังก์ชันช่วยอัปเดต/สร้าง meta tag
-        const setMeta = (property, content) => {
-            let el = document.querySelector(`meta[property="${property}"]`) || document.querySelector(`meta[name="${property}"]`);
-            if (!el) {
-                el = document.createElement('meta');
-                if (property.startsWith('twitter')) el.setAttribute('name', property);
-                else el.setAttribute('property', property);
-                document.head.appendChild(el);
-            }
-            el.setAttribute('content', content);
+        const setMeta = (prop, content) => {
+            let el = document.querySelector(`meta[property="${prop}"]`) || document.querySelector(`meta[name="${prop}"]`);
+            if (el) el.setAttribute('content', content);
         };
 
-        setMeta('og:title', metaData.title);
-        setMeta('og:description', metaData.description);
-        setMeta('og:image', metaData.image);
-        setMeta('og:url', metaData.url);
-        setMeta('og:type', 'video.episode');
-        setMeta('twitter:card', 'summary_large_image');
-        
-        // อัปเดตชื่อตอนบน UI (Header ด้านบนวิดีโอ) ถ้ามี element นี้
-        const headerTitle = document.getElementById('show-title');
-        if (headerTitle && metaData.episodeTitle) {
-             headerTitle.textContent = metaData.episodeTitle;
-        }
+        setMeta('og:title', meta.title);
+        setMeta('og:description', meta.description);
+        setMeta('og:image', meta.image);
+    }
+    ,
+
+    // 6. ปุ่ม Navigation
+    updateNavButtons({ canGoPrev, canGoNext }) {
+        this._setBtnState('prev-episode-btn', canGoPrev);
+        this._setBtnState('next-episode-btn', canGoNext);
     },
 
-    // 6. จัดการสถานะปุ่ม Next/Prev
-    updateNavButtons(canGoPrev, canGoNext) {
-        const prevBtn = document.getElementById('prev-episode-btn');
-        const nextBtn = document.getElementById('next-episode-btn');
-        
-        if (prevBtn) {
-            prevBtn.disabled = !canGoPrev;
-            prevBtn.style.opacity = canGoPrev ? '1' : '0.5';
-            prevBtn.style.cursor = canGoPrev ? 'pointer' : 'not-allowed';
-        }
-        
-        if (nextBtn) {
-            nextBtn.disabled = !canGoNext;
-            nextBtn.style.opacity = canGoNext ? '1' : '0.5';
-            nextBtn.style.cursor = canGoNext ? 'pointer' : 'not-allowed';
+    // --- Internal Helpers ---
+    _setText(id, text) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    },
+
+    _setBtnState(id, isEnabled) {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.disabled = !isEnabled;
+            btn.classList.toggle('opacity-50', !isEnabled);
+            btn.classList.toggle('cursor-not-allowed', !isEnabled);
+            btn.classList.toggle('hover:bg-gray-700', !isEnabled);
         }
     }
 };
