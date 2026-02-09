@@ -7,7 +7,7 @@ import { generateVideoEmbed } from "../utils/tools.js";
 export function prepareVideoEmbedHtml(episode) {
     if (!episode) return null;
 
-    // ตรวจสอบ Source ว่ามาจาก field ไหน (รองรับทั้ง videoUrl และ embedCode)
+    // รองรับทั้ง videoUrl (ลิงก์ตรง) และ embedCode (iframe)
     const source = episode.videoUrl || episode.embedCode;
     
     if (!source) return null;
@@ -24,7 +24,7 @@ export function prepareMetaData(show, episode) {
     const description = show.description || `ดูอนิเมะ ${show.title} ฟรีที่ ANI-END`;
     const image = show.thumbnailUrl || 'https://placehold.co/600x400?text=ANI-END';
     
-    // ชื่อที่จะแสดงบนหัวข้อหน้าเว็บ (Header)
+    // ชื่อที่จะแสดงบน Header ของหน้าเว็บ
     const episodeTitle = episode ? `${show.title} - ${episode.title || 'ตอนที่ ' + episode.number}` : show.title;
 
     return {
@@ -36,7 +36,7 @@ export function prepareMetaData(show, episode) {
     };
 }
 
-// คำนวณสถานะปุ่ม Next/Prev (Logic เดิมจาก updateNavButtons)
+// คำนวณสถานะปุ่ม Next/Prev
 export function checkNavStatus(currentEpNum, latestEpNum) {
     const current = parseFloat(currentEpNum) || 1;
     const max = parseFloat(latestEpNum) || 9999;
@@ -47,7 +47,7 @@ export function checkNavStatus(currentEpNum, latestEpNum) {
     };
 }
 
-// อัปเดต URL บน Address Bar โดยไม่ต้อง Refresh หน้า
+// อัปเดต URL บน Address Bar โดยไม่ต้อง Refresh หน้า (History API)
 export function updateUrlState(episodeId) {
     if (!episodeId) return;
     try {
