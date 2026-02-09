@@ -156,3 +156,44 @@ body {
     opacity: 1; 
     transform: translateY(0); 
 }
+/* =========================================
+   GLOBAL UTILITIES (รวมจากทุกหน้า)
+   ========================================= */
+
+/* พื้นฐานหน้าเว็บ (ใช้แทน body { ... } ใน html) */
+body {
+    font-family: 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif;
+    /* แนะนำให้ลบ background-color ออกจาก css แล้วใช้ class="bg-[#0f172a]" ใน HTML แทน */
+}
+
+/* Player Loader */
+.spinner {
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-left-color: #22c55e;
+    border-radius: 50%;
+    width: 40px; height: 40px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* History & Cards */
+.history-item { transition: background-color 0.2s; }
+.history-item:hover { background-color: #1f2937; }
+.image-wrapper { position: relative; width: 100%; overflow: hidden; border-radius: 6px; background-color: #374151; }
+.image-wrapper img { width: 100%; height: 100%; object-fit: cover; transition: opacity 0.5s ease-out; }
+
+/* Scrollbar Helper */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Scroll to Top Animation */
+.scroll-to-top { transition: all 0.3s; visibility: hidden; opacity: 0; transform: translateY(20px); }
+.scroll-to-top.visible { visibility: visible; opacity: 1; transform: translateY(0); }
+
+/* Skeleton Loading */
+.skeleton { 
+    background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+    background-size: 200% 100%;
+    animation: loading-shimmer 1.5s infinite;
+}
+@keyframes loading-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
