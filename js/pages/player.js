@@ -1,20 +1,17 @@
 // js/pages/player.js
 // 🎮 CONTROLLER: ผู้สั่งการ (Main Entry Point)
-// หน้าที่: เชื่อมต่อ Core -> Renderer และจัดการ Event Listeners
 
 import { onAuthStateChanged } from "firebase/auth";
 import { setLogLevel } from "firebase/firestore";
 import { auth } from "../config/db-config.js";
 
-// Import "The Brain" and "The Body"
 import * as Core from "../modules/player-core.js";
 import { PlayerRenderer } from "../renderers/player-renderer.js";
 
-// Import Modules (Side Features)
 import { loadNavbar } from "../modules/navbar.js";
 import { setupSearchSystem } from "../modules/search.js";
 import { observeImages } from "../utils/tools.js";
-import * as EpListModule from "../modules/episode-list.js"; // ใช้ทั้ง Module
+import * as EpListModule from "../modules/episode-list.js";
 import { initBookmarkSystem } from "../modules/bookmark-manager.js";
 import { loadWatchHistory } from "../modules/watch-service.js";
 import { initReportSystem, updateReportUI } from "../modules/report-service.js";
@@ -24,7 +21,7 @@ import { initCommentSystem, postComment, updateCommentUIState } from "../modules
 
 let currentUser = null;
 let isFirstLoad = true;
-let isSearchInitialized = false; // ✅ 1. เพิ่มตัวแปรป้องกันการโหลดซ้ำ
+let isSearchInitialized = false;
 
 // --- 1. Main Action: Play Episode ---
 async function handlePlayEpisode(episode) {
@@ -33,21 +30,17 @@ async function handlePlayEpisode(episode) {
         return;
     }
 
-    // 1. Ask Core to prepare everything
     const context = Core.preparePlaybackContext(episode, currentUser);
     if (!context) return;
 
-    // 2. Command Renderer to update UI
     PlayerRenderer.renderPlayer(context.embedHtml);
     PlayerRenderer.updateMetaData(context.metaData);
     PlayerRenderer.updateNavButtons(context.navStatus);
 
-    // 3. Update Side Modules (UI Components)
     EpListModule.highlightActiveEpisode(context.episodeId);
     updateReportUI(episode);
     initCommentSystem(context.showId, context.episodeId, context.episodeNumber);
 
-    // Scroll top on mobile
     if (!isFirstLoad) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -56,17 +49,15 @@ async function handlePlayEpisode(episode) {
 
 // --- 2. Navigation Handler ---
 async function handleNavigation(direction) {
-    PlayerRenderer.updateNavButtons({ canGoPrev: false, canGoNext: false }); // Lock buttons
+    PlayerRenderer.updateNavButtons({ canGoPrev: false, canGoNext: false });
 
     try {
-        // Ask Core/Module for the next episode
         const nextEp = await Core.determineNextAction(direction, EpListModule);
         
         if (nextEp) {
             await EpListModule.checkAndLoadEpisodeBatch(nextEp.number, handlePlayEpisode);
             handlePlayEpisode(nextEp);
         } else {
-            // Revert button state if failed
             const state = Core.getState();
             if (state.currentEpisode) {
                  const context = Core.preparePlaybackContext(state.currentEpisode, currentUser);
@@ -83,7 +74,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setLogLevel('silent');
     await loadNavbar('..');
     
-    // Bind Global Events
     document.getElementById('prev-episode-btn')?.addEventListener('click', () => handleNavigation('prev'));
     document.getElementById('next-episode-btn')?.addEventListener('click', () => handleNavigation('next'));
     document.getElementById('btn-post-comment')?.addEventListener('click', () => postComment(currentUser));
@@ -114,7 +104,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 historyItems = await loadWatchHistory(user.uid);
             }
             
-            // ✅ 2. แก้ไข: ครอบด้วย if เพื่อให้โหลด Search แค่ครั้งเดียวเท่านั้น
             if (!isSearchInitialized) {
                 setupSearchSystem(historyItems || []);
                 isSearchInitialized = true;
@@ -154,7 +143,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 else PlayerRenderer.renderErrorState("ยังไม่มีตอนในขณะนี้");
             }
 
+            // ✅ เปิดเนื้อหา แล้วค่อยคำนวณปุ่มเพิ่มเติม
             PlayerRenderer.toggleLoading(false);
+            PlayerRenderer.checkDescriptionOverflow(); 
 
         } catch (error) {
             PlayerRenderer.toggleLoading(true, `Error: ${error.message}`);
