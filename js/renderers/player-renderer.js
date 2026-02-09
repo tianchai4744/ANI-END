@@ -1,5 +1,5 @@
 // js/renderers/player-renderer.js
-// 🎨 PLAYER RENDERER: รับผิดชอบเรื่องหน้าตาและการแสดงผล (ห้ามคำนวณ Logic)
+// 🎨 PLAYER RENDERER: รับผิดชอบเรื่องหน้าตาและการแสดงผล (Logic Free)
 
 export const PlayerRenderer = {
     // 1. จัดการหน้า Loading
@@ -13,9 +13,9 @@ export const PlayerRenderer = {
                 if (errorMessage) {
                     loader.innerHTML = `<p class="text-red-500 text-center mt-4 bg-black/50 p-2 rounded">${errorMessage}</p>`;
                 } else {
-                    // ใช้ Spinner เดิมที่มีใน HTML หรือ Default
+                    // ถ้าไม่มี Spinner เดิม ให้สร้างใหม่, ถ้ามีแล้วก็ปล่อยไว้
                     if (!loader.querySelector('.spinner')) {
-                        loader.innerHTML = '<div class="spinner"></div><p class="mt-4 text-gray-400 animate-pulse">กำลังโหลดข้อมูล...</p>';
+                         loader.innerHTML = '<div class="spinner"></div><p class="mt-4 text-gray-400 animate-pulse">กำลังโหลดข้อมูล...</p>';
                     }
                 }
             }
@@ -39,18 +39,19 @@ export const PlayerRenderer = {
         if (descEl) {
             descEl.textContent = show.description || "ไม่มีคำอธิบาย";
             
-            // รีเซ็ต Class พื้นฐานก่อนคำนวณ
-            descEl.className = "text-gray-300 text-sm leading-relaxed line-clamp-2 transition-all duration-300";
+            // ✅ Fix: มั่นใจว่าเริ่มมาเป็นแบบย่อ (line-clamp-2) โดยไม่ล้าง class อื่นๆ
+            descEl.classList.add('line-clamp-2');
 
             // Logic ปุ่มกด "เพิ่มเติม" (ย้ายมาจาก player-core เดิม)
-            // ใช้ setTimeout เล็กน้อยเพื่อให้ DOM วาดเสร็จก่อนวัดความสูง
+            // ใช้ setTimeout เพื่อรอให้ Browser วาด Text เสร็จก่อนคำนวณความสูงจริง
             setTimeout(() => {
+                // เช็คว่าข้อความยาวเกินกล่องหรือไม่
                 if (descEl.scrollHeight > descEl.clientHeight) {
                     if (expandBtn) {
                         expandBtn.classList.remove('hidden');
                         expandBtn.textContent = 'เพิ่มเติม';
                         
-                        // Clone Node เพื่อล้าง Event Listener เก่ากันเบิ้ล
+                        // Clone Node เพื่อล้าง Event Listener เก่า (กันกดเบิ้ล)
                         const newBtn = expandBtn.cloneNode(true);
                         expandBtn.parentNode.replaceChild(newBtn, expandBtn);
                         
@@ -66,6 +67,7 @@ export const PlayerRenderer = {
                         };
                     }
                 } else {
+                    // ถ้าข้อความสั้น ให้ซ่อนปุ่ม
                     if (expandBtn) expandBtn.classList.add('hidden');
                 }
             }, 50);
@@ -85,6 +87,7 @@ export const PlayerRenderer = {
         const playerEmbedDiv = document.getElementById('video-player-embed');
         if (playerEmbedDiv) {
             const colorClass = isError ? 'text-red-500' : 'text-gray-400';
+            // ปรับ UI ให้สวยงาม มี Icon และจัดกึ่งกลาง
             playerEmbedDiv.innerHTML = `
                 <div class="w-full h-full flex flex-col items-center justify-center bg-black gap-2">
                     <i class="${isError ? 'ri-error-warning-line' : 'ri-movie-line'} text-3xl ${colorClass}"></i>
@@ -93,9 +96,9 @@ export const PlayerRenderer = {
         }
     },
 
-    // 5. อัปเดต Meta Tags และ Title Bar
+    // 5. อัปเดต Meta Tags และ Title Bar (SEO)
     updatePageMeta(metaData) {
-        // อัปเดต Title Bar
+        // อัปเดต Title Bar ของ Browser
         document.title = metaData.title;
 
         // ฟังก์ชันช่วยอัปเดต/สร้าง meta tag
@@ -117,10 +120,9 @@ export const PlayerRenderer = {
         setMeta('og:type', 'video.episode');
         setMeta('twitter:card', 'summary_large_image');
         
-        // อัปเดตชื่อตอนบน UI (Header ด้านบนวิดีโอ ถ้ามี)
+        // อัปเดตชื่อตอนบน UI (Header ด้านบนวิดีโอ) ถ้ามี element นี้
         const headerTitle = document.getElementById('show-title');
         if (headerTitle && metaData.episodeTitle) {
-            // เช็คว่า User กำลังดูตอนไหนอยู่เพื่ออัปเดต Title ให้ตรง
              headerTitle.textContent = metaData.episodeTitle;
         }
     },
@@ -132,7 +134,6 @@ export const PlayerRenderer = {
         
         if (prevBtn) {
             prevBtn.disabled = !canGoPrev;
-            // ปรับ Style ปุ่ม disabled ให้ดูจางลง (Optional)
             prevBtn.style.opacity = canGoPrev ? '1' : '0.5';
             prevBtn.style.cursor = canGoPrev ? 'pointer' : 'not-allowed';
         }
