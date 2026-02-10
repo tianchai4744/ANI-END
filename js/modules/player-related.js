@@ -8,10 +8,11 @@ import { observeImages } from "../utils/tools.js";
 const RelatedService = {
     async fetchRelated(tags, currentId) {
         if (!tags || tags.length === 0) return [];
+        // ดึง 12 เรื่อง เพื่อให้หารลงตัวกับ Grid (2, 3, 4 คอลัมน์)
         const q = query(
             collection(db, `artifacts/${appId}/public/data/shows`), 
             where("tags", "array-contains-any", tags.slice(0, 5)), 
-            limit(10)
+            limit(12) 
         );
         const snapshot = await getDocs(q);
         const results = [];
@@ -28,8 +29,11 @@ const RelatedUI = {
         const container = document.getElementById('related-list-container');
         if (!container) return;
 
+        // Reset & Setup Grid Class
+        container.className = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"; // ปรับ Grid ให้แน่นขึ้น
+
         if (shows.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 col-span-full text-center">ไม่มีอนิเมะที่เกี่ยวข้อง</p>';
+            container.innerHTML = '<p class="text-gray-500 col-span-full text-center py-4">ไม่มีอนิเมะที่เกี่ยวข้อง</p>';
             return;
         }
 
