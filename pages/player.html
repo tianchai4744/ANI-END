@@ -6,17 +6,16 @@
     <title>เครื่องเล่นวิดีโอ - ANI-END</title>
     <link rel="stylesheet" href="../style.css">
     <style>
-        /* บังคับสัดส่วน 16:9 แบบเด็ดขาด (แก้ปัญหาจอดำ/จอเล็ก) */
+        /* บังคับสัดส่วน 16:9 สำหรับวิดีโอ */
         .aspect-video-wrapper {
             position: relative;
-            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            padding-bottom: 56.25%;
             height: 0;
             background: #000;
             overflow: hidden;
             border-radius: 0.75rem;
             width: 100%;
         }
-        /* บังคับ iframe ข้างในให้เต็มกล่องเสมอ */
         .aspect-video-wrapper iframe, 
         .aspect-video-wrapper > div {
             position: absolute !important;
@@ -41,6 +40,7 @@
         <div id="player-content-wrapper" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             <div class="lg:col-span-2 space-y-6">
+                
                 <div class="aspect-video-wrapper shadow-2xl ring-1 ring-gray-800 bg-black">
                     <div id="video-player-embed"></div>
                 </div>
@@ -49,7 +49,11 @@
                     <button id="prev-episode-btn" class="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="ri-skip-back-line"></i> <span class="hidden sm:inline">ตอนก่อนหน้า</span>
                     </button>
-                    <h1 id="show-title" class="text-white font-bold text-sm sm:text-base line-clamp-1 px-2 text-center">...</h1>
+                    
+                    <button id="report-broken-btn" class="flex items-center gap-2 px-4 py-2 bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/50 rounded-lg text-sm transition-colors">
+                        <i class="ri-alarm-warning-line"></i> <span class="hidden sm:inline">แจ้งไฟล์เสีย</span>
+                    </button>
+
                     <button id="next-episode-btn" class="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         <span class="hidden sm:inline">ตอนถัดไป</span> <i class="ri-skip-forward-line"></i>
                     </button>
@@ -57,20 +61,25 @@
 
                 <div class="bg-gray-900/50 rounded-xl p-5 border border-gray-800">
                     <div class="flex justify-between items-start gap-4">
-                        <div class="flex gap-2">
-                            <button id="btn-bookmark" class="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-pink-900/20 hover:text-pink-400 border border-gray-700 rounded-lg text-xs transition-colors">
-                                <i class="ri-heart-line"></i> รายการโปรด
-                            </button>
-                            <button id="report-broken-btn" class="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-red-900/20 hover:text-red-400 border border-gray-700 rounded-lg text-xs transition-colors">
-                                <i class="ri-alarm-warning-line"></i> แจ้งเสีย
-                            </button>
-                        </div>
+                        <h1 id="show-title" class="text-xl sm:text-2xl font-bold text-white leading-tight">...</h1>
+                        <button id="btn-bookmark" class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-pink-900/20 hover:text-pink-400 border border-gray-700 rounded-lg text-xs transition-colors">
+                            <i class="ri-heart-line"></i> รายการโปรด
+                        </button>
                     </div>
+                    
                     <div id="broken-alert" class="hidden mt-3 bg-red-900/20 border border-red-900/50 text-red-300 px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                         <i class="ri-alert-line"></i> มีการแจ้งปัญหาไฟล์เสีย ทีมงานกำลังตรวจสอบ
                     </div>
+
                     <p id="show-description" class="mt-4 text-gray-400 text-sm leading-relaxed line-clamp-2">...</p>
                     <button id="expand-desc-btn" class="text-xs text-green-500 hover:text-green-400 mt-1 hidden">เพิ่มเติม</button>
+                </div>
+
+                <div class="bg-gray-900/50 rounded-xl border border-gray-800 p-5">
+                    <h3 class="font-bold mb-4 flex items-center gap-2 text-sm text-gray-300">
+                        <i class="ri-film-line text-blue-400"></i> เรื่องที่คล้ายกัน
+                    </h3>
+                    <div id="related-list-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"></div>
                 </div>
 
                 <div class="bg-gray-900/50 rounded-xl border border-gray-800 overflow-hidden">
@@ -78,7 +87,7 @@
                         <button id="tab-comment-episode" class="flex-1 py-3 text-sm font-bold text-green-400 border-b-2 border-green-500 bg-gray-800/50">คอมเมนต์ตอนนี้</button>
                         <button id="tab-comment-show" class="flex-1 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">คอมเมนต์ทั้งเรื่อง</button>
                     </div>
-                    <div class="p-4">
+                    <div class="p-4 sm:p-6">
                         <div id="comment-login-prompt" class="text-center py-6 border border-dashed border-gray-700 rounded-lg">
                             <p class="text-gray-400 text-sm mb-2">เข้าสู่ระบบเพื่อแสดงความคิดเห็น</p>
                             <button onclick="window.triggerLogin()" class="text-green-400 hover:underline text-sm font-bold">คลิกเพื่อเข้าสู่ระบบ</button>
@@ -99,6 +108,7 @@
             </div>
 
             <div class="space-y-6">
+                
                 <div class="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg flex flex-col max-h-[600px]">
                     <div class="p-3 border-b border-gray-800 bg-gray-800/80 backdrop-blur sticky top-0 z-10 flex justify-between items-center">
                         <h3 class="font-bold flex items-center gap-2 text-white text-sm"><i class="ri-list-check text-green-500"></i> เลือกตอน</h3>
@@ -110,14 +120,10 @@
                 </div>
 
                 <div class="bg-gray-900/50 rounded-xl border border-gray-800 p-4">
-                    <h3 class="font-bold mb-3 flex items-center gap-2 text-sm text-gray-300"><i class="ri-film-line text-blue-400"></i> เรื่องที่คล้ายกัน</h3>
-                    <div id="related-list-container" class="grid grid-cols-2 gap-3"></div>
-                </div>
-
-                <div class="bg-gray-900/50 rounded-xl border border-gray-800 p-4">
                     <h3 class="font-bold mb-3 flex items-center gap-2 text-sm text-gray-300"><i class="ri-fire-line text-orange-500"></i> ยอดนิยม</h3>
                     <div id="top10-list-container" class="space-y-1"></div>
                 </div>
+
             </div>
 
         </div>
