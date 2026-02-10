@@ -2,7 +2,7 @@
 @import 'swiper/css';
 @import 'swiper/css/navigation';
 @import 'swiper/css/pagination';
-@import 'swiper/css/effect-fade';
+@import 'swiper/css/effect-creative'; /* เปลี่ยนเป็น effect-creative */
 
 @tailwind base;
 @tailwind components;
@@ -21,7 +21,6 @@
 body {
     background-color: #111;
     color: #fff;
-    /* ใช้ Prompt นำหน้าเพื่อให้ภาษาไทยสวยงาม */
     font-family: 'Prompt', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -38,42 +37,42 @@ body {
 }
 
 /* =========================================
-   HERO BANNER & SWIPER (ปรับปรุงใหม่)
+   HERO BANNER & SWIPER (Gallery Mode)
    ========================================= */
-/* ปรับแก้: ลดความเข้มของเงาลง เพื่อให้ภาพเด่นขึ้น */
+
+/* Mask แบบบางๆ แค่ช่วยให้ภาพดูมีขอบเขต ไม่ดำมืด */
 .hero-mask {
-    background: linear-gradient(to top, 
-        rgba(0,0,0,0.9) 0%,     /* สีดำเข้มสุดที่ขอบล่าง */
-        rgba(0,0,0,0.5) 30%,     /* จางลงเร็วขึ้น */
-        transparent 60%          /* กลายเป็นใสตั้งแต่กลางภาพ */
-    );
+    background: radial-gradient(circle, transparent 60%, rgba(0,0,0,0.4) 100%);
+    box-shadow: inset 0 0 50px rgba(0,0,0,0.3); /* เพิ่มเงาขอบในเล็กน้อย */
 }
 
 .swiper-button-next, .swiper-button-prev { display: none !important; }
 
-/* Custom Pagination */
+/* Custom Pagination (จุดไข่ปลา) */
 .swiper-pagination {
-    bottom: 20px !important;
-    text-align: right !important;
-    padding-right: 24px;
+    bottom: 24px !important;
+    text-align: center !important; /* ย้ายมาตรงกลางให้สมดุล */
+    width: 100% !important;
+    z-index: 50;
 }
 .swiper-pagination-bullet { 
     background: #fff !important; 
     opacity: 0.3 !important; 
-    width: 6px !important; 
-    height: 6px !important; 
-    transition: all 0.4s ease !important;
-    margin: 0 4px !important;
+    width: 8px !important; 
+    height: 8px !important; 
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    margin: 0 6px !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 .swiper-pagination-bullet-active { 
-    background: #22c55e !important; 
+    background: #fff !important; /* เปลี่ยนเป็นสีขาวล้วนให้ดูคลีน */
     opacity: 1 !important; 
-    width: 20px !important; 
-    border-radius: 10px !important;
-    box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+    width: 24px !important; 
+    border-radius: 12px !important;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.6); /* เรืองแสงสีขาว */
 }
 
-/* Glassmorphism Utilities (สำหรับป้าย Badge) */
+/* Glassmorphism (เก็บไว้เผื่อใช้ในส่วนอื่น) */
 .glass-panel {
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(8px);
@@ -82,20 +81,15 @@ body {
 }
 
 /* =========================================
-   ANIMATIONS (รวมไว้ที่เดียว)
+   ANIMATIONS
    ========================================= */
 @keyframes ken-burns {
     0% { transform: scale(1); }
-    100% { transform: scale(1.2); }
+    100% { transform: scale(1.15); }
 }
 .animate-ken-burns {
-    animation: ken-burns 20s ease-out infinite alternate;
+    animation: ken-burns 18s ease-out infinite alternate;
     will-change: transform;
-}
-
-@keyframes pulse-custom { 
-    0%, 100% { opacity: 1; } 
-    50% { opacity: 0.5; } 
 }
 
 @keyframes loading-shimmer { 
@@ -111,7 +105,7 @@ body {
     border-radius: 0.5rem; 
 }
 
-/* Player Loading Spinner */
+/* Player Spinner */
 .spinner {
     border: 4px solid rgba(255, 255, 255, 0.1);
     border-left-color: #22c55e;
@@ -122,10 +116,8 @@ body {
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* =========================================
-   UTILITIES & HELPERS
+   UTILITIES
    ========================================= */
-
-/* Scrollbar Helpers */
 .custom-scrollbar-y::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar-y::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
 .custom-scrollbar-y::-webkit-scrollbar-track { background: transparent; }
@@ -133,7 +125,6 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Scroll to Top Button */
 .scroll-to-top { 
     transition: all 0.3s; 
     visibility: hidden; 
@@ -146,19 +137,9 @@ body {
     transform: translateY(0); 
 }
 
-/* =========================================
-   COMPONENT SPECIFIC
-   ========================================= */
+.history-item { transition: background-color 0.2s; }
+.history-item:hover { background-color: #1f2937; }
 
-/* History Items */
-.history-item { 
-    transition: background-color 0.2s; 
-}
-.history-item:hover { 
-    background-color: #1f2937; 
-}
-
-/* Card Image Wrappers */
 .image-wrapper { 
     position: relative; 
     width: 100%; 
