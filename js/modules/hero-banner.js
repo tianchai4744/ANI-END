@@ -2,7 +2,6 @@
 import Swiper from 'swiper';
 import { Navigation, Pagination, Autoplay, EffectFade, Parallax } from 'swiper/modules';
 
-// Import CSS (Optional if bundler handles it, but good for explicit dependency)
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
@@ -51,7 +50,6 @@ const HeroUI = {
     createSlideHTML(data) {
         if (!data) return '';
 
-        // Badge Logic: แสดง "ดูต่อ" หรือ "แนะนำ"
         const badgeHTML = data.hasHistory 
             ? `<div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg glass-panel text-green-400 border-green-500/30 mb-3" data-swiper-parallax="-300">
                  <i class="ri-history-line"></i>
@@ -62,8 +60,9 @@ const HeroUI = {
                  <span class="text-xs font-semibold tracking-wide">กำลังมาแรง</span>
                </div>`;
 
+        // 🌟 ปรับแก้: เปลี่ยน div ด้านนอกสุดเป็น <a> เพื่อให้คลิกได้ทั้งสไลด์
         return `
-            <div class="swiper-slide relative w-full h-full overflow-hidden bg-black group">
+            <a href="${data.targetUrl}" class="swiper-slide relative w-full h-full overflow-hidden bg-black group block">
                 <div class="absolute inset-0 w-full h-full z-0">
                     <img src="${data.imageUrl}" 
                          alt="${data.title}" 
@@ -86,63 +85,46 @@ const HeroUI = {
                         </h2>
 
                         <div class="pt-4 pointer-events-auto transform transition-all duration-700 delay-300 opacity-0 translate-y-4 group-[.swiper-slide-active]:opacity-100 group-[.swiper-slide-active]:translate-y-0">
-                            <a href="${data.targetUrl}" 
-                               class="group/btn relative inline-flex items-center gap-3 bg-white text-black px-6 py-3 rounded-xl font-bold text-lg hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] overflow-hidden">
+                            <div class="group/btn relative inline-flex items-center gap-3 bg-white text-black px-6 py-3 rounded-xl font-bold text-lg hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] overflow-hidden cursor-pointer">
                                 <div class="absolute inset-0 bg-gradient-to-r from-gray-100 to-gray-300 opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
                                 <i class="ri-play-fill text-2xl relative z-10"></i>
                                 <span class="relative z-10">ดูเลย</span>
-                            </a>
+                            </div>
                             
-                            <button class="ml-3 inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white glass-panel hover:bg-white/10 transition-all duration-300 hover:scale-105 backdrop-blur-md">
+                            <div class="ml-3 inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white glass-panel hover:bg-white/10 transition-all duration-300 hover:scale-105 backdrop-blur-md cursor-pointer">
                                 <i class="ri-information-line text-xl"></i>
                                 <span class="hidden sm:inline">ข้อมูล</span>
-                            </button>
+                            </div>
                         </div>
 
                     </div>
                 </div>
-            </div>`;
+            </a>`;
     },
 
     initSwiper(containerId) {
+        // ... (ส่วนนี้เหมือนเดิม ไม่มีการเปลี่ยนแปลง)
         return new Swiper(`#${containerId}`, {
             modules: [Navigation, Pagination, Autoplay, EffectFade, Parallax],
             loop: true,
-            speed: 1000, // ความเร็วในการเลื่อน (ms)
-            parallax: true, // เปิดใช้งาน Parallax
-            effect: 'fade', // ใช้ Effect Fade ซ้อนกันสวยๆ
-            fadeEffect: {
-                crossFade: true
-            },
-            autoplay: {
-                delay: 6000,
-                disableOnInteraction: false,
-                pauseOnMouseEnter: true
-            },
-            pagination: {
-                el: '.swiper-pagination',
-                clickable: true,
-                dynamicBullets: false // ปิด dynamic เพื่อโชว์จุดทั้งหมดแบบสวยๆ
-            },
-            navigation: {
-                nextEl: '.swiper-button-next',
-                prevEl: '.swiper-button-prev'
-            },
+            speed: 1000,
+            parallax: true,
+            effect: 'fade',
+            fadeEffect: { crossFade: true },
+            autoplay: { delay: 6000, disableOnInteraction: false, pauseOnMouseEnter: true },
+            pagination: { el: '.swiper-pagination', clickable: true, dynamicBullets: false },
+            navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
             allowTouchMove: true,
         });
     }
 };
 
 // --- 🎮 CONTROLLER ---
-export function renderHeroSkeleton(containerId) {
-    HeroUI.renderSkeleton(containerId);
-}
-
+// ... (ส่วนนี้เหมือนเดิม ไม่มีการเปลี่ยนแปลง)
+export function renderHeroSkeleton(containerId) { HeroUI.renderSkeleton(containerId); }
 export function renderHeroBanner(containerId, banners, historyItems) {
     const swiperContainer = document.getElementById(containerId);
     if (!swiperContainer) return;
-
-    // 1. Setup Structure (ถ้ายังไม่มี)
     if (!swiperContainer.querySelector('.swiper-wrapper')) {
         swiperContainer.innerHTML = `
             <div class="swiper-wrapper"></div>
@@ -151,21 +133,15 @@ export function renderHeroBanner(containerId, banners, historyItems) {
             <div class="swiper-button-next"></div>
         `;
     }
-
     const wrapper = swiperContainer.querySelector('.swiper-wrapper');
     if (!banners || banners.length === 0) {
         wrapper.innerHTML = `<div class="flex items-center justify-center h-full text-gray-500">No Banners Available</div>`;
         return;
     }
-
-    // 2. Generate Slides
     const slidesHtml = banners.map(banner => {
         const data = HeroService.prepareSlideData(banner, historyItems);
         return HeroUI.createSlideHTML(data);
     }).join('');
-
     wrapper.innerHTML = slidesHtml;
-
-    // 3. Init Swiper
     HeroUI.initSwiper(containerId);
 }
