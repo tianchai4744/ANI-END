@@ -3,31 +3,20 @@ import {
     loginWithGoogle, loginWithEmail, registerWithEmail, resetPasswordEmail,
     logoutUser, monitorUserAuth, getAuthErrorMessage 
 } from "../services/auth.js";
-
 import { initRandomButton } from "./random-service.js";
-import { initNotificationSystem } from "./notification-service.js"; // อย่าลืมบรรทัดนี้!
+import { initNotificationSystem } from "./notification-service.js";
 import { initGlobalErrorLogging } from "./logger.js";
 
-// --- 🧠 SERVICE LAYER (Logic: ข้อมูล, Cache, Path) ---
+// --- 🧠 SERVICE LAYER ---
 const NavbarService = {
-    CACHE_KEY: 'ani_navbar_html_v4_pro', // เปลี่ยน key เพื่อให้เครื่อง user โหลดใหม่
+    CACHE_KEY: 'ani_navbar_v5_pro_full', 
 
-    getCache() {
-        return localStorage.getItem(this.CACHE_KEY);
-    },
-
-    setCache(html) {
-        localStorage.setItem(this.CACHE_KEY, html);
-    },
-
-    clearCache() {
-        localStorage.removeItem(this.CACHE_KEY);
-    },
+    getCache() { return localStorage.getItem(this.CACHE_KEY); },
+    setCache(html) { localStorage.setItem(this.CACHE_KEY, html); },
+    clearCache() { localStorage.removeItem(this.CACHE_KEY); },
 
     getUserCache() {
-        try {
-            return JSON.parse(localStorage.getItem('ani_user_cache'));
-        } catch { return null; }
+        try { return JSON.parse(localStorage.getItem('ani_user_cache')); } catch { return null; }
     },
 
     setUserCache(user) {
@@ -51,14 +40,12 @@ const NavbarService = {
             const cleanPrefix = pathPrefix.endsWith('/') ? pathPrefix.slice(0, -1) : pathPrefix;
             return `href="${cleanPrefix}/${cleanHref}"`;
         });
-
         processed = processed.replace(/src="([^"]*)"/g, (match, src) => {
              if (src.startsWith('http') || src.startsWith('data:')) return match;
              const cleanSrc = src.startsWith('/') ? src.substring(1) : src;
              const cleanPrefix = pathPrefix.endsWith('/') ? pathPrefix.slice(0, -1) : pathPrefix;
              return `src="${cleanPrefix}/${cleanSrc}"`;
         });
-
         return processed;
     },
 
@@ -69,17 +56,12 @@ const NavbarService = {
     }
 };
 
-// --- 🎨 UI LAYER (View: DOM, Modal, Toast) ---
+// --- 🎨 UI LAYER ---
 const NavbarUI = {
     placeholder: null,
 
-    init() {
-        this.placeholder = document.getElementById('navbar-placeholder');
-    },
-
-    renderHTML(html) {
-        if (this.placeholder) this.placeholder.innerHTML = html;
-    },
+    init() { this.placeholder = document.getElementById('navbar-placeholder'); },
+    renderHTML(html) { if (this.placeholder) this.placeholder.innerHTML = html; },
 
     showToast(message, type = 'success') {
         const container = document.getElementById('toast-container');
@@ -100,40 +82,30 @@ const NavbarUI = {
     },
 
     updateAuthState(user) {
-        const els = {
-            desktop: {
-                loginBtn: document.getElementById('btn-login-google'),
-                profile: document.getElementById('user-profile'),
-                avatar: document.getElementById('user-avatar'),
-                name: document.getElementById('user-name'),
-                dropdownName: document.getElementById('user-name-dropdown')
-            },
-            mobile: {
-                loginBtn: document.getElementById('btn-login-google-mobile'),
-                profile: document.getElementById('mobile-user-profile'),
-                avatar: document.getElementById('mobile-user-avatar'),
-                name: document.getElementById('mobile-user-name')
-            }
-        };
+        const toggle = (id, show) => { const el = document.getElementById(id); if(el) show ? el.classList.remove('hidden') : el.classList.add('hidden'); };
+        const setSrc = (id, src) => { const el = document.getElementById(id); if(el) el.src = src; };
+        const setText = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
 
         if (user) {
-            // Logged In
-            els.desktop.loginBtn?.classList.add('hidden');
-            els.desktop.profile?.classList.remove('hidden');
-            if(els.desktop.avatar) els.desktop.avatar.src = user.photo;
-            if(els.desktop.name) els.desktop.name.textContent = user.name;
-            if(els.desktop.dropdownName) els.desktop.dropdownName.textContent = user.name;
-
-            els.mobile.loginBtn?.classList.add('hidden');
-            els.mobile.profile?.classList.remove('hidden');
-            if(els.mobile.avatar) els.mobile.avatar.src = user.photo;
-            if(els.mobile.name) els.mobile.name.textContent = user.name;
+            // Desktop
+            toggle('btn-login-google', false);
+            toggle('user-profile', true);
+            setSrc('user-avatar', user.photo);
+            setText('user-name-dropdown', user.name);
+            // Mobile
+            toggle('btn-login-google-mobile', false);
+            toggle('mobile-user-profile', true);
+            toggle('btn-logout-mobile', true);
+            setSrc('mobile-user-avatar', user.photo);
+            setText('mobile-user-name', user.name);
         } else {
-            // Logged Out
-            els.desktop.loginBtn?.classList.remove('hidden');
-            els.desktop.profile?.classList.add('hidden');
-            els.mobile.loginBtn?.classList.remove('hidden');
-            els.mobile.profile?.classList.add('hidden');
+            // Desktop
+            toggle('btn-login-google', true);
+            toggle('user-profile', false);
+            // Mobile
+            toggle('btn-login-google-mobile', true);
+            toggle('mobile-user-profile', false);
+            toggle('btn-logout-mobile', false);
         }
     },
 
@@ -159,36 +131,47 @@ const NavbarUI = {
         const currentPath = window.location.pathname.split('/').pop() || 'index.html';
         const currentParams = new URLSearchParams(window.location.search);
 
-        document.querySelectorAll('.nav-link').forEach(link => {
-            const href = link.getAttribute('href');
-            if (!href) return;
-            const cleanHref = href.replace(/^(\.\.\/|\.\/)/, '').split('?')[0];
-            
-            // Logic เช็คหน้าปัจจุบัน
-            let isMatch = false;
-            if (cleanHref === currentPath) {
-                 isMatch = true;
-                 if (href.includes('?')) {
-                    const linkParams = new URLSearchParams(href.split('?')[1]);
-                    for (const [key, value] of linkParams.entries()) {
-                        if (currentParams.get(key) !== decodeURIComponent(value)) { isMatch = false; break; }
-                    }
-                 }
+        const isLinkActive = (href) => {
+            if (!href) return false;
+            const linkPath = href.split('?')[0].split('/').pop() || 'index.html';
+            if (linkPath !== currentPath) return false;
+            if (href.includes('?')) {
+                const linkParams = new URLSearchParams(href.split('?')[1]);
+                for (const [key, value] of linkParams.entries()) {
+                    if (currentParams.get(key) !== decodeURIComponent(value)) return false;
+                }
             }
-            
-            // New Style Application
-            if (isMatch) {
-                link.classList.remove('text-gray-400', 'hover:bg-white/10');
-                link.classList.add('bg-green-500/10', 'text-green-400', 'shadow-[0_0_15px_rgba(74,222,128,0.2)]');
+            return true;
+        };
+
+        // Desktop
+        document.querySelectorAll('.nav-link').forEach(link => {
+            if (isLinkActive(link.getAttribute('href'))) {
+                link.classList.add('nav-active');
+                link.classList.remove('text-gray-400', 'hover:text-white', 'hover:bg-white/5');
             } else {
-                link.classList.remove('bg-green-500/10', 'text-green-400', 'shadow-[0_0_15px_rgba(74,222,128,0.2)]');
-                link.classList.add('text-gray-400', 'hover:bg-white/10');
+                link.classList.remove('nav-active');
+                link.classList.add('text-gray-400', 'hover:text-white', 'hover:bg-white/5');
+            }
+        });
+
+        // Mobile
+        document.querySelectorAll('.nav-link-mobile').forEach(link => {
+            const iconBox = link.querySelector('span:first-child'); 
+            if (isLinkActive(link.getAttribute('href'))) {
+                link.classList.add('bg-green-500/10', 'text-green-400', 'border-l-4', 'border-green-500');
+                link.classList.remove('text-gray-300', 'hover:bg-gray-800');
+                if(iconBox) iconBox.classList.add('bg-green-500/20', 'text-green-400');
+            } else {
+                link.classList.remove('bg-green-500/10', 'text-green-400', 'border-l-4', 'border-green-500');
+                link.classList.add('text-gray-300', 'hover:bg-gray-800');
+                if(iconBox) iconBox.classList.remove('bg-green-500/20', 'text-green-400');
             }
         });
     }
 };
 
-// --- 🎮 CONTROLLER (Main Entry) ---
+// --- 🎮 CONTROLLER ---
 export async function loadNavbar(pathPrefix = '.') {
     initGlobalErrorLogging(); 
     
@@ -200,98 +183,88 @@ export async function loadNavbar(pathPrefix = '.') {
 
     const cachedHtml = NavbarService.getCache();
     let isRenderedFromCache = false;
-
     if (cachedHtml) {
         NavbarUI.renderHTML(NavbarService.fixPaths(cachedHtml, pathPrefix));
         isRenderedFromCache = true;
-        initPostRender(true); 
+        initPostRender(); 
     }
 
     try {
         const rawHtml = await NavbarService.fetchHTML(pathPrefix);
-        NavbarService.setCache(rawHtml); // Update Cache
-
+        NavbarService.setCache(rawHtml);
         if (!isRenderedFromCache) {
             NavbarUI.renderHTML(NavbarService.fixPaths(rawHtml, pathPrefix));
-            initPostRender(false);
-        } else {
-            console.log('Navbar updated from cache');
+            initPostRender();
         }
-    } catch (error) {
-        console.error("Navbar load error:", error);
-    }
+    } catch (error) { console.error("Navbar load error:", error); }
 }
 
-function initPostRender(isCached) {
+function initPostRender() {
     const cachedUser = NavbarService.getUserCache();
     NavbarUI.updateAuthState(cachedUser);
     NavbarUI.highlightActiveLink();
     
-    setupNavbarInteractions();
+    setupInteractions();
     setupAuthSystem();
     initRandomButton(); 
 }
 
-function setupNavbarInteractions() {
-    // Mobile Sidebar Logic
-    const menuBtn = document.getElementById('mobile-menu-btn');
-    const closeBtn = document.getElementById('mobile-close-btn');
-    const menu = document.getElementById('mobile-menu');
-    const backdrop = document.getElementById('mobile-menu-backdrop');
-    
+function setupInteractions() {
+    const els = {
+        menuBtn: document.getElementById('mobile-menu-btn'),
+        closeBtn: document.getElementById('mobile-close-btn'),
+        menu: document.getElementById('mobile-menu'),
+        backdrop: document.getElementById('mobile-menu-backdrop'),
+        mSearch: document.getElementById('mobile-search-input')
+    };
+
     const toggleMenu = (show) => {
-        if(!menu || !backdrop) return;
+        if(!els.menu || !els.backdrop) return;
         if (show) {
-            menu.classList.add('drawer-open');
-            menu.classList.remove('translate-x-full');
-            backdrop.classList.add('backdrop-active');
-            backdrop.classList.remove('pointer-events-none', 'opacity-0');
+            els.menu.classList.remove('drawer-closed');
+            els.menu.classList.add('drawer-open');
+            els.backdrop.classList.add('backdrop-visible');
             document.body.style.overflow = 'hidden'; 
         } else {
-            menu.classList.remove('drawer-open');
-            menu.classList.add('translate-x-full');
-            backdrop.classList.remove('backdrop-active');
-            backdrop.classList.add('pointer-events-none', 'opacity-0');
+            els.menu.classList.add('drawer-closed');
+            els.menu.classList.remove('drawer-open');
+            els.backdrop.classList.remove('backdrop-visible');
             document.body.style.overflow = '';
         }
     };
 
-    if (menuBtn) menuBtn.onclick = (e) => { e.stopPropagation(); toggleMenu(true); };
-    if (closeBtn) closeBtn.onclick = () => toggleMenu(false);
-    if (backdrop) backdrop.onclick = () => toggleMenu(false);
-
-    // Mobile Search Input Logic (เพื่อให้มัน Focus ได้และไม่ปิดเมนู)
-    const mSearchInput = document.getElementById('mobile-search-input');
-    if(mSearchInput) {
-        mSearchInput.onclick = (e) => e.stopPropagation();
-    }
+    if (els.menuBtn) els.menuBtn.onclick = (e) => { e.stopPropagation(); toggleMenu(true); };
+    if (els.closeBtn) els.closeBtn.onclick = () => toggleMenu(false);
+    if (els.backdrop) els.backdrop.onclick = () => toggleMenu(false);
+    if (els.mSearch) els.mSearch.onclick = (e) => e.stopPropagation(); 
 }
 
 function setupAuthSystem() {
-    const setupBtn = (id, fn) => { const el = document.getElementById(id); if(el) el.onclick = fn; };
+    const bind = (id, fn) => { const el = document.getElementById(id); if(el) el.onclick = fn; };
     
-    setupBtn('btn-login-google', window.triggerLogin);
-    setupBtn('btn-login-google-mobile', window.triggerLogin);
+    bind('btn-login-google', window.triggerLogin);
+    bind('btn-login-google-mobile', window.triggerLogin);
     
-    const logoutHandler = async () => {
+    const logout = async () => {
         if(confirm('ต้องการออกจากระบบ?')) {
             NavbarService.setUserCache(null);
             await logoutUser();
             window.location.reload();
         }
     };
-    setupBtn('btn-logout', logoutHandler);
-    setupBtn('btn-logout-mobile', logoutHandler);
+    bind('btn-logout', logout);
+    bind('btn-logout-mobile', logout);
 
     initAuthModalLogic();
-
+    
     monitorUserAuth((user) => {
         const userData = NavbarService.setUserCache(user);
         NavbarUI.updateAuthState(userData);
-        if(user) initNotificationSystem(user.uid); // เรียก Notification ตรงนี้
+        if(user) initNotificationSystem(user.uid);
     });
 }
 
+// 🔥 Logic ที่หายไป: ใส่กลับมาให้ครบแล้วครับ
 function initAuthModalLogic() {
     const els = {
         modal: document.getElementById('auth-modal'),
@@ -357,7 +330,8 @@ function initAuthModalLogic() {
         }
     };
 
-    if (els.switchBtn) els.switchBtn.onclick = () => { mode = (mode === 'login') ? 'register' : 'login'; updateModalUI(); };
+    // Events
+    if (els.switchBtn) els.switchBtn.onclick = (e) => { e.preventDefault(); mode = (mode === 'login') ? 'register' : 'login'; updateModalUI(); };
     if (els.forgotBtn) els.forgotBtn.onclick = () => { mode = 'forgot'; updateModalUI(); };
     if (els.backBtn) els.backBtn.onclick = () => { mode = 'login'; updateModalUI(); };
     
