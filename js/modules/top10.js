@@ -28,9 +28,9 @@ export function renderTop10Section(shows, historyItems) {
             <div class="absolute top-0 right-0 w-1/2 h-full bg-green-500/5 blur-[100px] pointer-events-none"></div>
             <div class="absolute bottom-0 left-0 w-1/3 h-1/2 bg-blue-500/5 blur-[80px] pointer-events-none"></div>
 
-            <div class="p-6 sm:p-8 lg:p-10 relative z-10">
+            <div class="p-4 sm:p-6 lg:p-8 relative z-10">
                 
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                     <div class="flex items-center gap-4">
                         <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow-lg shadow-green-500/30 shrink-0">
                             <i class="ri-trophy-fill text-2xl text-white"></i>
@@ -62,24 +62,26 @@ export function renderTop10Section(shows, historyItems) {
         </div>
     `;
 
-    // 3. ตั้งค่า Swiper (ปรับจำนวนการ์ดให้น้อยลง = การ์ดใหญ่ขึ้น)
+    // 3. ตั้งค่า Swiper (สูตร 5 ใบ ใหญ่ขึ้น)
     setTimeout(() => {
         const swiperContainer = section.querySelector('.top10-swiper');
         if (swiperContainer) {
             new Swiper(swiperContainer, { 
-                // มือถือ: โชว์ 1.4 ใบ (ใบใหญ่เห็นชัดเจน)
-                slidesPerView: 1.4, 
+                // มือถือ: 2 ใบ (กำลังดี ไม่เล็กไม่ใหญ่ไป)
+                slidesPerView: 2, 
                 spaceBetween: 16, 
                 navigation: { 
                     nextEl: section.querySelector('.top10-next'), 
                     prevEl: section.querySelector('.top10-prev') 
                 },
-                // Responsive: ลดจำนวน slide ต่อหน้าจอลง เพื่อให้แต่ละใบมีขนาดใหญ่ขึ้น
                 breakpoints: {
-                    640: { slidesPerView: 2.2, spaceBetween: 20 }, // จาก 3 -> 2.2 (ใหญ่ขึ้น)
-                    768: { slidesPerView: 2.5, spaceBetween: 24 }, 
-                    1024: { slidesPerView: 3.2, spaceBetween: 24 }, // จาก 4 -> 3.2 (ใหญ่ขึ้น)
-                    1280: { slidesPerView: 4.2, spaceBetween: 28 }, // จาก 5 -> 4.2 (ใหญ่ขึ้น)
+                    // แท็บเล็ต: 3 ใบ (ใหญ่กว่าเดิม)
+                    640: { slidesPerView: 3, spaceBetween: 20 }, 
+                    // โน้ตบุ๊ก: 4 ใบ (ให้ใหญ่ขึ้นชัดเจน)
+                    1024: { slidesPerView: 4, spaceBetween: 24 }, 
+                    // จอคอมใหญ่ (1280px+): 5 ใบ (ตามที่ขอครับ!)
+                    // (แต่เดิมเคยเป็น 6 ใบ พอเหลือ 5 ใบ + ลดขอบกล่อง = การ์ดใหญ่ขึ้นแน่นอน)
+                    1280: { slidesPerView: 5, spaceBetween: 24 }, 
                 }
             });
         }
