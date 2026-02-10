@@ -2,7 +2,7 @@
 @import 'swiper/css';
 @import 'swiper/css/navigation';
 @import 'swiper/css/pagination';
-@import 'swiper/css/effect-fade'; /* เพิ่ม Effect Fade เข้ามาใหม่ */
+@import 'swiper/css/effect-fade';
 
 @tailwind base;
 @tailwind components;
@@ -40,12 +40,12 @@ body {
 /* =========================================
    HERO BANNER & SWIPER (ปรับปรุงใหม่)
    ========================================= */
+/* ปรับแก้: ลดความเข้มของเงาลง เพื่อให้ภาพเด่นขึ้น */
 .hero-mask {
     background: linear-gradient(to top, 
-        rgba(0,0,0,1) 0%, 
-        rgba(0,0,0,0.8) 25%, 
-        rgba(0,0,0,0.4) 50%, 
-        transparent 100%
+        rgba(0,0,0,0.9) 0%,     /* สีดำเข้มสุดที่ขอบล่าง */
+        rgba(0,0,0,0.5) 30%,     /* จางลงเร็วขึ้น */
+        transparent 60%          /* กลายเป็นใสตั้งแต่กลางภาพ */
     );
 }
 
@@ -147,7 +147,7 @@ body {
 }
 
 /* =========================================
-   COMPONENT SPECIFIC (กู้คืนมาแล้ว)
+   COMPONENT SPECIFIC
    ========================================= */
 
 /* History Items */
