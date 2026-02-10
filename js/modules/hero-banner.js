@@ -1,65 +1,29 @@
 // js/modules/hero-banner.js
 import Swiper from 'swiper';
-import { Navigation, Pagination, Autoplay, EffectCreative, Parallax } from 'swiper/modules';
+import { Navigation, Pagination, Autoplay, EffectFade, Parallax } from 'swiper/modules';
 
-// Import CSS
+// Import CSS (Optional if bundler handles it, but good for explicit dependency)
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
-import 'swiper/css/effect-creative';
+import 'swiper/css/effect-fade';
 
-// --- CSS เสริม ---
-const style = document.createElement('style');
-style.innerHTML = `
-    @keyframes ken-burns {
-        0% { transform: scale(1); }
-        100% { transform: scale(1.15); }
-    }
-    .animate-ken-burns {
-        animation: ken-burns 20s ease-out infinite alternate;
-        will-change: transform;
-    }
-    .custom-swiper-button {
-        width: 40px !important;
-        height: 40px !important;
-        background: rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(2px);
-        border-radius: 50%;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        color: rgba(255, 255, 255, 0.7) !important;
-        transition: all 0.3s ease;
-        z-index: 50;
-    }
-    .custom-swiper-button:hover {
-        background: rgba(0, 0, 0, 0.5);
-        color: white !important;
-        border-color: rgba(255, 255, 255, 0.2);
-    }
-    .custom-swiper-button::after { font-size: 16px !important; }
-`;
-document.head.appendChild(style);
-
-// --- 🧠 SERVICE LAYER (Logic: คำนวณข้อมูล) ---
+// --- 🧠 SERVICE LAYER (Logic) ---
 const HeroService = {
     prepareSlideData(banner, historyItems) {
         if (!banner) return null;
 
-        // 1. หาประวัติการดู
         const history = historyItems ? historyItems.find(h => h.showId === banner.id) : null;
         const epNumber = history?.latestEpisodeNumber || 1;
         const epId = history?.lastWatchedEpisodeId || '';
-
-        // 2. คำนวณ Base Path
         const isPages = window.location.pathname.includes('/pages/');
         const basePath = isPages ? 'player.html' : 'pages/player.html';
 
-        // 3. สร้าง URL
         let targetUrl = `${basePath}?id=${banner.id}`;
         if (history && epId) {
             targetUrl += `&ep=${epNumber}&ep_id=${epId}`;
         }
 
-        // 4. เตรียมข้อมูลสำหรับ UI
         return {
             id: banner.id,
             title: banner.title,
@@ -71,16 +35,15 @@ const HeroService = {
     }
 };
 
-// --- 🎨 UI LAYER (View: สร้าง HTML) ---
+// --- 🎨 UI LAYER (View) ---
 const HeroUI = {
     renderSkeleton(containerId) {
         const container = document.getElementById(containerId);
         if (container) {
             container.innerHTML = `
-                <div class="swiper-wrapper">
-                    <div class="swiper-slide w-full h-full bg-gray-900 animate-pulse flex items-center justify-center">
-                        <i class="ri-image-2-line text-6xl text-gray-800"></i>
-                    </div>
+                <div class="w-full h-full bg-gray-900 animate-pulse flex items-center justify-center relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent z-10"></div>
+                    <i class="ri-movie-2-line text-6xl text-gray-800 z-0"></i>
                 </div>`;
         }
     },
@@ -88,38 +51,54 @@ const HeroUI = {
     createSlideHTML(data) {
         if (!data) return '';
 
-        // สร้าง Badge สถานะ
-        const statusLabel = data.hasHistory 
-            ? `<span class="inline-flex items-center gap-1 text-[11px] font-medium text-green-400 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full border border-green-500/30 mb-2">
-                 <i class="ri-play-circle-line"></i> ดูต่อ EP.${data.epNumber}
-               </span>` 
-            : ``; 
+        // Badge Logic: แสดง "ดูต่อ" หรือ "แนะนำ"
+        const badgeHTML = data.hasHistory 
+            ? `<div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg glass-panel text-green-400 border-green-500/30 mb-3" data-swiper-parallax="-300">
+                 <i class="ri-history-line"></i>
+                 <span class="text-xs font-semibold tracking-wide">ดูต่อ EP.${data.epNumber}</span>
+               </div>`
+            : `<div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg glass-panel text-yellow-400 border-yellow-500/30 mb-3" data-swiper-parallax="-300">
+                 <i class="ri-fire-fill"></i>
+                 <span class="text-xs font-semibold tracking-wide">กำลังมาแรง</span>
+               </div>`;
 
         return `
-            <div class="swiper-slide relative w-full h-full overflow-hidden bg-black group block">
-                <a href="${data.targetUrl}" 
-                   class="absolute inset-0 z-30 w-full h-full cursor-pointer"
-                   aria-label="ดู ${data.title}">
-                </a>
-
-                <div class="absolute inset-0 w-full h-full overflow-hidden z-0" data-swiper-parallax="50%">
-                     <img src="${data.imageUrl}" 
+            <div class="swiper-slide relative w-full h-full overflow-hidden bg-black group">
+                <div class="absolute inset-0 w-full h-full z-0">
+                    <img src="${data.imageUrl}" 
                          alt="${data.title}" 
-                         class="w-full h-full object-cover animate-ken-burns opacity-90 transition-opacity duration-700"
+                         class="w-full h-full object-cover animate-ken-burns opacity-90"
                          loading="lazy">
                 </div>
 
-                <div class="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none z-10"></div>
+                <div class="absolute inset-0 hero-mask z-10 pointer-events-none"></div>
 
-                <div class="absolute inset-0 container mx-auto px-4 sm:px-6 flex items-end pb-8 sm:pb-10 z-20 pointer-events-none">
-                    <div class="w-full" data-swiper-parallax="-200">
-                        <div class="opacity-90 transform transition-transform duration-500 group-hover:translate-y-[-4px]">
-                            ${statusLabel}
+                <div class="absolute inset-0 container mx-auto px-4 sm:px-6 lg:px-8 flex items-end pb-12 z-20 pointer-events-none">
+                    <div class="w-full lg:w-2/3 flex flex-col items-start space-y-2">
+                        
+                        <div class="transform transition-all duration-700 delay-100 opacity-0 translate-y-4 group-[.swiper-slide-active]:opacity-100 group-[.swiper-slide-active]:translate-y-0">
+                            ${badgeHTML}
                         </div>
-                        <h2 class="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight drop-shadow-lg tracking-tight line-clamp-2">
+
+                        <h2 class="text-3xl sm:text-4xl md:text-6xl font-black text-white leading-tight drop-shadow-2xl line-clamp-2 mb-2" 
+                            data-swiper-parallax="-400">
                             ${data.title}
                         </h2>
-                        <div class="w-12 h-1 bg-green-500 rounded-full mt-4 opacity-0 group-hover:opacity-100 transition-all duration-500 shadow-[0_0_15px_rgba(34,197,94,0.6)] translate-y-4 group-hover:translate-y-0"></div>
+
+                        <div class="pt-4 pointer-events-auto transform transition-all duration-700 delay-300 opacity-0 translate-y-4 group-[.swiper-slide-active]:opacity-100 group-[.swiper-slide-active]:translate-y-0">
+                            <a href="${data.targetUrl}" 
+                               class="group/btn relative inline-flex items-center gap-3 bg-white text-black px-6 py-3 rounded-xl font-bold text-lg hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.3)] overflow-hidden">
+                                <div class="absolute inset-0 bg-gradient-to-r from-gray-100 to-gray-300 opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
+                                <i class="ri-play-fill text-2xl relative z-10"></i>
+                                <span class="relative z-10">ดูเลย</span>
+                            </a>
+                            
+                            <button class="ml-3 inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white glass-panel hover:bg-white/10 transition-all duration-300 hover:scale-105 backdrop-blur-md">
+                                <i class="ri-information-line text-xl"></i>
+                                <span class="hidden sm:inline">ข้อมูล</span>
+                            </button>
+                        </div>
+
                     </div>
                 </div>
             </div>`;
@@ -127,43 +106,49 @@ const HeroUI = {
 
     initSwiper(containerId) {
         return new Swiper(`#${containerId}`, {
-            modules: [Navigation, Pagination, Autoplay, EffectCreative, Parallax],
+            modules: [Navigation, Pagination, Autoplay, EffectFade, Parallax],
             loop: true,
-            speed: 1000,
-            parallax: true,
-            preventClicks: false,
-            preventClicksPropagation: false,
-            effect: 'creative',
-            creativeEffect: {
-                prev: { shadow: true, translate: ['-20%', 0, -1], opacity: 0.6 },
-                next: { translate: ['100%', 0, 0] },
+            speed: 1000, // ความเร็วในการเลื่อน (ms)
+            parallax: true, // เปิดใช้งาน Parallax
+            effect: 'fade', // ใช้ Effect Fade ซ้อนกันสวยๆ
+            fadeEffect: {
+                crossFade: true
             },
-            autoplay: { delay: 7000, disableOnInteraction: false, pauseOnMouseEnter: true },
-            pagination: { el: '.swiper-pagination', clickable: true, dynamicBullets: true },
-            navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
+            autoplay: {
+                delay: 6000,
+                disableOnInteraction: false,
+                pauseOnMouseEnter: true
+            },
+            pagination: {
+                el: '.swiper-pagination',
+                clickable: true,
+                dynamicBullets: false // ปิด dynamic เพื่อโชว์จุดทั้งหมดแบบสวยๆ
+            },
+            navigation: {
+                nextEl: '.swiper-button-next',
+                prevEl: '.swiper-button-prev'
+            },
             allowTouchMove: true,
         });
     }
 };
 
-// --- 🎮 CONTROLLER (Main Entry) ---
+// --- 🎮 CONTROLLER ---
 export function renderHeroSkeleton(containerId) {
     HeroUI.renderSkeleton(containerId);
 }
 
-export function renderHeroBanner(containerId, banners, historyItems, userId) {
+export function renderHeroBanner(containerId, banners, historyItems) {
     const swiperContainer = document.getElementById(containerId);
     if (!swiperContainer) return;
 
-    // 1. Setup Structure
+    // 1. Setup Structure (ถ้ายังไม่มี)
     if (!swiperContainer.querySelector('.swiper-wrapper')) {
         swiperContainer.innerHTML = `
             <div class="swiper-wrapper"></div>
-            <div class="absolute bottom-6 right-6 z-40 flex gap-2 hidden sm:flex">
-                <div class="swiper-button-prev custom-swiper-button flex items-center justify-center cursor-pointer"></div>
-                <div class="swiper-button-next custom-swiper-button flex items-center justify-center cursor-pointer"></div>
-            </div>
-            <div class="swiper-pagination z-40"></div>
+            <div class="swiper-pagination z-30"></div>
+            <div class="swiper-button-prev"></div>
+            <div class="swiper-button-next"></div>
         `;
     }
 
@@ -173,7 +158,7 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
         return;
     }
 
-    // 2. Data Preparation & Rendering
+    // 2. Generate Slides
     const slidesHtml = banners.map(banner => {
         const data = HeroService.prepareSlideData(banner, historyItems);
         return HeroUI.createSlideHTML(data);
@@ -181,6 +166,6 @@ export function renderHeroBanner(containerId, banners, historyItems, userId) {
 
     wrapper.innerHTML = slidesHtml;
 
-    // 3. Initialize Swiper
+    // 3. Init Swiper
     HeroUI.initSwiper(containerId);
 }
