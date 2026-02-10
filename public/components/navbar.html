@@ -1,24 +1,33 @@
 <style>
-    /* --- Animations --- */
-    @keyframes shine {
+    /* เอฟเฟกต์แสงวิ่งผ่านปุ่ม (Shine Effect) */
+    @keyframes shine-move {
         0% { left: -100%; }
         100% { left: 100%; }
     }
-    .animate-shine { position: relative; overflow: hidden; }
-    .animate-shine::after {
+    .btn-shine { position: relative; overflow: hidden; }
+    .btn-shine::after {
         content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
-        background: linear-gradient(to right, transparent, rgba(255,255,255,0.3), transparent);
-        transform: skewX(-20deg); animation: shine 3s infinite;
+        background: linear-gradient(to right, transparent, rgba(255,255,255,0.2), transparent);
+        transform: skewX(-20deg); animation: shine-move 3s infinite; pointer-events: none;
     }
-    /* Mobile Drawer */
+
+    /* เมนู Active: แสงเรืองรองสีเขียว */
+    .nav-active {
+        background: rgba(34, 197, 94, 0.15) !important; /* พื้นหลังเขียวจางๆ */
+        color: #4ade80 !important; /* ตัวหนังสือสีเขียวสว่าง */
+        box-shadow: 0 0 15px rgba(74, 222, 128, 0.25); /* แสงฟุ้ง */
+        border: 1px solid rgba(74, 222, 128, 0.2); /* ขอบบางๆ */
+        font-weight: 700 !important;
+    }
+
+    /* Mobile Drawer Animation */
+    .mobile-drawer { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     .drawer-open { transform: translateX(0) !important; }
-    .backdrop-active { opacity: 1 !important; pointer-events: auto !important; }
+    .drawer-closed { transform: translateX(100%); }
     
-    /* Toast Animations */
-    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    @keyframes fadeOut { to { opacity: 0; } }
-    .toast-enter { animation: slideInRight 0.3s ease-out forwards; }
-    .toast-exit { animation: fadeOut 0.3s ease-in forwards; }
+    /* Backdrop Animation */
+    .mobile-backdrop { transition: opacity 0.3s ease; pointer-events: none; opacity: 0; }
+    .backdrop-visible { pointer-events: auto !important; opacity: 1 !important; }
 </style>
 
 <header class="fixed top-0 left-0 w-full z-50 transition-all duration-300 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 supports-[backdrop-filter]:bg-[#0f172a]/60">
@@ -27,18 +36,18 @@
             
             <div class="flex items-center gap-8">
                 <a href="index.html" class="flex-shrink-0 flex items-center gap-2 group relative">
-                    <div class="absolute -inset-2 bg-green-500/20 rounded-full blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <span class="relative font-black text-2xl tracking-tighter bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent group-hover:from-green-400 group-hover:to-emerald-500 transition-all duration-300">
+                    <div class="absolute -inset-4 bg-green-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    <span class="relative font-black text-2xl tracking-tighter bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent group-hover:from-green-400 group-hover:to-emerald-400 transition-all duration-300">
                         ANI<span class="text-green-500">-</span>END
                     </span> 
                 </a>
                 
-                <div class="hidden md:flex items-center gap-1">
-                    <div id="desktop-nav-links" class="flex items-center p-1 bg-gray-800/50 rounded-full border border-white/5 backdrop-blur-sm">
-                        <a href="index.html" class="nav-link relative px-4 py-1.5 rounded-full text-sm font-medium text-gray-400 hover:text-white transition-all duration-300 hover:bg-white/10">หน้าแรก</a>
-                        <a href="pages/grid.html?tag=อนิเมะ" class="nav-link relative px-4 py-1.5 rounded-full text-sm font-medium text-gray-400 hover:text-white transition-all duration-300 hover:bg-white/10">อนิเมะ</a>
-                        <a href="pages/grid.html?tag=อนิเมะจีน" class="nav-link relative px-4 py-1.5 rounded-full text-sm font-medium text-gray-400 hover:text-white transition-all duration-300 hover:bg-white/10">จีน</a>
-                        <a href="pages/grid.html?tag=อนิเมะพากย์ไทย" class="nav-link relative px-4 py-1.5 rounded-full text-sm font-medium text-gray-400 hover:text-white transition-all duration-300 hover:bg-white/10">พากย์ไทย</a>
+                <div class="hidden md:flex items-center">
+                    <div id="desktop-nav-links" class="flex items-center p-1.5 bg-gray-900/50 rounded-full border border-white/5 backdrop-blur-sm shadow-inner">
+                        <a href="index.html" class="nav-link px-5 py-2 rounded-full text-sm font-medium text-gray-400 hover:text-white transition-all duration-300 hover:bg-white/5">หน้าแรก</a>
+                        <a href="pages/grid.html?tag=อนิเมะ" class="nav-link px-5 py-2 rounded-full text-sm font-medium text-gray-400 hover:text-white transition-all duration-300 hover:bg-white/5">อนิเมะ</a>
+                        <a href="pages/grid.html?tag=อนิเมะจีน" class="nav-link px-5 py-2 rounded-full text-sm font-medium text-gray-400 hover:text-white transition-all duration-300 hover:bg-white/5">จีน</a>
+                        <a href="pages/grid.html?tag=อนิเมะพากย์ไทย" class="nav-link px-5 py-2 rounded-full text-sm font-medium text-gray-400 hover:text-white transition-all duration-300 hover:bg-white/5">พากย์ไทย</a>
                     </div>
                 </div>
             </div>
@@ -47,61 +56,63 @@
                 
                 <div class="relative search-container group hidden md:block">
                     <div class="relative flex items-center">
-                        <i class="ri-search-line absolute left-3 text-gray-400 z-10"></i>
-                        <input id="search-input" type="text" placeholder="ค้นหา..." 
-                            class="pl-10 pr-4 py-2 bg-gray-900/50 border border-gray-700/50 rounded-full text-sm text-gray-200 w-48 focus:w-72 focus:bg-gray-800 focus:border-green-500/50 focus:ring-4 focus:ring-green-500/10 transition-all duration-300 outline-none placeholder-gray-500 shadow-inner">
-                        <div class="absolute right-3 hidden group-focus-within:block text-xs text-gray-600 border border-gray-700 rounded px-1.5 py-0.5">ESC</div>
+                        <i class="ri-search-line absolute left-3.5 text-gray-400 z-10 pointer-events-none group-focus-within:text-green-400 transition-colors"></i>
+                        <input id="search-input" type="text" placeholder="ค้นหาอนิเมะ..." 
+                            class="pl-10 pr-4 py-2 bg-gray-900/50 border border-gray-700/50 rounded-full text-sm text-gray-200 w-40 focus:w-64 focus:bg-gray-800 focus:border-green-500/50 focus:ring-4 focus:ring-green-500/10 transition-all duration-300 outline-none placeholder-gray-500 shadow-inner">
                     </div>
-                    <div id="search-dropdown" class="absolute top-full left-0 right-0 mt-3 bg-[#1a202c] border border-gray-700/50 rounded-xl shadow-2xl overflow-hidden hidden z-50 max-h-96 overflow-y-auto"></div>
+                    <div id="search-dropdown" class="absolute top-full right-0 mt-3 w-80 bg-[#1e293b] border border-gray-700/50 rounded-xl shadow-2xl overflow-hidden hidden z-50 max-h-96 overflow-y-auto custom-scrollbar-y"></div>
                 </div>
 
-                <button id="btn-random-anime" class="hidden md:flex animate-shine relative overflow-hidden px-4 py-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:scale-105 transition-all duration-300 items-center gap-2 group">
+                <button id="btn-random-anime" class="hidden md:flex btn-shine relative overflow-hidden px-5 py-2 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:scale-105 transition-all duration-300 items-center gap-2 group">
                     <i class="ri-shuffle-line transition-transform group-hover:rotate-180 duration-500"></i> 
                     <span>สุ่ม</span>
                 </button>
 
                 <div class="relative group" id="notification-container">
-                    <button id="btn-notification" class="text-gray-400 hover:text-white p-2 relative transition-colors rounded-full hover:bg-white/5">
+                    <button id="btn-notification" class="text-gray-400 hover:text-white w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 transition-colors relative">
                         <i class="ri-notification-3-line text-xl"></i>
-                        <span id="notif-badge" class="hidden absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 rounded-full border-2 border-[#0f172a]">0</span>
+                        <span id="notif-badge" class="hidden absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#0f172a]"></span>
                     </button>
-                    <div id="notification-dropdown" class="absolute right-0 top-full mt-4 w-80 bg-[#1e293b] rounded-xl shadow-2xl border border-gray-700/50 overflow-hidden hidden z-50 ring-1 ring-black/5">
+                    <div id="notification-dropdown" class="absolute right-0 top-full mt-4 w-80 bg-[#1e293b] rounded-xl shadow-2xl border border-gray-700/50 overflow-hidden hidden z-50 ring-1 ring-black/5 animate-fade-in-up">
                         <div class="p-3 border-b border-gray-700/50 flex justify-between items-center bg-gray-800/50">
                             <h4 class="text-sm font-bold text-white">การแจ้งเตือน</h4>
                         </div>
                         <div id="notification-list" class="max-h-64 overflow-y-auto custom-scrollbar-y">
-                            <p class="text-center text-gray-500 text-xs p-6">ไม่มีการแจ้งเตือนใหม่</p>
+                            <div class="flex flex-col items-center justify-center py-8 text-gray-500">
+                                <i class="ri-notification-off-line text-3xl mb-2 opacity-50"></i>
+                                <p class="text-xs">ไม่มีการแจ้งเตือนใหม่</p>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="auth-container" class="flex items-center">
-                    <button id="btn-login-google" class="hidden flex items-center gap-2 bg-white/10 hover:bg-white text-white hover:text-black border border-white/20 px-5 py-2 rounded-full text-sm font-bold transition-all duration-300 backdrop-blur-md">
-                        <i class="ri-login-circle-line"></i> เข้าสู่ระบบ
+                <div id="auth-container" class="flex items-center pl-2 border-l border-white/10 ml-2">
+                    <button id="btn-login-google" class="hidden flex items-center gap-2 bg-white/5 hover:bg-white text-white hover:text-black border border-white/10 px-4 py-2 rounded-full text-sm font-bold transition-all duration-300 backdrop-blur-md">
+                        <i class="ri-google-fill"></i> <span class="hidden sm:inline">เข้าสู่ระบบ</span>
                     </button>
                     
-                    <div id="user-profile" class="hidden relative group cursor-pointer pl-2">
-                        <img id="user-avatar" src="https://placehold.co/40x40" class="w-10 h-10 rounded-full border-2 border-transparent group-hover:border-green-400 transition-all duration-300 object-cover bg-gray-800 shadow-lg">
-                        <div class="absolute right-0 top-full pt-4 w-60 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-300 ease-out z-50">
-                            <div class="bg-[#1e293b] rounded-xl shadow-2xl border border-gray-700/50 overflow-hidden ring-1 ring-black/5">
-                                <div class="px-4 py-3 border-b border-gray-700/50 bg-gray-800/50">
+                    <div id="user-profile" class="hidden relative group cursor-pointer">
+                        <img id="user-avatar" src="https://placehold.co/40x40" class="w-10 h-10 rounded-full border-2 border-transparent group-hover:border-green-400 transition-all duration-300 object-cover bg-gray-800 shadow-lg ring-2 ring-black/20">
+                        <div class="absolute right-0 top-full pt-4 w-64 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-300 ease-out z-50">
+                            <div class="bg-[#1e293b] rounded-xl shadow-2xl border border-gray-700/50 overflow-hidden ring-1 ring-black/5 backdrop-blur-xl">
+                                <div class="px-4 py-4 border-b border-gray-700/50 bg-gradient-to-r from-gray-800/50 to-gray-900/50">
                                     <p class="text-xs text-gray-400">เข้าสู่ระบบเป็น</p>
-                                    <p id="user-name-dropdown" class="text-white font-bold truncate mt-0.5">User</p>
+                                    <p id="user-name-dropdown" class="text-white font-bold truncate mt-0.5 text-base">User</p>
                                 </div>
-                                <div class="p-1 space-y-0.5">
-                                    <a href="pages/profile.html" class="flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors"><i class="ri-user-settings-line mr-3 text-green-400"></i>โปรไฟล์</a>
-                                    <a href="pages/bookmarks.html" class="flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors"><i class="ri-heart-line mr-3 text-rose-400"></i>รายการโปรด</a>
-                                    <a href="pages/history.html" class="flex items-center px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors"><i class="ri-history-line mr-3 text-blue-400"></i>ประวัติ</a>
+                                <div class="p-2 space-y-1">
+                                    <a href="pages/profile.html" class="flex items-center px-3 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors"><i class="ri-user-settings-line mr-3 text-green-400 text-lg"></i>จัดการโปรไฟล์</a>
+                                    <a href="pages/bookmarks.html" class="flex items-center px-3 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors"><i class="ri-heart-line mr-3 text-rose-400 text-lg"></i>รายการโปรด</a>
+                                    <a href="pages/history.html" class="flex items-center px-3 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors"><i class="ri-history-line mr-3 text-blue-400 text-lg"></i>ประวัติการรับชม</a>
                                 </div>
-                                <div class="border-t border-gray-700/50 p-1">
-                                    <button id="btn-logout" class="flex w-full items-center px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors"><i class="ri-logout-box-line mr-3"></i>ออกจากระบบ</button>
+                                <div class="border-t border-gray-700/50 p-2 bg-red-500/5">
+                                    <button id="btn-logout" class="flex w-full items-center px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors"><i class="ri-logout-box-line mr-3 text-lg"></i>ออกจากระบบ</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <button id="mobile-menu-btn" class="md:hidden p-2 text-gray-300 hover:text-white transition-colors relative z-50">
+                <button id="mobile-menu-btn" class="md:hidden p-2 text-gray-300 hover:text-white transition-colors relative z-50 rounded-lg hover:bg-white/5">
                     <i class="ri-menu-4-line text-2xl"></i>
                 </button>
             </div>
@@ -109,63 +120,66 @@
     </nav>
 </header>
 
-<div id="mobile-menu-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] opacity-0 pointer-events-none transition-opacity duration-300"></div>
+<div id="mobile-menu-backdrop" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[90] mobile-backdrop"></div>
 
-<div id="mobile-menu" class="fixed inset-y-0 right-0 w-[280px] bg-[#0f172a] border-l border-gray-800 shadow-2xl z-[100] transform translate-x-full transition-transform duration-300 flex flex-col">
+<div id="mobile-menu" class="fixed inset-y-0 right-0 w-[300px] bg-[#0f172a] border-l border-gray-800 shadow-2xl z-[100] mobile-drawer drawer-closed flex flex-col">
     <div class="p-5 flex items-center justify-between border-b border-gray-800 bg-gray-900/50">
-        <span class="font-bold text-lg text-white">เมนูหลัก</span>
-        <button id="mobile-close-btn" class="text-gray-400 hover:text-white transition-colors bg-gray-800 p-1.5 rounded-full"><i class="ri-close-line text-xl"></i></button>
+        <span class="font-bold text-lg text-white flex items-center gap-2">
+            <i class="ri-menu-line text-green-500"></i> เมนูหลัก
+        </span>
+        <button id="mobile-close-btn" class="text-gray-400 hover:text-white transition-colors bg-gray-800 p-2 rounded-full hover:bg-gray-700"><i class="ri-close-line text-xl"></i></button>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4 custom-scrollbar-y">
-        <div id="mobile-user-section" class="mb-6 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50 text-center">
-            <button id="btn-login-google-mobile" class="hidden w-full py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-bold transition-all shadow-lg shadow-green-900/20">
-                เข้าสู่ระบบ / สมัครสมาชิก
+        <div id="mobile-user-section" class="mb-6 p-4 bg-gray-800/40 rounded-2xl border border-gray-700/50 text-center relative overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-b from-green-500/5 to-transparent pointer-events-none"></div>
+            <button id="btn-login-google-mobile" class="hidden w-full py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-green-900/20 flex items-center justify-center gap-2">
+                <i class="ri-login-circle-line text-lg"></i> เข้าสู่ระบบ / สมัครสมาชิก
             </button>
-            <div id="mobile-user-profile" class="hidden flex flex-col items-center gap-2">
-                <img id="mobile-user-avatar" src="" class="w-16 h-16 rounded-full border-2 border-green-500 shadow-xl">
+            <div id="mobile-user-profile" class="hidden flex flex-col items-center gap-3">
+                <img id="mobile-user-avatar" src="" class="w-16 h-16 rounded-full border-2 border-green-500 shadow-xl p-0.5 bg-gray-900">
                 <div>
-                    <p id="mobile-user-name" class="text-white font-bold truncate max-w-[180px]">User</p>
-                    <a href="pages/profile.html" class="text-xs text-green-400 hover:underline">จัดการโปรไฟล์</a>
+                    <p id="mobile-user-name" class="text-white font-bold truncate max-w-[200px] text-lg">User</p>
+                    <a href="pages/profile.html" class="text-xs text-green-400 hover:underline flex items-center justify-center gap-1 mt-1"><i class="ri-settings-3-line"></i> จัดการโปรไฟล์</a>
                 </div>
             </div>
         </div>
 
         <div class="space-y-1">
-            <a href="index.html" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-all group">
-                <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-green-500/20 group-hover:text-green-400 transition-colors"><i class="ri-home-4-line"></i></span>
-                หน้าแรก
+            <a href="index.html" class="nav-link-mobile flex items-center gap-4 px-4 py-3.5 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl transition-all group">
+                <span class="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-green-500/20 group-hover:text-green-400 transition-colors shadow-inner"><i class="ri-home-4-line text-lg"></i></span>
+                <span class="font-medium">หน้าแรก</span>
             </a>
-            <a href="pages/grid.html?tag=อนิเมะ" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-all group">
-                <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors"><i class="ri-film-line"></i></span>
-                อนิเมะทั้งหมด
+            <a href="pages/grid.html?tag=อนิเมะ" class="nav-link-mobile flex items-center gap-4 px-4 py-3.5 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl transition-all group">
+                <span class="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors shadow-inner"><i class="ri-film-line text-lg"></i></span>
+                <span class="font-medium">อนิเมะทั้งหมด</span>
             </a>
-             <a href="pages/grid.html?tag=อนิเมะจีน" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-all group">
-                <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-yellow-500/20 group-hover:text-yellow-400 transition-colors"><i class="ri-translate-2"></i></span>
-                อนิเมะจีน
+             <a href="pages/grid.html?tag=อนิเมะจีน" class="nav-link-mobile flex items-center gap-4 px-4 py-3.5 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl transition-all group">
+                <span class="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-yellow-500/20 group-hover:text-yellow-400 transition-colors shadow-inner"><i class="ri-translate-2 text-lg"></i></span>
+                <span class="font-medium">อนิเมะจีน</span>
             </a>
-            <a href="pages/bookmarks.html" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-all group">
-                <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-rose-500/20 group-hover:text-rose-400 transition-colors"><i class="ri-heart-line"></i></span>
-                รายการโปรด
+            <a href="pages/bookmarks.html" class="nav-link-mobile flex items-center gap-4 px-4 py-3.5 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl transition-all group">
+                <span class="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-rose-500/20 group-hover:text-rose-400 transition-colors shadow-inner"><i class="ri-heart-line text-lg"></i></span>
+                <span class="font-medium">รายการโปรด</span>
             </a>
-             <a href="pages/history.html" class="flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-all group">
-                <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-purple-500/20 group-hover:text-purple-400 transition-colors"><i class="ri-history-line"></i></span>
-                ประวัติการรับชม
+             <a href="pages/history.html" class="nav-link-mobile flex items-center gap-4 px-4 py-3.5 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl transition-all group">
+                <span class="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-800 group-hover:bg-purple-500/20 group-hover:text-purple-400 transition-colors shadow-inner"><i class="ri-history-line text-lg"></i></span>
+                <span class="font-medium">ประวัติการรับชม</span>
             </a>
         </div>
         
         <div class="mt-6 pt-6 border-t border-gray-800">
-            <p class="text-xs text-gray-500 font-bold uppercase mb-3 px-2">ค้นหา</p>
+            <p class="text-xs text-gray-500 font-bold uppercase mb-3 px-2 tracking-wider">ค้นหาด่วน</p>
             <div class="relative search-container">
-                <input id="mobile-search-input" type="text" placeholder="พิมพ์ชื่อเรื่อง..." class="w-full bg-gray-900 border border-gray-700 rounded-lg py-2.5 px-4 text-sm text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none">
-                <button class="absolute right-3 top-2.5 text-gray-400"><i class="ri-search-line"></i></button>
+                <input id="mobile-search-input" type="text" placeholder="พิมพ์ชื่อเรื่องที่ต้องการ..." class="w-full bg-gray-900 border border-gray-700 rounded-xl py-3 px-4 pl-11 text-sm text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none shadow-inner">
+                <i class="ri-search-line absolute left-4 top-3.5 text-gray-400"></i>
             </div>
-             <div id="mobile-search-dropdown" class="mt-2 hidden bg-gray-900 border border-gray-700 rounded-lg max-h-60 overflow-y-auto"></div>
+             <div id="mobile-search-dropdown" class="mt-2 hidden bg-gray-900 border border-gray-700 rounded-lg max-h-60 overflow-y-auto custom-scrollbar-y"></div>
         </div>
     </div>
 
-    <div class="p-4 border-t border-gray-800">
-        <button id="btn-logout-mobile" class="hidden w-full flex items-center justify-center gap-2 text-red-400 hover:bg-red-500/10 hover:text-red-300 py-2 rounded-lg transition-colors text-sm">
+    <div class="p-4 border-t border-gray-800 bg-gray-900/30">
+        <button id="btn-logout-mobile" class="hidden w-full flex items-center justify-center gap-2 text-red-400 hover:bg-red-500/10 hover:text-red-300 py-3 rounded-xl transition-colors text-sm font-bold border border-red-500/20">
             <i class="ri-logout-box-line"></i> ออกจากระบบ
         </button>
     </div>
@@ -180,57 +194,36 @@
                 <i id="auth-icon" class="ri-login-circle-line text-green-500"></i> 
                 <span id="auth-modal-title">เข้าสู่ระบบ</span>
             </h3>
-            <button id="btn-close-auth" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700">
-                <i class="ri-close-line text-2xl"></i>
-            </button>
+            <button id="btn-close-auth" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"><i class="ri-close-line text-2xl"></i></button>
         </div>
         <div class="p-6 space-y-4">
             <div id="social-auth-section">
                 <button id="btn-auth-google" class="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-4 rounded-lg transition-all hover:scale-[1.02] shadow-lg">
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-6 h-6">
-                    ดำเนินการต่อด้วย Google
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-6 h-6"> ดำเนินการต่อด้วย Google
                 </button>
                 <div class="relative flex py-4 items-center">
-                    <div class="flex-grow border-t border-gray-600"></div>
-                    <span class="flex-shrink-0 mx-4 text-gray-400 text-xs uppercase tracking-wider">หรือใช้อีเมล</span>
-                    <div class="flex-grow border-t border-gray-600"></div>
+                    <div class="flex-grow border-t border-gray-600"></div><span class="flex-shrink-0 mx-4 text-gray-400 text-xs uppercase tracking-wider">หรือใช้อีเมล</span><div class="flex-grow border-t border-gray-600"></div>
                 </div>
             </div>
             <form id="email-auth-form" class="space-y-4">
                 <div id="field-name-container" class="hidden space-y-1">
                     <label class="text-xs font-medium text-gray-400 ml-1">ชื่อที่ใช้แสดง</label>
-                    <div class="relative">
-                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="ri-user-smile-line"></i></span>
-                        <input type="text" id="auth-name" class="w-full bg-gray-900 border border-gray-600 rounded-lg pl-10 pr-3 py-2.5 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none placeholder-gray-600 transition-colors" placeholder="เช่น พี่โต แอนิเมะ">
-                    </div>
+                    <input type="text" id="auth-name" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-green-500 focus:outline-none" placeholder="ชื่อเล่น">
                 </div>
                 <div class="space-y-1">
                     <label class="text-xs font-medium text-gray-400 ml-1">อีเมล</label>
-                    <div class="relative">
-                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="ri-mail-line"></i></span>
-                        <input type="email" id="auth-email" required class="w-full bg-gray-900 border border-gray-600 rounded-lg pl-10 pr-3 py-2.5 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none placeholder-gray-600 transition-colors" placeholder="name@example.com">
-                    </div>
+                    <input type="email" id="auth-email" required class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-green-500 focus:outline-none" placeholder="name@example.com">
                 </div>
                 <div id="field-password-container" class="space-y-1">
                     <label class="text-xs font-medium text-gray-400 ml-1">รหัสผ่าน</label>
-                    <div class="relative">
-                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="ri-lock-line"></i></span>
-                        <input type="password" id="auth-password" required minlength="6" class="w-full bg-gray-900 border border-gray-600 rounded-lg pl-10 pr-3 py-2.5 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none placeholder-gray-600 transition-colors" placeholder="อย่างน้อย 6 ตัวอักษร">
-                    </div>
-                    <div class="flex justify-end">
-                        <button type="button" id="btn-forgot-password" class="text-xs text-gray-400 hover:text-green-400 hover:underline transition-colors mt-1">ลืมรหัสผ่าน?</button>
-                    </div>
+                    <input type="password" id="auth-password" required minlength="6" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-green-500 focus:outline-none" placeholder="อย่างน้อย 6 ตัวอักษร">
+                    <div class="flex justify-end"><button type="button" id="btn-forgot-password" class="text-xs text-gray-400 hover:text-green-400 hover:underline mt-1">ลืมรหัสผ่าน?</button></div>
                 </div>
-                <button type="submit" id="btn-submit-auth" class="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-3 rounded-lg transition-all shadow-lg hover:shadow-green-900/30 mt-2">
-                    เข้าสู่ระบบ
-                </button>
-                <button type="button" id="btn-back-login" class="hidden w-full text-gray-400 hover:text-white text-sm py-2">
-                    ยกเลิก / กลับไปเข้าสู่ระบบ
-                </button>
+                <button type="submit" id="btn-submit-auth" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-all shadow-lg mt-2">เข้าสู่ระบบ</button>
+                <button type="button" id="btn-back-login" class="hidden w-full text-gray-400 hover:text-white text-sm py-2">ยกเลิก</button>
             </form>
             <div id="auth-footer" class="text-center text-sm text-gray-400 mt-4 bg-gray-900/50 p-3 rounded-lg">
-                <span id="auth-switch-text">ยังไม่มีบัญชี?</span>
-                <button id="btn-switch-mode" class="text-green-400 hover:text-green-300 font-bold ml-1 hover:underline transition-colors">สมัครสมาชิกฟรี</button>
+                <span id="auth-switch-text">ยังไม่มีบัญชี?</span> <button id="btn-switch-mode" class="text-green-400 font-bold ml-1 hover:underline">สมัครสมาชิกฟรี</button>
             </div>
         </div>
     </div>
