@@ -6,7 +6,7 @@ export function renderTop10Section(shows, historyItems) {
     const top10Shows = shows.slice(0, 10);
     if (top10Shows.length === 0) return null;
 
-    // 1. สร้าง Container หลัก (เป็นแค่ตัวกำหนดตำแหน่งบนหน้าเว็บ)
+    // 1. สร้าง Container หลัก
     const section = document.createElement('section');
     section.className = 'container mx-auto px-4 sm:px-6 lg:px-8 mb-16'; 
 
@@ -21,7 +21,7 @@ export function renderTop10Section(shows, historyItems) {
         `;
     });
 
-    // 2. ใส่โครงสร้าง HTML แบบ "Boxed Layout" (กล่องหุ้มเนื้อหา)
+    // 2. ใส่โครงสร้าง HTML (Boxed Layout)
     section.innerHTML = `
         <div class="relative bg-gradient-to-b from-[#1f2937] to-[#111827] rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
             
@@ -62,23 +62,24 @@ export function renderTop10Section(shows, historyItems) {
         </div>
     `;
 
-    // 3. ตั้งค่า Swiper
+    // 3. ตั้งค่า Swiper (ปรับจำนวนการ์ดให้น้อยลง = การ์ดใหญ่ขึ้น)
     setTimeout(() => {
         const swiperContainer = section.querySelector('.top10-swiper');
         if (swiperContainer) {
             new Swiper(swiperContainer, { 
-                // ปรับจำนวนการ์ดให้พอดีกับพื้นที่ภายในกล่อง
-                slidesPerView: 2, 
+                // มือถือ: โชว์ 1.4 ใบ (ใบใหญ่เห็นชัดเจน)
+                slidesPerView: 1.4, 
                 spaceBetween: 16, 
                 navigation: { 
                     nextEl: section.querySelector('.top10-next'), 
                     prevEl: section.querySelector('.top10-prev') 
                 },
-                // Responsive Breakpoints: ปรับให้แน่นขึ้นนิดนึงเพราะอยู่ในกล่อง
+                // Responsive: ลดจำนวน slide ต่อหน้าจอลง เพื่อให้แต่ละใบมีขนาดใหญ่ขึ้น
                 breakpoints: {
-                    640: { slidesPerView: 3, spaceBetween: 20 }, 
-                    1024: { slidesPerView: 4, spaceBetween: 24 }, 
-                    1280: { slidesPerView: 5, spaceBetween: 24 }, 
+                    640: { slidesPerView: 2.2, spaceBetween: 20 }, // จาก 3 -> 2.2 (ใหญ่ขึ้น)
+                    768: { slidesPerView: 2.5, spaceBetween: 24 }, 
+                    1024: { slidesPerView: 3.2, spaceBetween: 24 }, // จาก 4 -> 3.2 (ใหญ่ขึ้น)
+                    1280: { slidesPerView: 4.2, spaceBetween: 28 }, // จาก 5 -> 4.2 (ใหญ่ขึ้น)
                 }
             });
         }
