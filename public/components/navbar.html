@@ -1,5 +1,5 @@
 <style>
-    /* เอฟเฟกต์แสงวิ่งผ่านปุ่ม (Shine Effect) */
+    /* เอฟเฟกต์แสงวิ่งผ่านปุ่ม */
     @keyframes shine-move {
         0% { left: -100%; }
         100% { left: 100%; }
@@ -11,23 +11,28 @@
         transform: skewX(-20deg); animation: shine-move 3s infinite; pointer-events: none;
     }
 
-    /* เมนู Active: แสงเรืองรองสีเขียว */
+    /* เมนู Active Style */
     .nav-active {
-        background: rgba(34, 197, 94, 0.15) !important; /* พื้นหลังเขียวจางๆ */
-        color: #4ade80 !important; /* ตัวหนังสือสีเขียวสว่าง */
-        box-shadow: 0 0 15px rgba(74, 222, 128, 0.25); /* แสงฟุ้ง */
-        border: 1px solid rgba(74, 222, 128, 0.2); /* ขอบบางๆ */
+        background: rgba(34, 197, 94, 0.15) !important;
+        color: #4ade80 !important;
+        box-shadow: 0 0 15px rgba(74, 222, 128, 0.25);
+        border: 1px solid rgba(74, 222, 128, 0.2);
         font-weight: 700 !important;
     }
 
-    /* Mobile Drawer Animation */
+    /* Mobile Drawer & Backdrop Animations */
     .mobile-drawer { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     .drawer-open { transform: translateX(0) !important; }
     .drawer-closed { transform: translateX(100%); }
     
-    /* Backdrop Animation */
     .mobile-backdrop { transition: opacity 0.3s ease; pointer-events: none; opacity: 0; }
     .backdrop-visible { pointer-events: auto !important; opacity: 1 !important; }
+    
+    /* Toast Animations */
+    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOut { to { opacity: 0; } }
+    .toast-enter { animation: slideInRight 0.3s ease-out forwards; }
+    .toast-exit { animation: fadeOut 0.3s ease-in forwards; }
 </style>
 
 <header class="fixed top-0 left-0 w-full z-50 transition-all duration-300 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 supports-[backdrop-filter]:bg-[#0f172a]/60">
@@ -194,36 +199,57 @@
                 <i id="auth-icon" class="ri-login-circle-line text-green-500"></i> 
                 <span id="auth-modal-title">เข้าสู่ระบบ</span>
             </h3>
-            <button id="btn-close-auth" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"><i class="ri-close-line text-2xl"></i></button>
+            <button id="btn-close-auth" class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700">
+                <i class="ri-close-line text-2xl"></i>
+            </button>
         </div>
         <div class="p-6 space-y-4">
             <div id="social-auth-section">
                 <button id="btn-auth-google" class="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-bold py-3 px-4 rounded-lg transition-all hover:scale-[1.02] shadow-lg">
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-6 h-6"> ดำเนินการต่อด้วย Google
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-6 h-6">
+                    ดำเนินการต่อด้วย Google
                 </button>
                 <div class="relative flex py-4 items-center">
-                    <div class="flex-grow border-t border-gray-600"></div><span class="flex-shrink-0 mx-4 text-gray-400 text-xs uppercase tracking-wider">หรือใช้อีเมล</span><div class="flex-grow border-t border-gray-600"></div>
+                    <div class="flex-grow border-t border-gray-600"></div>
+                    <span class="flex-shrink-0 mx-4 text-gray-400 text-xs uppercase tracking-wider">หรือใช้อีเมล</span>
+                    <div class="flex-grow border-t border-gray-600"></div>
                 </div>
             </div>
             <form id="email-auth-form" class="space-y-4">
                 <div id="field-name-container" class="hidden space-y-1">
                     <label class="text-xs font-medium text-gray-400 ml-1">ชื่อที่ใช้แสดง</label>
-                    <input type="text" id="auth-name" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-green-500 focus:outline-none" placeholder="ชื่อเล่น">
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="ri-user-smile-line"></i></span>
+                        <input type="text" id="auth-name" class="w-full bg-gray-900 border border-gray-600 rounded-lg pl-10 pr-3 py-2.5 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none placeholder-gray-600 transition-colors" placeholder="เช่น พี่โต แอนิเมะ">
+                    </div>
                 </div>
                 <div class="space-y-1">
                     <label class="text-xs font-medium text-gray-400 ml-1">อีเมล</label>
-                    <input type="email" id="auth-email" required class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-green-500 focus:outline-none" placeholder="name@example.com">
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="ri-mail-line"></i></span>
+                        <input type="email" id="auth-email" required class="w-full bg-gray-900 border border-gray-600 rounded-lg pl-10 pr-3 py-2.5 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none placeholder-gray-600 transition-colors" placeholder="name@example.com">
+                    </div>
                 </div>
                 <div id="field-password-container" class="space-y-1">
                     <label class="text-xs font-medium text-gray-400 ml-1">รหัสผ่าน</label>
-                    <input type="password" id="auth-password" required minlength="6" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:border-green-500 focus:outline-none" placeholder="อย่างน้อย 6 ตัวอักษร">
-                    <div class="flex justify-end"><button type="button" id="btn-forgot-password" class="text-xs text-gray-400 hover:text-green-400 hover:underline mt-1">ลืมรหัสผ่าน?</button></div>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="ri-lock-line"></i></span>
+                        <input type="password" id="auth-password" required minlength="6" class="w-full bg-gray-900 border border-gray-600 rounded-lg pl-10 pr-3 py-2.5 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none placeholder-gray-600 transition-colors" placeholder="อย่างน้อย 6 ตัวอักษร">
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="button" id="btn-forgot-password" class="text-xs text-gray-400 hover:text-green-400 hover:underline transition-colors mt-1">ลืมรหัสผ่าน?</button>
+                    </div>
                 </div>
-                <button type="submit" id="btn-submit-auth" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-all shadow-lg mt-2">เข้าสู่ระบบ</button>
-                <button type="button" id="btn-back-login" class="hidden w-full text-gray-400 hover:text-white text-sm py-2">ยกเลิก</button>
+                <button type="submit" id="btn-submit-auth" class="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-3 rounded-lg transition-all shadow-lg hover:shadow-green-900/30 mt-2">
+                    เข้าสู่ระบบ
+                </button>
+                <button type="button" id="btn-back-login" class="hidden w-full text-gray-400 hover:text-white text-sm py-2">
+                    ยกเลิก / กลับไปเข้าสู่ระบบ
+                </button>
             </form>
             <div id="auth-footer" class="text-center text-sm text-gray-400 mt-4 bg-gray-900/50 p-3 rounded-lg">
-                <span id="auth-switch-text">ยังไม่มีบัญชี?</span> <button id="btn-switch-mode" class="text-green-400 font-bold ml-1 hover:underline">สมัครสมาชิกฟรี</button>
+                <span id="auth-switch-text">ยังไม่มีบัญชี?</span>
+                <button id="btn-switch-mode" class="text-green-400 hover:text-green-300 font-bold ml-1 hover:underline transition-colors">สมัครสมาชิกฟรี</button>
             </div>
         </div>
     </div>
