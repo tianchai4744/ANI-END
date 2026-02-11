@@ -19,7 +19,9 @@ function formatDateTime(timestamp) {
     }
 }
 
-// สร้าง HTML การ์ดแต่ละใบ (ปรับปรุง UI ใหม่ตรงนี้)
+// ... (code ก่อนหน้า)
+
+// สร้าง HTML การ์ดแต่ละใบ
 function createHistoryCard(history) {
     const showId = history.showId; 
     const episodeId = history.lastWatchedEpisodeId; 
@@ -30,7 +32,7 @@ function createHistoryCard(history) {
 
     const targetUrl = `pages/player.html?id=${showId}${episodeId ? `&ep_id=${episodeId}` : ''}`;
 
-    // ✅ ปรับปรุง: ใช้ Flexbox และกำหนดขนาดรูปภาพด้วย Tailwind (w-16 h-24) เพื่อให้เป็นสัดส่วน 2:3 เสมอ
+    // ✅ ปรับปรุง: แก้ไขส่วนแสดงผล Title ให้รองรับ 2 บรรทัด
     return `
         <a href="${targetUrl}" class="flex gap-3 p-2 rounded-xl hover:bg-gray-800/50 transition-all group border border-transparent hover:border-gray-700">
             <div class="relative w-16 h-24 flex-shrink-0">
@@ -45,19 +47,23 @@ function createHistoryCard(history) {
             </div>
 
             <div class="flex-grow min-w-0 py-1 flex flex-col justify-center">
-                <h4 class="font-bold text-sm text-white truncate group-hover:text-green-400 transition-colors">${title}</h4>
-                <div class="flex items-center gap-2 mt-1">
-                    <span class="text-[10px] bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30">
+                <h4 class="font-bold text-sm text-white line-clamp-2 leading-tight group-hover:text-green-400 transition-colors mb-1">
+                    ${title}
+                </h4>
+                
+                <div class="flex items-center gap-2 mt-auto"> <span class="text-[10px] bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30">
                         ${episodeTitle}
                     </span>
                 </div>
-                <p class="text-[10px] text-gray-500 mt-auto flex items-center gap-1">
+                <p class="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
                     <i class="ri-time-line"></i> ${watchedTime}
                 </p>
             </div>
         </a>
     `;
 }
+
+// ... (code ส่วนที่เหลือเหมือนเดิม)
 
 /**
  * สร้าง HTML สำหรับส่วนประวัติ
