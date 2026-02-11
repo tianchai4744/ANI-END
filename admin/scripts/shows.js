@@ -128,7 +128,7 @@ const ShowService = {
 const ShowUI = {
     renderTable(data, onAction) {
         const tbody = document.getElementById('show-table-body');
-        if (!tbody) return;
+        if (!tbody) return; // Safety Check
         tbody.innerHTML = '';
         
         if(data.length === 0) {
@@ -159,7 +159,7 @@ const ShowUI = {
             tbody.appendChild(tr);
         });
 
-        // ✅ ใช้ onclick แทน addEventListener เพื่อป้องกันการผูกคำสั่งซ้ำ
+        // ✅ FIXED: ใช้ onclick เพื่อป้องกัน Event ซ้ำซ้อน
         tbody.querySelectorAll('.btn-manage').forEach(b => b.onclick = () => onAction('manage', b.dataset.id));
         tbody.querySelectorAll('.btn-edit').forEach(b => b.onclick = () => onAction('edit', b.dataset.id));
         tbody.querySelectorAll('.btn-del').forEach(b => b.onclick = () => onAction('delete', b.dataset.id));
@@ -209,7 +209,7 @@ const ShowUI = {
 
 // --- 🎮 CONTROLLER ---
 export function initShowModule() {
-    // ✅ 1. จัดการปุ่มค้นหาแบบ Clean Event (ล้างคำสั่งเก่าก่อนใส่ใหม่)
+    // ✅ FIXED: จัดการปุ่มแบบ Clean Event (ล้างคำสั่งเก่าก่อนใส่ใหม่)
     const btnSearch = document.getElementById('btn-search-show');
     if(btnSearch) {
         const newBtn = btnSearch.cloneNode(true);
@@ -227,7 +227,7 @@ export function initShowModule() {
         };
     }
     
-    // ✅ 2. จัดการ Form Submit ด้วย onsubmit (มีได้แค่ 1 คำสั่งเสมอ)
+    // ✅ FIXED: Form Submit ใช้ onsubmit (มีได้แค่ 1 คำสั่งเสมอ)
     const form = document.getElementById('show-form');
     if(form) {
         form.onsubmit = handleFormSubmit;
@@ -293,12 +293,12 @@ async function handleOpenModal(id = null) {
 async function handleFormSubmit(e) {
     e.preventDefault();
     
-    // ✅ 3. ป้องกันการกดซ้ำ (Double Click Prevention)
+    // ✅ FIXED: ป้องกันการกดรัว (Double Click Prevention)
     const btnSubmit = e.submitter || e.target.querySelector('button[type="submit"]');
-    if (btnSubmit && btnSubmit.disabled) return; // ถ้าปุ่มถูกปิดอยู่ ให้หยุดทันที
+    if (btnSubmit && btnSubmit.disabled) return; 
 
     toggleLoading(true, "กำลังบันทึก...");
-    if (btnSubmit) btnSubmit.disabled = true; // 🔒 ล็อคปุ่มทันทีที่เริ่มทำ
+    if (btnSubmit) btnSubmit.disabled = true; // 🔒 ล็อคปุ่มทันที
 
     try {
         const id = e.target.dataset.id;
@@ -322,7 +322,7 @@ async function handleFormSubmit(e) {
         showToast(err.message, 'error');
     } finally {
         toggleLoading(false);
-        if (btnSubmit) btnSubmit.disabled = false; // 🔓 ปลดล็อคปุ่มเมื่อเสร็จ
+        if (btnSubmit) btnSubmit.disabled = false; // 🔓 ปลดล็อคเมื่อเสร็จ
     }
 }
 
