@@ -22,7 +22,7 @@ const MAIN_ADMIN_EMAIL = 'tianchai4744@gmail.com';
 
 setLogLevel('silent');
 
-// ✅ ตัวแปรป้องกันการรันซ้ำ (Anti-Freeze Flag)
+// ✅ FIXED: ตัวแปรล็อคสถานะป้องกันการรันซ้ำ (Anti-Freeze Flag)
 let isSystemInitialized = false;
 
 // --- 🧠 DASHBOARD SERVICE (Logic) ---
@@ -224,7 +224,7 @@ window.fetchDashboardStats = loadDashboardData;
 // --- AUTHENTICATION FLOW ---
 
 onAuthStateChanged(auth, async (user) => {
-    // ✅ จุดสำคัญ: ถ้าเคย Init ระบบไปแล้ว ให้หยุดทันที (แก้ปัญหาโหลดซ้ำ)
+    // ✅ FIXED: ถ้าเคย Init ระบบไปแล้ว ให้หยุดทันที (Stop Infinite Loop)
     if (isSystemInitialized) return;
 
     if (user) {
@@ -252,8 +252,9 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function grantAdminAccess(user) {
+    // ✅ FIXED: Double Check & Lock
     if (isSystemInitialized) return;
-    isSystemInitialized = true; // 🔒 ล็อคระบบทันทีเมื่อผ่าน
+    isSystemInitialized = true; 
 
     console.log("Admin Access Granted:", user.email);
     DashboardUI.removeLoginOverlay();
@@ -269,10 +270,9 @@ function grantAdminAccess(user) {
     // Auto Refresh
     setInterval(loadDashboardData, 60000); 
     
-    // Setup Logout
+    // Setup Logout (Clean Event Listener)
     const logoutBtn = document.getElementById('btn-logout');
     if(logoutBtn) {
-        // ใช้ cloneNode เพื่อล้าง Event Listener เก่าทิ้งให้หมด
         const newBtn = logoutBtn.cloneNode(true);
         logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
         newBtn.addEventListener('click', () => {
