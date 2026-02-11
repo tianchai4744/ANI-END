@@ -17,10 +17,13 @@ import { initReportModule } from "./reports.js";
 // ==========================================
 // ⚠️ ตั้งค่า: ใส่อีเมล Admin หลักของคุณที่นี่
 // ==========================================
-const MAIN_ADMIN_EMAIL = 'YOUR_EMAIL@GMAIL.COM'; 
+const MAIN_ADMIN_EMAIL = 'tianchai4744@gmail.com'; 
 // ==========================================
 
 setLogLevel('silent');
+
+// ✅ ตัวแปรป้องกันการรันซ้ำ (Anti-Freeze Flag)
+let isSystemInitialized = false;
 
 // --- 🧠 DASHBOARD SERVICE (Logic) ---
 const DashboardService = {
@@ -209,21 +212,21 @@ async function loadDashboardData() {
     try {
         const stats = await DashboardService.fetchStats();
         DashboardUI.updateStats(stats);
-        
-        DashboardUI.renderCharts(); // Render Charts (Mock Data)
-
+        DashboardUI.renderCharts(); 
         const recent = await DashboardService.fetchRecentActivity();
         DashboardUI.renderRecentActivity(recent);
-
     } catch(err) { console.error(err); }
 }
 
-// Global Refresh Function (For Delete callbacks)
+// Global Refresh Function
 window.fetchDashboardStats = loadDashboardData;
 
 // --- AUTHENTICATION FLOW ---
 
 onAuthStateChanged(auth, async (user) => {
+    // ✅ จุดสำคัญ: ถ้าเคย Init ระบบไปแล้ว ให้หยุดทันที (แก้ปัญหาโหลดซ้ำ)
+    if (isSystemInitialized) return;
+
     if (user) {
         if (user.email === MAIN_ADMIN_EMAIL) {
             grantAdminAccess(user);
@@ -249,6 +252,9 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function grantAdminAccess(user) {
+    if (isSystemInitialized) return;
+    isSystemInitialized = true; // 🔒 ล็อคระบบทันทีเมื่อผ่าน
+
     console.log("Admin Access Granted:", user.email);
     DashboardUI.removeLoginOverlay();
 
@@ -266,6 +272,7 @@ function grantAdminAccess(user) {
     // Setup Logout
     const logoutBtn = document.getElementById('btn-logout');
     if(logoutBtn) {
+        // ใช้ cloneNode เพื่อล้าง Event Listener เก่าทิ้งให้หมด
         const newBtn = logoutBtn.cloneNode(true);
         logoutBtn.parentNode.replaceChild(newBtn, logoutBtn);
         newBtn.addEventListener('click', () => {
