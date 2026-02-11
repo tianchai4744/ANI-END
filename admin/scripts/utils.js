@@ -1,19 +1,19 @@
 // admin/scripts/utils.js
 import { collection } from "firebase/firestore";
-import { db } from "../../js/config/db-config.js";
+import { db, appId } from "../../js/config/db-config.js"; // ✅ เพิ่ม appId
 
-// ✅ ฟังก์ชันดึง Reference ของ Collection (กันเหนียว)
+// ✅ FIXED: ชี้เป้าไปที่ path ที่เก็บข้อมูลจริงๆ (artifacts/...)
 export function getCollectionRef(colName) {
-    return collection(db, colName);
+    // โครงสร้างข้อมูลเดิมของคุณอยู่ที่ path นี้ครับ ไม่ใช่หน้าบ้าน (Root)
+    return collection(db, `artifacts/${appId}/public/data/${colName}`);
 }
 
 // ✅ ฟังก์ชันแสดง Toast แจ้งเตือน
 export function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
-    if (!container) return; // ถ้าหาไม่เจอให้จบเลย กัน Error
+    if (!container) return; 
 
     const toast = document.createElement('div');
-    // จัดสีตามประเภท (เขียว/แดง)
     const bgColor = type === 'error' ? 'bg-red-600' : 'bg-emerald-600';
     
     toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-xl flex items-center gap-3 transform transition-all duration-300 translate-y-10 opacity-0`;
@@ -24,30 +24,26 @@ export function showToast(message, type = 'success') {
 
     container.appendChild(toast);
 
-    // Animation ขาเข้า
     requestAnimationFrame(() => {
         toast.classList.remove('translate-y-10', 'opacity-0');
     });
 
-    // ลบออกเมื่อเวลาผ่านไป
     setTimeout(() => {
         toast.classList.add('opacity-0', 'translate-y-10');
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
 
-// ✅ ฟังก์ชันจัดการหน้าจอ Loading (จุดที่ Error บ่อย)
+// ✅ ฟังก์ชันจัดการหน้าจอ Loading
 export function toggleLoading(show, text = "กำลังโหลด...") {
     const el = document.getElementById('global-loading');
     const txtEl = document.getElementById('loading-text');
 
-    // ถ้ามี Element Loading ให้จัดการซ่อน/แสดง
     if (el) {
         if (show) el.classList.remove('hidden');
         else el.classList.add('hidden');
     }
 
-    // ✅ FIXED: เช็คก่อนเสมอว่า txtEl มีจริงไหม ก่อนจะสั่งแก้ข้อความ
     if (show && txtEl && text) {
         txtEl.textContent = text;
     }
@@ -55,11 +51,10 @@ export function toggleLoading(show, text = "กำลังโหลด...") {
 
 // ✅ ฟังก์ชัน Modal ยืนยัน
 export function showConfirmModal(title, message, onConfirm) {
-    // สร้าง Modal HTML ขึ้นมาสดๆ เพื่อลดปัญหา Element หาย
     const modalId = 'dynamic-confirm-modal';
     let modal = document.getElementById(modalId);
     
-    if (modal) modal.remove(); // ลบตัวเก่าทิ้งก่อน
+    if (modal) modal.remove();
 
     const html = `
     <div id="${modalId}" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in">
@@ -75,7 +70,6 @@ export function showConfirmModal(title, message, onConfirm) {
 
     document.body.insertAdjacentHTML('beforeend', html);
 
-    // ผูก Event
     document.getElementById('btn-cancel-modal').onclick = () => document.getElementById(modalId).remove();
     document.getElementById('btn-confirm-modal').onclick = async () => {
         document.getElementById(modalId).remove();
