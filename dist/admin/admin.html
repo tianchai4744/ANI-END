@@ -1,536 +1,525 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="th" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ani-End Admin (Modern Dark)</title>
-    
-
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.2/dragula.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Admin Dashboard - ANI-END</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.3/dragula.min.css">
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Noto Sans Thai', sans-serif; }
-        .gu-mirror { position: fixed !important; margin: 0 !important; z-index: 9999 !important; opacity: 0.8; }
-        .gu-hide { display: none !important; }
-        .gu-unselectable { -webkit-user-select: none !important; -moz-user-select: none !important; user-select: none !important; }
-        .gu-transit { opacity: 0.2; }
-        /* Modern Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        body { font-family: 'Prompt', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1e293b; }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #64748b; }
-        ::-moz-placeholder { color: #64748b !important; opacity: 1; }
-        ::placeholder { color: #64748b !important; opacity: 1; }
-        /* Toast Animation */
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        .toast-enter { animation: slideIn 0.3s ease-out forwards; }
+        
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .sidebar-item { transition: all 0.2s; border-left: 3px solid transparent; }
+        .sidebar-item:hover, .sidebar-item.active { background: rgba(51, 65, 85, 0.5); border-left-color: #6366f1; color: white; }
+        .sidebar-item.active i { color: #818cf8; }
+        
+        /* Loading Overlay */
+        #global-loading { backdrop-filter: blur(4px); }
+        
+        /* Modal Animation */
+        .modal-enter { opacity: 0; transform: scale(0.95); }
+        .modal-enter-active { opacity: 1; transform: scale(1); transition: all 0.2s ease-out; }
+        .modal-exit { opacity: 1; transform: scale(1); }
+        .modal-exit-active { opacity: 0; transform: scale(0.95); transition: all 0.15s ease-in; }
+
+        /* Badge Pulse */
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+        .badge-pulse { animation: pulse-red 2s infinite; }
     </style>
-  <script type="module" crossorigin src="/assets/admin-DllAuFKf.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/db-config-JzEx42YR.js">
-  <link rel="modulepreload" crossorigin href="/assets/tools-Cv2G4J4g.js">
-  <link rel="stylesheet" crossorigin href="/assets/db-config-B9_qiA1B.css">
+  <script type="module" crossorigin src="/ANI-END/assets/admin-YDMa-Lu8.js"></script>
+  <link rel="modulepreload" crossorigin href="/ANI-END/assets/db-config-CDOV0zmd.js">
+  <link rel="modulepreload" crossorigin href="/ANI-END/assets/tools-BcGrSTdy.js">
 </head>
-<body class="bg-gray-900 min-h-screen text-gray-100">
-    <div id="loading-overlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] hidden flex-col items-center justify-center">
-        <div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div>
-        <p id="loading-text" class="mt-4 text-white font-medium animate-pulse">กำลังประมวลผล...</p>
-    </div>
+<body class="flex h-screen overflow-hidden text-sm">
 
-    <div id="toast-container" class="fixed top-5 right-5 z-[110] flex flex-col gap-3"></div>
+    <aside class="w-64 bg-[#1e293b] border-r border-gray-800 flex flex-col flex-shrink-0 z-20">
+        <div class="h-16 flex items-center px-6 border-b border-gray-800 bg-[#0f172a]">
+            <i class="fas fa-shield-alt text-indigo-500 text-2xl mr-3"></i>
+            <h1 class="text-xl font-bold tracking-wider text-white">ADMIN<span class="text-indigo-500">PANEL</span></h1>
+        </div>
 
-    <div id="confirm-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] hidden items-center justify-center p-4 transition-opacity">
-        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-2xl max-w-sm w-full p-6 transform transition-all scale-100">
-            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100/10 rounded-full mb-4">
-                <i class="fas fa-exclamation-triangle text-red-500 text-xl"></i>
+        <nav class="flex-1 overflow-y-auto py-4 space-y-1">
+            <p class="px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Main Menu</p>
+            <a href="#" onclick="switchTab('dashboard')" id="tab-dashboard" class="sidebar-item nav-item flex items-center px-6 py-3 text-gray-400 group active">
+                <i class="fas fa-chart-line w-6 text-gray-500 group-hover:text-indigo-400 transition-colors"></i> Dashboard
+            </a>
+            <a href="#" onclick="switchTab('shows')" id="tab-shows" class="sidebar-item nav-item flex items-center px-6 py-3 text-gray-400 group">
+                <i class="fas fa-film w-6 text-gray-500 group-hover:text-indigo-400 transition-colors"></i> จัดการอนิเมะ
+            </a>
+            <a href="#" onclick="switchTab('episodes')" id="tab-episodes" class="sidebar-item nav-item flex items-center px-6 py-3 text-gray-400 group">
+                <i class="fas fa-list-ol w-6 text-gray-500 group-hover:text-indigo-400 transition-colors"></i> จัดการตอน
+            </a>
+            
+            <p class="px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider mt-6 mb-2">Settings</p>
+            <a href="#" onclick="switchTab('banners')" id="tab-banners" class="sidebar-item nav-item flex items-center px-6 py-3 text-gray-400 group">
+                <i class="fas fa-images w-6 text-gray-500 group-hover:text-indigo-400 transition-colors"></i> แบนเนอร์
+            </a>
+            <a href="#" onclick="switchTab('tags')" id="tab-tags" class="sidebar-item nav-item flex items-center px-6 py-3 text-gray-400 group">
+                <i class="fas fa-tags w-6 text-gray-500 group-hover:text-indigo-400 transition-colors"></i> หมวดหมู่
+            </a>
+            <a href="#" onclick="switchTab('reports')" id="tab-reports" class="sidebar-item nav-item flex items-center px-6 py-3 text-gray-400 group justify-between">
+                <div class="flex items-center"><i class="fas fa-exclamation-triangle w-6 text-gray-500 group-hover:text-indigo-400 transition-colors"></i> รายงานปัญหา</div>
+                <span id="sidebar-report-badge" class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full hidden">0</span>
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-gray-800 bg-[#0f172a]">
+            <a href="../index.html" class="flex items-center px-4 py-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800 mb-2">
+                <i class="fas fa-home w-6"></i> กลับหน้าบ้าน
+            </a>
+            <button id="btn-logout" class="w-full flex items-center px-4 py-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors">
+                <i class="fas fa-sign-out-alt w-6"></i> ออกจากระบบ
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col overflow-hidden relative bg-[#0f172a]">
+        
+        <header class="h-16 flex items-center justify-between px-8 border-b border-gray-800 bg-[#1e293b]/50 backdrop-blur-md z-10">
+            <h2 id="header-title" class="text-lg font-medium text-white">ภาพรวมระบบ</h2>
+            <div class="flex items-center gap-4">
+                <div class="text-right hidden sm:block">
+                    <p class="text-sm font-bold text-white">Admin User</p>
+                    <p class="text-xs text-gray-500">Super Administrator</p>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg">
+                    A
+                </div>
             </div>
-            <h3 class="text-lg font-bold text-center text-white mb-2" id="confirm-title">ยืนยันการทำรายการ</h3>
-            <p class="text-gray-400 text-center text-sm mb-6" id="confirm-message">คุณแน่ใจหรือไม่ที่จะดำเนินการนี้? การกระทำนี้ไม่สามารถย้อนกลับได้</p>
-            <div class="flex gap-3">
-                <button id="btn-confirm-cancel" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm font-medium transition-colors">ยกเลิก</button>
-                <button id="btn-confirm-ok" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium shadow-lg shadow-red-900/20 transition-colors">ยืนยัน</button>
+        </header>
+
+        <div class="flex-1 overflow-auto p-8 relative scroll-smooth" id="content-area">
+            
+            <div id="dashboard-panel" class="panel space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="glass-panel p-6 rounded-2xl flex items-center justify-between relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-indigo-500/20 transition-all"></div>
+                        <div>
+                            <p class="text-gray-400 text-xs uppercase font-bold tracking-wider mb-1">อนิเมะทั้งหมด</p>
+                            <h3 class="text-3xl font-bold text-white" id="stat-total-shows">...</h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                            <i class="fas fa-film text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-6 rounded-2xl flex items-center justify-between relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-emerald-500/20 transition-all"></div>
+                        <div>
+                            <p class="text-gray-400 text-xs uppercase font-bold tracking-wider mb-1">ตอนทั้งหมด</p>
+                            <h3 class="text-3xl font-bold text-white" id="stat-total-episodes">...</h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                            <i class="fas fa-layer-group text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-6 rounded-2xl flex items-center justify-between relative overflow-hidden group cursor-pointer hover:border-red-500/30 transition-all" onclick="switchTab('reports')">
+                        <div class="absolute right-0 top-0 w-32 h-32 bg-red-500/10 rounded-full blur-2xl transform translate-x-10 -translate-y-10 group-hover:bg-red-500/20 transition-all"></div>
+                        <div>
+                            <p class="text-gray-400 text-xs uppercase font-bold tracking-wider mb-1">รายงานปัญหา</p>
+                            <h3 class="text-3xl font-bold text-white flex items-center gap-2">
+                                <span id="stat-total-reports">...</span>
+                                <span id="dashboard-report-badge" class="hidden text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">New!</span>
+                            </h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400">
+                            <i class="fas fa-bug text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 glass-panel p-6 rounded-2xl">
+                        <h3 class="text-lg font-bold text-white mb-4">สถิติการอัปเดต (7 วันล่าสุด)</h3>
+                        <div class="h-64">
+                            <canvas id="chart-episodes"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-panel p-6 rounded-2xl flex flex-col">
+                        <h3 class="text-lg font-bold text-white mb-4">เคลื่อนไหวล่าสุด</h3>
+                        <div id="recent-activity-list" class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar-y">
+                            </div>
+                        
+                        <div class="mt-4 pt-4 border-t border-gray-700">
+                            <h4 class="text-xs font-bold text-gray-400 mb-2 uppercase">สัดส่วนหมวดหมู่</h4>
+                            <div class="h-32 relative">
+                                <canvas id="chart-tags"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="shows-panel" class="panel hidden space-y-6">
+                <div class="flex justify-between items-center bg-[#1e293b] p-4 rounded-xl border border-gray-800">
+                    <div class="flex gap-2">
+                        <div class="relative">
+                            <input type="text" id="search-show" placeholder="ค้นหาชื่อเรื่อง..." class="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg block w-64 pl-10 p-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none"><i class="fas fa-search text-gray-500"></i></div>
+                        </div>
+                        <button id="btn-search-show" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-lg transition-colors"><i class="fas fa-arrow-right"></i></button>
+                        <button id="btn-reset-show" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 rounded-lg transition-colors"><i class="fas fa-sync-alt"></i></button>
+                    </div>
+                    <button onclick="openShowModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium shadow-lg shadow-emerald-900/20 transition-all flex items-center gap-2">
+                        <i class="fas fa-plus"></i> เพิ่มอนิเมะ
+                    </button>
+                </div>
+
+                <div class="glass-panel rounded-xl overflow-hidden">
+                    <table class="w-full text-left text-gray-400">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-800/50">
+                            <tr>
+                                <th class="px-6 py-3 cursor-pointer hover:text-white" onclick="sortShows('title')">ชื่อเรื่อง <i class="fas fa-sort ml-1"></i></th>
+                                <th class="px-6 py-3 text-center">ตอนล่าสุด</th>
+                                <th class="px-6 py-3 text-center cursor-pointer hover:text-white" onclick="sortShows('viewCount')">ยอดวิว <i class="fas fa-sort ml-1"></i></th>
+                                <th class="px-6 py-3 text-center cursor-pointer hover:text-white" onclick="sortShows('updatedAt')">อัปเดต <i class="fas fa-sort ml-1"></i></th>
+                                <th class="px-6 py-3 text-right">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="show-table-body" class="divide-y divide-gray-800"></tbody>
+                    </table>
+                    <div class="flex justify-between items-center px-6 py-3 bg-gray-800/30 border-t border-gray-800">
+                        <span id="page-info-show" class="text-xs text-gray-500">หน้า 1</span>
+                        <div class="flex gap-2">
+                            <button id="prev-page-show" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs disabled:opacity-50">ก่อนหน้า</button>
+                            <button id="next-page-show" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs disabled:opacity-50">ถัดไป</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="episodes-panel" class="panel hidden space-y-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#1e293b] p-4 rounded-xl border border-gray-800">
+                    <div class="flex items-center gap-4 w-full md:w-auto">
+                        <button id="btn-back-to-shows" onclick="switchTab('shows')" class="hidden text-gray-400 hover:text-white mr-2"><i class="fas fa-arrow-left"></i> กลับ</button>
+                        <h2 id="episodes-header-title" class="text-lg font-bold text-white whitespace-nowrap">จัดการตอน</h2>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                        <div class="relative w-full sm:w-64">
+                            <select id="filter-episode-show" class="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg block w-full p-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="">-- เลือกอนิเมะ --</option>
+                            </select>
+                        </div>
+                        <button id="btn-load-episodes" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors">
+                            <i class="fas fa-search"></i> ค้นหา
+                        </button>
+                        <div class="h-8 w-[1px] bg-gray-700 hidden sm:block"></div>
+                        <button onclick="openEpisodeModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors shadow-lg">
+                            <i class="fas fa-plus"></i> เพิ่มตอนเดียว
+                        </button>
+                        <button onclick="openBulkEpisodeModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors shadow-lg">
+                            <i class="fas fa-layer-group"></i> เพิ่มหลายตอน
+                        </button>
+                    </div>
+                </div>
+
+                <div class="glass-panel rounded-xl overflow-hidden relative">
+                    <div class="absolute top-3 right-4 z-10 flex gap-2">
+                        <button id="btn-sort-episodes" class="text-gray-400 hover:text-white bg-gray-800 p-1.5 rounded text-xs" title="เรียงลำดับ">
+                            <i class="fas fa-sort-numeric-down-alt"></i>
+                        </button>
+                    </div>
+
+                    <table class="w-full text-left text-gray-400">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-800/50">
+                            <tr>
+                                <th class="px-6 py-3">ตอนที่</th>
+                                <th class="px-6 py-3">ชื่อตอน</th>
+                                <th class="px-6 py-3">อัปเดตเมื่อ</th>
+                                <th class="px-6 py-3 text-right">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="episode-table-body" class="divide-y divide-gray-800">
+                            <tr><td colspan="4" class="text-center py-10 text-gray-500">กรุณาเลือกอนิเมะเพื่อดูรายการตอน</td></tr>
+                        </tbody>
+                    </table>
+                    
+                    <div id="episode-pagination" class="flex justify-between items-center px-6 py-3 bg-gray-800/30 border-t border-gray-800 hidden">
+                        <span id="page-info-ep" class="text-xs text-gray-500">หน้า 1</span>
+                        <div class="flex gap-2">
+                            <button id="prev-page-ep" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs disabled:opacity-50">ก่อนหน้า</button>
+                            <button id="next-page-ep" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs disabled:opacity-50">ถัดไป</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="banners-panel" class="panel hidden space-y-6">
+                <div class="flex justify-between items-center bg-[#1e293b] p-4 rounded-xl border border-gray-800">
+                    <h3 class="text-lg font-bold text-white">จัดการแบนเนอร์</h3>
+                    <button onclick="openBannerModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium shadow-lg transition-colors">
+                        <i class="fas fa-plus"></i> เพิ่มแบนเนอร์
+                    </button>
+                </div>
+                <div class="glass-panel rounded-xl overflow-hidden">
+                    <table class="w-full text-left text-gray-400">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-800/50">
+                            <tr>
+                                <th class="px-6 py-3">รูปภาพ</th>
+                                <th class="px-6 py-3">หัวข้อ</th>
+                                <th class="px-6 py-3">ลำดับ</th>
+                                <th class="px-6 py-3 text-right">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="banner-table-body" class="divide-y divide-gray-800"></tbody>
+                    </table>
+                    <p class="text-xs text-gray-500 p-4 text-center bg-gray-800/30"><i class="fas fa-info-circle"></i> ลากแล้ววางเพื่อจัดลำดับแบนเนอร์</p>
+                </div>
+            </div>
+
+            <div id="tags-panel" class="panel hidden space-y-6">
+                <div class="flex justify-between items-center bg-[#1e293b] p-4 rounded-xl border border-gray-800">
+                    <h3 class="text-lg font-bold text-white">จัดการหมวดหมู่ (Tags)</h3>
+                    <button onclick="openTagModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium shadow-lg transition-colors">
+                        <i class="fas fa-plus"></i> เพิ่มหมวดหมู่
+                    </button>
+                </div>
+                <div class="glass-panel rounded-xl overflow-hidden">
+                    <table class="w-full text-left text-gray-400">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-800/50">
+                            <tr>
+                                <th class="px-6 py-3">ชื่อหมวดหมู่</th>
+                                <th class="px-6 py-3">Slug (อ้างอิง)</th>
+                                <th class="px-6 py-3 text-right">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tag-table-body" class="divide-y divide-gray-800"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="reports-panel" class="panel hidden space-y-6">
+                <div class="flex justify-between items-center bg-[#1e293b] p-4 rounded-xl border border-gray-800">
+                    <h3 class="text-lg font-bold text-white">รายงานปัญหาไฟล์เสีย</h3>
+                    <button id="btn-refresh-reports" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                        <i class="fas fa-sync-alt"></i> รีเฟรช
+                    </button>
+                </div>
+                <div class="glass-panel rounded-xl overflow-hidden">
+                    <table class="w-full text-left text-gray-400">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-800/50">
+                            <tr>
+                                <th class="px-6 py-3">ชื่อเรื่อง</th>
+                                <th class="px-6 py-3">ตอน/รายละเอียด</th>
+                                <th class="px-6 py-3">สาเหตุ</th>
+                                <th class="px-6 py-3">เวลาแจ้ง</th>
+                                <th class="px-6 py-3 text-right">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="report-table-body" class="divide-y divide-gray-800"></tbody>
+                    </table>
+                    <div class="flex justify-between items-center px-6 py-3 bg-gray-800/30 border-t border-gray-800">
+                        <span id="page-info-report" class="text-xs text-gray-500">หน้า 1</span>
+                        <div class="flex gap-2">
+                            <button id="prev-page-report" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs disabled:opacity-50">ก่อนหน้า</button>
+                            <button id="next-page-report" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs disabled:opacity-50">ถัดไป</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="show-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4 modal-enter">
+        <div class="bg-[#1e293b] w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-700 flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white">จัดการข้อมูลอนิเมะ</h3>
+                <button onclick="document.getElementById('show-modal').classList.add('hidden'); document.getElementById('show-modal').classList.remove('flex');" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scrollbar-y">
+                <form id="show-form" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">ชื่อเรื่อง</label>
+                            <input type="text" id="show-title" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white focus:ring-indigo-500 focus:border-indigo-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">รูปปก (URL)</label>
+                            <input type="url" id="show-thumbnail" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white focus:ring-indigo-500 focus:border-indigo-500" required placeholder="https://...">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">เรื่องย่อ</label>
+                        <textarea id="show-desc" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">หมวดหมู่ (Tags)</label>
+                        <div id="tags-checkbox-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-gray-900 p-3 rounded-lg border border-gray-700 max-h-32 overflow-y-auto custom-scrollbar-y">
+                            </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">ยอดวิวเริ่มต้น</label>
+                            <input type="number" id="show-view-count" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white" value="0">
+                        </div>
+                        <div class="flex items-end">
+                            <label class="flex items-center space-x-3 bg-gray-900 p-2.5 rounded-lg border border-gray-700 w-full cursor-pointer hover:bg-gray-800">
+                                <input type="checkbox" id="show-completed" class="form-checkbox h-5 w-5 text-indigo-600 bg-gray-800 border-gray-600 rounded">
+                                <span class="text-sm font-medium text-gray-300">ฉายจบแล้ว (Completed)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end gap-3 pt-4 border-t border-gray-700">
+                        <button type="button" onclick="document.getElementById('show-modal').classList.add('hidden'); document.getElementById('show-modal').classList.remove('flex');" class="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">ยกเลิก</button>
+                        <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-lg">บันทึก</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
-    <div class="flex h-screen overflow-hidden">
-        
-        <div class="hidden md:flex md:flex-shrink-0">
-            <div class="flex flex-col w-64 bg-black border-r border-gray-800">
-                <div onclick="switchTab('dashboard')" class="flex items-center h-16 flex-shrink-0 px-6 bg-gray-900/50 text-white font-bold text-xl border-b border-gray-800 cursor-pointer hover:text-indigo-400 transition-colors">
-                    <span class="text-indigo-500 mr-2">CMS</span> Ani-End
+    <div id="episode-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4 modal-enter">
+        <div class="bg-[#1e293b] w-full max-w-lg rounded-2xl shadow-2xl border border-gray-700">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white">จัดการตอน</h3>
+                <button onclick="document.getElementById('episode-modal').classList.add('hidden'); document.getElementById('episode-modal').classList.remove('flex');" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6">
+                <form id="episode-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">เลือกอนิเมะ</label>
+                        <select id="episode-show-select" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white"></select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">ตอนที่ (ตัวเลข)</label>
+                            <input type="number" id="episode-number" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">ชื่อตอน (Optional)</label>
+                            <input type="text" id="episode-title" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">ลิงก์วิดีโอ (Embed URL)</label>
+                        <input type="url" id="episode-url" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white font-mono text-xs" required placeholder="https://...">
+                    </div>
+                    <div class="flex justify-end gap-3 pt-4">
+                        <button type="submit" class="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-lg">บันทึก</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="bulk-episode-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4 modal-enter">
+        <div class="bg-[#1e293b] w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-700">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white"><i class="fas fa-layer-group mr-2 text-blue-500"></i> เพิ่มหลายตอนพร้อมกัน</h3>
+                <button onclick="document.getElementById('bulk-episode-modal').classList.add('hidden'); document.getElementById('bulk-episode-modal').classList.remove('flex');" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">เลือกอนิเมะ</label>
+                        <select id="bulk-episode-show-select" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">เริ่มที่ตอน (ตัวเลข)</label>
+                        <input type="number" id="bulk-start-ep" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm" value="1">
+                    </div>
                 </div>
-                <div class="flex-1 flex flex-col overflow-y-auto py-4">
-                    <nav class="flex-1 px-3 space-y-1">
-                        <button id="tab-dashboard" onclick="switchTab('dashboard')" class="tab-btn w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-white bg-gray-800 transition-all hover:translate-x-1">
-                            <i class="fas fa-chart-pie w-6 text-center mr-2 text-indigo-400"></i> ภาพรวม
-                        </button>
-                        <button id="tab-shows" onclick="switchTab('shows')" class="tab-btn w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all hover:translate-x-1">
-                            <i class="fas fa-film w-6 text-center mr-2"></i> อนิเมะ
-                        </button>
-                        <button id="tab-banners" onclick="switchTab('banners')" class="tab-btn w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all hover:translate-x-1">
-                            <i class="fas fa-images w-6 text-center mr-2"></i> แบนเนอร์
-                        </button>
-                        <button id="tab-tags" onclick="switchTab('tags')" class="tab-btn w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all hover:translate-x-1">
-                            <i class="fas fa-tags w-6 text-center mr-2"></i> หมวดหมู่
-                        </button>
-                        <button id="tab-reports" onclick="switchTab('reports')" class="tab-btn w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all hover:translate-x-1 relative">
-                            <i class="fas fa-exclamation-triangle w-6 text-center mr-2"></i> รายงานปัญหา
-                            <span id="report-badge" class="hidden absolute right-2 top-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-lg border border-gray-900">0</span>
-                        </button>
-                    </nav>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">รายการลิงก์ (1 บรรทัด = 1 ตอน)</label>
+                    <textarea id="bulk-urls" rows="8" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white font-mono text-xs leading-relaxed focus:ring-blue-500 focus:border-blue-500" placeholder="https://video1.com/embed...&#10;https://video2.com/embed..."></textarea>
+                    <p class="text-xs text-gray-500 mt-1">* ระบบจะไล่ลำดับตอนให้อัตโนมัติ เริ่มจากเลขที่ระบุ</p>
                 </div>
-                <div class="p-4 border-t border-gray-800">
-                    <button id="btn-logout" class="w-full flex items-center justify-center px-4 py-2.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600/90 hover:bg-red-600 transition-colors">
-                        <i class="fas fa-sign-out-alt mr-2"></i> ออกจากระบบ
+                <div class="pt-2">
+                    <button id="btn-submit-bulk" class="w-full px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow-lg transition-colors">
+                        ตรวจสอบและบันทึก
                     </button>
                 </div>
             </div>
         </div>
-
-        <div class="flex flex-col w-0 flex-1 overflow-hidden bg-gray-900">
-            <main class="flex-1 relative z-0 overflow-y-auto focus:outline-none custom-scrollbar">
-                <div class="py-8">
-                    
-                    <div id="dashboard-panel" class="tab-panel px-4 sm:px-6 md:px-8">
-                        <h1 class="text-2xl font-bold text-white mb-6">ภาพรวมระบบ</h1>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                            <div onclick="switchTab('shows')" class="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-lg hover:border-indigo-500/50 hover:bg-gray-800/80 transition-all cursor-pointer group">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-400 text-sm font-medium">อนิเมะทั้งหมด</p>
-                                        <p class="text-3xl font-bold text-white mt-2 group-hover:text-indigo-400 transition-colors" id="stat-total-shows">-</p>
-                                    </div>
-                                    <div class="p-3 rounded-lg bg-indigo-500/10 text-indigo-400 group-hover:scale-110 transition-transform">
-                                        <i class="fas fa-film text-2xl"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div onclick="switchTab('shows')" class="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-lg hover:border-emerald-500/50 hover:bg-gray-800/80 transition-all cursor-pointer group">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-400 text-sm font-medium">ตอนทั้งหมด</p>
-                                        <p class="text-3xl font-bold text-white mt-2 group-hover:text-emerald-400 transition-colors" id="stat-total-episodes">-</p>
-                                    </div>
-                                    <div class="p-3 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
-                                        <i class="fas fa-play-circle text-2xl"></i>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div onclick="switchTab('reports')" class="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-lg hover:border-rose-500/50 hover:bg-gray-800/80 transition-all cursor-pointer group">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-400 text-sm font-medium">รายงานปัญหา</p>
-                                        <p class="text-3xl font-bold text-white mt-2 group-hover:text-rose-400 transition-colors" id="stat-total-reports">-</p>
-                                    </div>
-                                    <div class="p-3 rounded-lg bg-rose-500/10 text-rose-400 group-hover:scale-110 transition-transform">
-                                        <i class="fas fa-exclamation-triangle text-2xl"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="shows-panel" class="tab-panel hidden px-4 sm:px-6 md:px-8">
-                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                            <h1 class="text-2xl font-bold text-white">จัดการอนิเมะ</h1>
-                            <button onclick="openShowModal()" class="flex items-center bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-indigo-500/20 transition-all">
-                                <i class="fas fa-plus mr-2"></i> เพิ่มอนิเมะ
-                            </button>
-                        </div>
-                        
-                        <div class="mb-6 bg-gray-800 p-4 rounded-xl shadow-sm flex flex-col sm:flex-row gap-3 items-center border border-gray-700/50">
-                            <div class="relative flex-1 w-full">
-                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
-                                    <i class="fas fa-search"></i>
-                                </span>
-                                <input type="text" id="search-show" placeholder="ค้นหาด้วยคำเต็ม... (เช่น One, Piece, Attack)" class="pl-10 pr-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full text-white placeholder-gray-500 text-sm">
-                            </div>
-                            <div class="flex gap-2 w-full sm:w-auto">
-                                <button id="btn-search-show" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex-1 sm:flex-none">
-                                    ค้นหา
-                                </button>
-                                <button id="btn-reset-show" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex-1 sm:flex-none border border-gray-600">
-                                    <i class="fas fa-sync-alt"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="bg-gray-800 shadow-xl overflow-hidden rounded-xl border border-gray-700/50">
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-700">
-                                    <thead class="bg-gray-900/50">
-                                        <tr>
-                                            <th scope="col" onclick="sortShows('title')" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white group select-none">
-                                                เรื่อง <i class="fas fa-sort ml-1 opacity-50 group-hover:opacity-100"></i>
-                                            </th>
-                                            <th scope="col" onclick="sortShows('latestEpisodeNumber')" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white group select-none">
-                                                ตอนล่าสุด <i class="fas fa-sort ml-1 opacity-50 group-hover:opacity-100"></i>
-                                            </th>
-                                            <th scope="col" onclick="sortShows('viewCount')" class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white group select-none">
-                                                ยอดวิว <i class="fas fa-sort ml-1 opacity-50 group-hover:opacity-100"></i>
-                                            </th>
-                                            <th scope="col" onclick="sortShows('updatedAt')" class="px-6 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white group select-none">
-                                                อัปเดต <i class="fas fa-sort ml-1 opacity-50 group-hover:opacity-100"></i>
-                                            </th>
-                                            <th scope="col" class="relative px-6 py-4"><span class="sr-only">Actions</span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="show-table-body" class="bg-gray-800 divide-y divide-gray-700"></tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div class="mt-4 flex justify-between items-center bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-700/50">
-                            <button id="prev-page-show" class="px-4 py-2 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                <i class="fas fa-chevron-left mr-1"></i> ก่อนหน้า
-                            </button>
-                            <span id="page-info-show" class="text-sm text-gray-400 font-medium bg-gray-900 px-3 py-1 rounded-md border border-gray-700">หน้า 1</span>
-                            <button id="next-page-show" class="px-4 py-2 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                ถัดไป <i class="fas fa-chevron-right ml-1"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div id="episodes-panel" class="tab-panel hidden px-4 sm:px-6 md:px-8">
-                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                            <h1 class="text-2xl font-bold text-white flex items-center">
-                                <button id="btn-back-to-shows" class="mr-3 text-gray-400 hover:text-white transition-colors hidden">
-                                    <i class="fas fa-arrow-left"></i>
-                                </button>
-                                <span id="episodes-header-title">จัดการตอน</span>
-                            </h1>
-                            <div class="flex gap-2">
-                                <button onclick="openBulkEpisodeModal()" class="flex items-center bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-all">
-                                    <i class="fas fa-layer-group mr-2"></i> เพิ่มหลายตอน
-                                </button>
-                                <button onclick="openEpisodeModal()" class="flex items-center bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-emerald-500/20 transition-all">
-                                    <i class="fas fa-plus mr-2"></i> เพิ่มตอนใหม่
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="mb-6 bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-700/50">
-                            <label class="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">เลือกอนิเมะ</label>
-                            <div class="flex flex-col sm:flex-row gap-3">
-                                <select id="filter-episode-show" class="flex-1 block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-white sm:text-sm">
-                                    <option value="">-- กรุณาเลือกอนิเมะ --</option>
-                                </select>
-                                <div class="flex gap-2">
-                                    <button id="btn-sort-episodes" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2.5 rounded-lg text-sm font-medium transition-colors" title="ใหม่ -> เก่า">
-                                        <i class="fas fa-sort-numeric-up-alt"></i>
-                                    </button>
-                                    <button id="btn-load-episodes" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap">
-                                        <i class="fas fa-filter mr-2"></i> แสดงข้อมูล
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="bg-gray-800 shadow-xl overflow-hidden rounded-xl border border-gray-700/50">
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-700">
-                                    <thead class="bg-gray-900/50">
-                                        <tr>
-                                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">ตอนที่</th>
-                                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">ชื่อตอน</th>
-                                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">อัปเดต</th>
-                                            <th class="relative px-6 py-4"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="episode-table-body" class="bg-gray-800 divide-y divide-gray-700">
-                                        <tr><td colspan="4" class="text-center py-12 text-gray-500 flex flex-col items-center justify-center">
-                                            <i class="fas fa-film text-4xl mb-3 opacity-20"></i>
-                                            กรุณาเลือกอนิเมะด้านบนเพื่อแสดงรายการตอน
-                                        </td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                         <div id="episode-pagination" class="mt-4 flex justify-between items-center bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-700/50 hidden">
-                            <button id="prev-page-ep" class="px-4 py-2 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50">ก่อนหน้า</button>
-                            <span id="page-info-ep" class="text-sm text-gray-400 bg-gray-900 px-3 py-1 rounded-md border border-gray-700">หน้า 1</span>
-                            <button id="next-page-ep" class="px-4 py-2 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50">ถัดไป</button>
-                        </div>
-                    </div>
-
-                    <div id="banners-panel" class="tab-panel hidden px-4 sm:px-6 md:px-8">
-                         <div class="flex justify-between items-center mb-6">
-                            <h1 class="text-2xl font-bold text-white">จัดการแบนเนอร์</h1>
-                            <button onclick="openBannerModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors">
-                                <i class="fas fa-plus mr-2"></i> เพิ่มแบนเนอร์
-                            </button>
-                        </div>
-                        <div class="bg-gray-800 shadow-xl overflow-hidden rounded-xl border border-gray-700/50">
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-700">
-                                    <thead class="bg-gray-900/50">
-                                        <tr>
-                                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase">รูปภาพ</th>
-                                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase">หัวข้อ</th>
-                                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase">ลำดับ</th>
-                                            <th class="relative px-6 py-4"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="banner-table-body" class="bg-gray-800 divide-y divide-gray-700"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="tags-panel" class="tab-panel hidden px-4 sm:px-6 md:px-8">
-                         <div class="flex justify-between items-center mb-6">
-                            <h1 class="text-2xl font-bold text-white">จัดการหมวดหมู่</h1>
-                            <button onclick="document.getElementById('tag-modal').classList.remove('hidden'); document.getElementById('tag-modal').classList.add('flex'); document.getElementById('tag-form').reset(); document.getElementById('tag-modal-title').innerText='เพิ่มหมวดหมู่';" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors">
-                                <i class="fas fa-plus mr-2"></i> เพิ่มหมวดหมู่
-                            </button>
-                        </div>
-                        <div class="bg-gray-800 shadow-xl overflow-hidden rounded-xl border border-gray-700/50">
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-700">
-                                    <thead class="bg-gray-900/50">
-                                        <tr>
-                                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase">ชื่อ</th>
-                                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase">Slug</th>
-                                            <th class="relative px-6 py-4"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tag-table-body" class="bg-gray-800 divide-y divide-gray-700"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                     <div id="reports-panel" class="tab-panel hidden px-4 sm:px-6 md:px-8">
-                        <div class="flex justify-between items-center mb-6">
-                           <h1 class="text-2xl font-bold text-white">รายงานปัญหา</h1>
-                           <div class="flex gap-2">
-                               <button id="btn-refresh-reports" class="text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 p-2 rounded-lg transition-colors" title="รีเฟรชข้อมูล">
-                                   <i class="fas fa-sync-alt"></i>
-                               </button>
-                           </div>
-                       </div>
-                       <div class="bg-gray-800 shadow-xl overflow-hidden rounded-xl border border-gray-700/50">
-                           <div class="overflow-x-auto">
-                               <table class="min-w-full divide-y divide-gray-700">
-                                   <thead class="bg-gray-900/50">
-                                       <tr>
-                                           <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase">เรื่อง</th>
-                                           <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase">ตอน/ID</th>
-                                           <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase">เหตุผล</th>
-                                           <th class="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase">เวลา</th>
-                                           <th class="relative px-6 py-4"></th>
-                                       </tr>
-                                   </thead>
-                                   <tbody id="report-table-body" class="bg-gray-800 divide-y divide-gray-700"></tbody>
-                               </table>
-                           </div>
-                       </div>
-                       
-                       <div class="mt-4 flex justify-between items-center bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-700/50">
-                            <button id="prev-page-report" class="px-4 py-2 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                <i class="fas fa-chevron-left mr-1"></i> ก่อนหน้า
-                            </button>
-                            <span id="page-info-report" class="text-sm text-gray-400 font-medium bg-gray-900 px-3 py-1 rounded-md border border-gray-700">หน้า 1</span>
-                            <button id="next-page-report" class="px-4 py-2 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                ถัดไป <i class="fas fa-chevron-right ml-1"></i>
-                            </button>
-                        </div>
-                   </div>
-
-                </div>
-            </main>
-        </div>
     </div>
 
-    <div id="show-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4 transition-opacity">
-        <div class="bg-gray-800 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-700 text-white shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white">ข้อมูลอนิเมะ</h2>
-                <button type="button" class="close-modal text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+    <div id="banner-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4 modal-enter">
+        <div class="bg-[#1e293b] w-full max-w-lg rounded-2xl shadow-2xl border border-gray-700">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white">จัดการแบนเนอร์</h3>
+                <button onclick="document.getElementById('banner-modal').classList.add('hidden'); document.getElementById('banner-modal').classList.remove('flex');" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
             </div>
-            <form id="show-form" class="space-y-5">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">ชื่อเรื่อง</label>
-                    <input type="text" id="show-title" required class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white placeholder-gray-600">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">คำอธิบาย</label>
-                    <textarea id="show-desc" rows="3" class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white placeholder-gray-600"></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">รูปปก (URL)</label>
-                    <input type="url" id="show-thumbnail" required class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white placeholder-gray-600">
-                </div>
-                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">ยอดวิวเริ่มต้น</label>
-                    <input type="number" id="show-view-count" value="0" min="0" class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-2">หมวดหมู่</label>
-                    <div id="tags-checkbox-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3 border border-gray-700 p-3 rounded-lg max-h-40 overflow-y-auto bg-gray-900/50 custom-scrollbar">
-                        </div>
-                </div>
-
-                <div class="flex items-center bg-gray-900/50 p-3 rounded-lg border border-gray-700/50">
-                    <input type="checkbox" id="show-completed" class="h-5 w-5 text-indigo-500 focus:ring-indigo-500 border-gray-600 rounded bg-gray-800">
-                    <label for="show-completed" class="ml-3 block text-sm font-medium text-gray-300">เรื่องนี้จบแล้ว (Completed)</label>
-                </div>
-                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-700">
-                    <button type="button" class="close-modal bg-gray-700 py-2.5 px-5 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-600 transition-colors">ยกเลิก</button>
-                    <button type="submit" class="bg-indigo-600 py-2.5 px-5 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 transition-all">บันทึกข้อมูล</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="episode-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-        <div class="bg-gray-800 rounded-2xl p-6 w-full max-w-lg border border-gray-700 text-white shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white">ข้อมูลตอน</h2>
-                <button type="button" class="close-modal text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
-            </div>
-            <form id="episode-form" class="space-y-5">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">เลือกเรื่อง</label>
-                    <select id="episode-show-select" required class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-emerald-500 focus:border-emerald-500 text-white">
-                        <option value="">กำลังโหลด...</option>
-                    </select>
-                </div>
-                <div class="grid grid-cols-1 gap-5">
+            <div class="p-6">
+                <form id="banner-form" class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-1">ตอนที่</label>
-                        <input type="number" id="episode-number" step="0.1" required class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-emerald-500 focus:border-emerald-500 text-white">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">หัวข้อแบนเนอร์</label>
+                        <input type="text" id="banner-title" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white" required>
                     </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">ชื่อตอน (ไม่บังคับ)</label>
-                    <input type="text" id="episode-title" class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-emerald-500 focus:border-emerald-500 text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">วิดีโอ URL / Embed Code</label>
-                    <textarea id="episode-url" rows="3" required placeholder="https://youtube.com/... หรือ <iframe...>" class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-emerald-500 focus:border-emerald-500 text-white font-mono text-xs"></textarea>
-                    <p class="text-xs text-gray-500 mt-1">รองรับลิงก์ YouTube, Dailymotion หรือ Embed Code (Iframe)</p>
-                </div>
-                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-700">
-                    <button type="button" class="close-modal bg-gray-700 py-2.5 px-5 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-600 transition-colors">ยกเลิก</button>
-                    <button type="submit" class="bg-emerald-600 py-2.5 px-5 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 transition-all">บันทึก</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="bulk-episode-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-        <div class="bg-gray-800 rounded-2xl p-6 w-full max-w-2xl border border-gray-700 text-white shadow-2xl h-[80vh] flex flex-col">
-            <div class="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 class="text-xl font-bold text-white flex items-center"><i class="fas fa-layer-group mr-2 text-indigo-400"></i> เพิ่มหลายตอน (Bulk Add)</h2>
-                <button type="button" class="close-modal text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
-            </div>
-            
-            <div class="space-y-4 flex-1 flex flex-col min-h-0">
-                <div class="flex-shrink-0">
-                    <label class="block text-sm font-medium text-gray-400 mb-1">เลือกเรื่อง</label>
-                    <select id="bulk-episode-show-select" class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
-                        <option value="">-- กรุณาเลือกอนิเมะ --</option>
-                    </select>
-                </div>
-                
-                <div class="grid grid-cols-2 gap-4 flex-shrink-0">
                     <div>
-                         <label class="block text-sm font-medium text-gray-400 mb-1">เริ่มจากตอนที่</label>
-                         <input type="number" id="bulk-start-ep" value="1" class="block w-full bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">รูปภาพ (URL 16:9)</label>
+                        <input type="url" id="banner-image-url" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white" required>
                     </div>
-                </div>
-
-                <div class="flex-1 flex flex-col min-h-0">
-                    <div class="flex justify-between items-center mb-1">
-                        <label class="block text-sm font-medium text-gray-400">รายการลิงก์วิดีโอ (1 บรรทัด = 1 ตอน)</label>
-                        <span class="text-xs text-emerald-400">* ระบบจะข้ามตอนที่มีอยู่แล้วอัตโนมัติ</span>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">ลิงก์ปลายทาง (เช่น player.html?id=...)</label>
+                        <input type="text" id="banner-link-url" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white">
                     </div>
-                    <textarea id="bulk-urls" class="flex-1 block w-full bg-gray-900 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500 text-white font-mono text-xs whitespace-nowrap resize-y min-h-[200px]" placeholder="https://video1.com...
-https://video2.com...
-https://video3.com..."></textarea>
-                    <div class="text-xs text-gray-500 mt-2 space-y-1">
-                        <p>1. ลิงก์จะถูกเรียงตามลำดับบรรทัด เริ่มจากเลขตอนที่กำหนด</p>
-                        <p>2. รองรับลิงก์ YouTube (ทุกแบบ), Dailymotion หรือ Iframe Code</p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">ลำดับการแสดง</label>
+                            <input type="number" id="banner-order" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white">
+                        </div>
+                        <div class="flex items-end">
+                            <label class="flex items-center space-x-3 bg-gray-900 p-2.5 rounded-lg border border-gray-700 w-full cursor-pointer hover:bg-gray-800">
+                                <input type="checkbox" id="banner-active" class="form-checkbox h-5 w-5 text-indigo-600 bg-gray-800 border-gray-600 rounded" checked>
+                                <span class="text-sm font-medium text-gray-300">เปิดใช้งาน</span>
+                            </label>
+                        </div>
                     </div>
-                </div>
-            </div>
-
-            <div class="flex justify-end space-x-3 pt-4 border-t border-gray-700 flex-shrink-0 mt-4">
-                <button type="button" class="close-modal bg-gray-700 py-2.5 px-5 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-600 transition-colors">ยกเลิก</button>
-                <button id="btn-submit-bulk" class="bg-indigo-600 py-2.5 px-5 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-indigo-500 shadow-lg transition-all">
-                    <i class="fas fa-save mr-2"></i> ตรวจสอบและบันทึก
-                </button>
+                    <div class="flex justify-end gap-3 pt-4">
+                        <button type="submit" class="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-lg">บันทึก</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
-    <div id="banner-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-        <div class="bg-gray-800 rounded-2xl p-6 w-full max-w-lg border border-gray-700 text-white shadow-2xl">
-            <h2 class="text-xl font-bold mb-4 text-white">ข้อมูลแบนเนอร์</h2>
-            <form id="banner-form" class="space-y-5">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">หัวข้อ</label>
-                    <input type="text" id="banner-title" required class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">รูปภาพ URL (แนวนอน)</label>
-                    <input type="url" id="banner-image-url" required class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">ลิงก์ปลายทาง (URL)</label>
-                    <input type="text" id="banner-link-url" class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
-                </div>
-                <div class="grid grid-cols-2 gap-5">
-                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-1">ลำดับการแสดงผล</label>
-                        <input type="number" id="banner-order" value="0" class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
+    <div id="tag-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4 modal-enter">
+        <div class="bg-[#1e293b] w-full max-w-sm rounded-2xl shadow-2xl border border-gray-700">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h3 id="tag-modal-title" class="text-xl font-bold text-white">เพิ่มหมวดหมู่</h3>
+                <button onclick="document.getElementById('tag-modal').classList.add('hidden'); document.getElementById('tag-modal').classList.remove('flex');" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6">
+                <form id="tag-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">ชื่อหมวดหมู่</label>
+                        <input type="text" id="tag-name" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white" required placeholder="เช่น Action, Drama">
                     </div>
-                </div>
-                <div class="flex items-center bg-gray-900/50 p-3 rounded-lg border border-gray-700/50">
-                    <input type="checkbox" id="banner-active" checked class="h-5 w-5 text-indigo-500 focus:ring-indigo-500 border-gray-600 rounded bg-gray-800">
-                    <label for="banner-active" class="ml-3 block text-sm font-medium text-gray-300">ใช้งาน (Active)</label>
-                </div>
-                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-700">
-                    <button type="button" class="close-modal bg-gray-700 py-2.5 px-5 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-600 transition-colors">ยกเลิก</button>
-                    <button type="submit" class="bg-indigo-600 py-2.5 px-5 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 transition-all">บันทึก</button>
-                </div>
-            </form>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Slug (ภาษาอังกฤษ ตัวเล็ก)</label>
+                        <input type="text" id="tag-slug" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white" required placeholder="เช่น action, drama">
+                    </div>
+                    <div class="flex justify-end gap-3 pt-4">
+                        <button type="submit" class="w-full px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-lg">บันทึก</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
-    <div id="tag-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-        <div class="bg-gray-800 rounded-2xl p-6 w-full max-w-sm border border-gray-700 text-white shadow-2xl">
-            <h2 id="tag-modal-title" class="text-xl font-bold mb-4 text-white">เพิ่มหมวดหมู่</h2>
-            <form id="tag-form" class="space-y-5">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">ชื่อหมวดหมู่ (เช่น Action)</label>
-                    <input type="text" id="tag-name" required class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-white">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Slug (เช่น action)</label>
-                    <input type="text" id="tag-slug" required class="block w-full bg-gray-900 border border-gray-700 rounded-lg shadow-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-gray-400">
-                    <p class="text-xs text-gray-500 mt-1">ภาษาอังกฤษตัวเล็ก ห้ามเว้นวรรค</p>
-                </div>
-                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-700">
-                    <button type="button" class="close-modal bg-gray-700 py-2.5 px-5 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-600 transition-colors">ยกเลิก</button>
-                    <button type="submit" class="bg-indigo-600 py-2.5 px-5 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 transition-all">บันทึก</button>
-                </div>
-            </form>
-        </div>
+    <div id="global-loading" class="fixed inset-0 bg-black/50 z-[60] hidden items-center justify-center flex-col">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
+        <p id="loading-text" class="text-white font-medium animate-pulse">กำลังทำงาน...</p>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.2/dragula.min.js"></script>
-    
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[70] space-y-2 pointer-events-none"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.3/dragula.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </body>
 </html>

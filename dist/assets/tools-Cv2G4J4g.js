@@ -1,9 +1,0 @@
-function c(t){if(typeof t!="string")return t||"";let e=t.normalize("NFC");return e=e.replace(/\u0E4D\u0E32/g,"ำ"),e=e.replace(/\u0E32\u0E4D/g,"ำ"),e}function l(t){if(!t)return[];const e=new Set,r=c(t).toLowerCase().trim();return r?(e.add(r),r.split(/\s+/).forEach(o=>{if(!o)return;e.add(o);let n="";const a=Math.min(o.length,20);for(let u=0;u<a;u++)n+=o[u],e.add(n)}),[...e]):[]}function s(t){if(!t)return"-";try{return(t.toDate?t.toDate():new Date(t)).toLocaleString("th-TH",{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}catch{return"-"}}function d(t,e){let r;return function(...i){const o=this;clearTimeout(r),r=setTimeout(()=>t.apply(o,i),e)}}function f(t){if(!t)return[];const e=c(t).toLowerCase().trim();return e?e.split(/\s+/).filter(r=>r.length>0):[]}function m(t){if(!t)return"";let e=t.trim();if(e.startsWith("<iframe"))return e;const r=/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i,i=e.match(r);if(i&&i[1])return`<iframe src="https://www.youtube.com/embed/${i[1]}?autoplay=1&rel=0&showinfo=0" 
-                width="100%" height="100%" 
-                frameborder="0" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" 
-                allowfullscreen></iframe>`;const o=/dailymotion\.com\/video\/([a-zA-Z0-9]+)/i,n=e.match(o);return n&&n[1]?`<iframe src="https://www.dailymotion.com/embed/video/${n[1]}?autoplay=1" 
-                width="100%" height="100%" 
-                frameborder="0" 
-                allow="autoplay; fullscreen" 
-                allowfullscreen></iframe>`:`<iframe src="${e}" width="100%" height="100%" frameborder="0" allowfullscreen allow="autoplay"></iframe>`}export{m as a,l as b,d,s as f,f as g};

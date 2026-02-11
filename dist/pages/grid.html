@@ -3,50 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="ANI-END - เว็บไซต์ดูอนิเมะออนไลน์ รวบรวมอนิเมะจีน อนิเมะพากย์ไทย และอนิเมะยอดนิยม อัปเดตตอนใหม่ทุกวัน">
-    <title>ANI-END - รายการอนิเมะและผลการค้นหา</title>
-    
-
-    <style>
-        #grid-view-title { scroll-margin-top: 80px; }
-        .scroll-to-top { transition: all 0.3s; visibility: hidden; opacity: 0; transform: translateY(20px); }
-        .scroll-to-top.visible { visibility: visible; opacity: 1; transform: translateY(0); }
-        
-        /* Skeleton */
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .skeleton {
-            background-color: #374151;
-            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-    </style>
-  <script type="module" crossorigin src="/assets/grid-BPwtFWHx.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/db-config-JzEx42YR.js">
-  <link rel="modulepreload" crossorigin href="/assets/card-DUAddn7M.js">
-  <link rel="modulepreload" crossorigin href="/assets/tools-Cv2G4J4g.js">
-  <link rel="modulepreload" crossorigin href="/assets/search-CnOzQKex.js">
-  <link rel="modulepreload" crossorigin href="/assets/navbar-DtgS--Xs.js">
-  <link rel="stylesheet" crossorigin href="/assets/db-config-B9_qiA1B.css">
+    <title>รายการอนิเมะ - ANI-END</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+  <script type="module" crossorigin src="/ANI-END/assets/grid-DIaPUmyN.js"></script>
+  <link rel="modulepreload" crossorigin href="/ANI-END/assets/db-config-CDOV0zmd.js">
+  <link rel="modulepreload" crossorigin href="/ANI-END/assets/navbar-BPKScrBx.js">
+  <link rel="modulepreload" crossorigin href="/ANI-END/assets/card-lo2QomBm.js">
+  <link rel="modulepreload" crossorigin href="/ANI-END/assets/tools-BcGrSTdy.js">
+  <link rel="modulepreload" crossorigin href="/ANI-END/assets/search-Cjk7YTPU.js">
+  <link rel="stylesheet" crossorigin href="/ANI-END/assets/navbar-BjZoIYDr.css">
 </head>
-<body class="bg-black text-gray-100">
+<body class="bg-[#0f172a] text-gray-100 min-h-screen flex flex-col">
 
-    <div id="navbar-placeholder"></div>
-
+    <div id="navbar-placeholder" class="sticky top-0 z-50"></div>
 
-    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div id="grid-view-container">
-            <h2 id="grid-view-title" class="text-3xl font-bold mb-6">...</h2>
-            <div id="grid-view-content" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4 min-h-[300px]"></div>
-            <div class="text-center mt-8">
-                <button id="load-more-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors duration-200 hidden">โหลดเพิ่มเติม...</button>
+    <main class="flex-grow container mx-auto px-4 py-8 mt-4">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <div>
+                <h1 id="page-title" class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500">
+                    รายการอนิเมะ
+                </h1>
+                <p id="result-count" class="text-gray-400 text-sm mt-1">กำลังโหลดข้อมูล...</p>
             </div>
+            <a href="grid.html" id="clear-search-btn" class="hidden px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors flex items-center gap-2">
+                <i class="ri-close-circle-line"></i> ล้างการค้นหา
+            </a>
+        </div>
+
+        <div id="anime-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 min-h-[300px]">
+            <div class="aspect-[2/3] rounded-xl skeleton"></div>
+            <div class="aspect-[2/3] rounded-xl skeleton"></div>
+            <div class="aspect-[2/3] rounded-xl skeleton"></div>
+            <div class="aspect-[2/3] rounded-xl skeleton"></div>
+            <div class="aspect-[2/3] rounded-xl skeleton"></div>
+            <div class="aspect-[2/3] rounded-xl skeleton"></div>
+        </div>
+
+        <div class="text-center mt-10">
+            <button id="load-more-btn" class="hidden px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full shadow-lg transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                โหลดเพิ่มเติม
+            </button>
+        </div>
+
+        <div id="no-results" class="hidden flex flex-col items-center justify-center py-20 text-center">
+            <i class="ri-search-2-line text-6xl text-gray-700 mb-4"></i>
+            <h3 class="text-xl font-semibold text-gray-400">ไม่พบข้อมูล</h3>
+            <p class="text-gray-500 mt-2">ลองเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่อื่น</p>
         </div>
     </main>
 
-    <footer class="bg-gray-900 border-t border-gray-800 mt-8 py-8">
+    <button id="scroll-to-top" class="scroll-to-top fixed bottom-8 right-8 bg-green-600 text-white p-3 rounded-full shadow-lg cursor-pointer hover:bg-green-700 z-50">
+        <i class="ri-arrow-up-line text-2xl"></i>
+    </button>
+
+    <footer class="bg-gray-900 border-t border-gray-800 mt-auto py-8">
         <div class="container mx-auto px-4 text-center">
-            <p class="text-gray-400 text-sm mb-2">© 2024 ANI-END. All rights reserved.</p>
-            <p class="text-gray-500 text-xs">เว็บไซต์นี้จัดทำขึ้นเพื่อการศึกษาและการเรียนรู้เท่านั้น</p>
+            <p class="text-gray-500 text-sm">© 2024 ANI-END. All rights reserved.</p>
         </div>
     </footer>
+
 </body>
 </html>
+
