@@ -9,7 +9,7 @@ import { generateKeywords, formatTimestamp } from "../../js/utils/tools.js";
 
 // --- 🧠 SERVICE LAYER (Business Logic) ---
 const ShowService = {
-    cursors: [null], // Pagination Cursors
+    cursors: [null], 
     currentPage: 1,
     currentSort: { field: 'updatedAt', dir: 'desc' },
     
@@ -32,15 +32,12 @@ const ShowService = {
         const colRef = getCollectionRef("shows");
         let q;
 
-        // Base Query
         let baseQuery = query(colRef, orderBy(this.currentSort.field, this.currentSort.dir));
 
-        // 1. Search Mode
         if (searchVal) {
             q = query(colRef, where("keywords", "array-contains", searchVal), limit(SHOWS_PER_PAGE));
             this.resetPagination();
         } 
-        // 2. Pagination Mode
         else {
             if (mode === 'reset') {
                 this.resetPagination();
@@ -63,13 +60,11 @@ const ShowService = {
 
         const snap = await getDocs(q);
         
-        // Handle Empty Page
         if (snap.empty && mode !== 'reset' && this.currentPage > 1) {
-            this.currentPage--; // Revert page
-            return await this.fetchList('current'); // Retry
+            this.currentPage--; 
+            return await this.fetchList('current'); 
         }
 
-        // Store Next Cursor
         if (snap.docs.length === SHOWS_PER_PAGE) {
             this.cursors[this.currentPage] = snap.docs[snap.docs.length - 1];
         }
@@ -133,6 +128,7 @@ const ShowService = {
 const ShowUI = {
     renderTable(data, onAction) {
         const tbody = document.getElementById('show-table-body');
+        if (!tbody) return;
         tbody.innerHTML = '';
         
         if(data.length === 0) {
@@ -163,7 +159,7 @@ const ShowUI = {
             tbody.appendChild(tr);
         });
 
-        // Bind Events
+        // ✅ ใช้ onclick แทน addEventListener เพื่อป้องกันการผูกคำสั่งซ้ำ
         tbody.querySelectorAll('.btn-manage').forEach(b => b.onclick = () => onAction('manage', b.dataset.id));
         tbody.querySelectorAll('.btn-edit').forEach(b => b.onclick = () => onAction('edit', b.dataset.id));
         tbody.querySelectorAll('.btn-del').forEach(b => b.onclick = () => onAction('delete', b.dataset.id));
@@ -213,16 +209,35 @@ const ShowUI = {
 
 // --- 🎮 CONTROLLER ---
 export function initShowModule() {
-    // Setup Listeners
-    document.getElementById('btn-search-show')?.addEventListener('click', () => refreshShows(true));
-    document.getElementById('btn-reset-show')?.addEventListener('click', () => {
-        document.getElementById('search-show').value = '';
-        refreshShows(false);
-    });
+    // ✅ 1. จัดการปุ่มค้นหาแบบ Clean Event (ล้างคำสั่งเก่าก่อนใส่ใหม่)
+    const btnSearch = document.getElementById('btn-search-show');
+    if(btnSearch) {
+        const newBtn = btnSearch.cloneNode(true);
+        btnSearch.parentNode.replaceChild(newBtn, btnSearch);
+        newBtn.onclick = () => refreshShows(true);
+    }
+
+    const btnReset = document.getElementById('btn-reset-show');
+    if(btnReset) {
+        const newBtn = btnReset.cloneNode(true);
+        btnReset.parentNode.replaceChild(newBtn, btnReset);
+        newBtn.onclick = () => {
+            document.getElementById('search-show').value = '';
+            refreshShows(false);
+        };
+    }
     
-    document.getElementById('show-form')?.addEventListener('submit', handleFormSubmit);
-    document.getElementById('next-page-show')?.addEventListener('click', () => loadShows('next'));
-    document.getElementById('prev-page-show')?.addEventListener('click', () => loadShows('prev'));
+    // ✅ 2. จัดการ Form Submit ด้วย onsubmit (มีได้แค่ 1 คำสั่งเสมอ)
+    const form = document.getElementById('show-form');
+    if(form) {
+        form.onsubmit = handleFormSubmit;
+    }
+
+    // Pagination
+    const btnNext = document.getElementById('next-page-show');
+    const btnPrev = document.getElementById('prev-page-show');
+    if(btnNext) btnNext.onclick = () => loadShows('next');
+    if(btnPrev) btnPrev.onclick = () => loadShows('prev');
 
     // Global Access
     window.openShowModal = (id) => handleOpenModal(id);
@@ -238,7 +253,8 @@ export function initShowModule() {
 async function loadShows(mode = 'reset') {
     toggleLoading(true, "กำลังโหลด...");
     try {
-        const searchVal = document.getElementById('search-show').value.trim().toLowerCase();
+        const searchInput = document.getElementById('search-show');
+        const searchVal = searchInput ? searchInput.value.trim().toLowerCase() : '';
         const result = await ShowService.fetchList(mode, searchVal);
         
         ShowUI.renderTable(result.items, (action, id) => {
@@ -276,30 +292,37 @@ async function handleOpenModal(id = null) {
 
 async function handleFormSubmit(e) {
     e.preventDefault();
-    toggleLoading(true, "กำลังบันทึก...");
     
-    const id = e.target.dataset.id;
-    const tags = Array.from(document.querySelectorAll('.show-tag-option:checked')).map(cb => cb.value);
-    if(tags.length === 0) tags.push('อนิเมะ');
+    // ✅ 3. ป้องกันการกดซ้ำ (Double Click Prevention)
+    const btnSubmit = e.submitter || e.target.querySelector('button[type="submit"]');
+    if (btnSubmit && btnSubmit.disabled) return; // ถ้าปุ่มถูกปิดอยู่ ให้หยุดทันที
 
-    const data = {
-        title: document.getElementById('show-title').value.trim(),
-        description: document.getElementById('show-desc').value,
-        thumbnailUrl: document.getElementById('show-thumbnail').value,
-        viewCount: parseInt(document.getElementById('show-view-count').value) || 0,
-        isCompleted: document.getElementById('show-completed').checked,
-        tags: tags
-    };
+    toggleLoading(true, "กำลังบันทึก...");
+    if (btnSubmit) btnSubmit.disabled = true; // 🔒 ล็อคปุ่มทันทีที่เริ่มทำ
 
     try {
+        const id = e.target.dataset.id;
+        const tags = Array.from(document.querySelectorAll('.show-tag-option:checked')).map(cb => cb.value);
+        if(tags.length === 0) tags.push('อนิเมะ');
+
+        const data = {
+            title: document.getElementById('show-title').value.trim(),
+            description: document.getElementById('show-desc').value,
+            thumbnailUrl: document.getElementById('show-thumbnail').value,
+            viewCount: parseInt(document.getElementById('show-view-count').value) || 0,
+            isCompleted: document.getElementById('show-completed').checked,
+            tags: tags
+        };
+
         await ShowService.save(id, data);
         showToast('บันทึกสำเร็จ');
         ShowUI.closeModal();
-        refreshShows(); // Reload List
+        refreshShows(); 
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
         toggleLoading(false);
+        if (btnSubmit) btnSubmit.disabled = false; // 🔓 ปลดล็อคปุ่มเมื่อเสร็จ
     }
 }
 
