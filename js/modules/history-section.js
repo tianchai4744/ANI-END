@@ -19,9 +19,6 @@ function formatDateTime(timestamp) {
     }
 }
 
-// ... (code ก่อนหน้า)
-
-// สร้าง HTML การ์ดแต่ละใบ
 function createHistoryCard(history) {
     const showId = history.showId; 
     const episodeId = history.lastWatchedEpisodeId; 
@@ -63,11 +60,7 @@ function createHistoryCard(history) {
     `;
 }
 
-// ... (code ส่วนที่เหลือเหมือนเดิม)
 
-/**
- * สร้าง HTML สำหรับส่วนประวัติ
- */
 export function renderHistorySectionHTML(historyItems, userId) {
     // 1. กรณีไม่ได้ Login -> แสดงปุ่ม Login
     if (!userId) {
