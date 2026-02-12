@@ -300,7 +300,7 @@
         <div class="bg-[#1e293b] w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-700 flex flex-col max-h-[90vh]">
             <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-[#0f172a]/50 rounded-t-2xl">
                 <h3 class="text-xl font-bold text-white">จัดการอนิเมะ</h3>
-                <button onclick="ShowUI.closeModal()" class="text-gray-400 hover:text-white transition-colors"><i class="ri-close-line text-2xl"></i></button>
+                <button onclick="closeShowModal()" class="text-gray-400 hover:text-white transition-colors"><i class="ri-close-line text-2xl"></i></button>
             </div>
             <form id="show-form" class="flex-1 overflow-y-auto p-6 space-y-4">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -332,7 +332,7 @@
                 </div>
             </form>
             <div class="p-4 border-t border-gray-700 bg-[#0f172a]/50 rounded-b-2xl flex justify-end gap-3">
-                <button onclick="ShowUI.closeModal()" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-colors">ยกเลิก</button>
+                <button onclick="closeShowModal()" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-colors">ยกเลิก</button>
                 <button type="submit" form="show-form" class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5">บันทึกข้อมูล</button>
             </div>
         </div>
@@ -342,7 +342,7 @@
         <div class="bg-[#1e293b] w-full max-w-lg rounded-2xl shadow-2xl border border-gray-700 flex flex-col">
             <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-[#0f172a]/50 rounded-t-2xl">
                 <h3 class="text-xl font-bold text-white">จัดการตอน</h3>
-                <button onclick="EpisodeUI.closeModal('episode-modal')" class="text-gray-400 hover:text-white"><i class="ri-close-line text-2xl"></i></button>
+                <button onclick="closeEpisodeModal('episode-modal')" class="text-gray-400 hover:text-white"><i class="ri-close-line text-2xl"></i></button>
             </div>
             <form id="episode-form" class="p-6 space-y-4">
                 <div>
@@ -365,7 +365,7 @@
                 </div>
             </form>
             <div class="p-4 border-t border-gray-700 bg-[#0f172a]/50 rounded-b-2xl flex justify-end gap-3">
-                <button onclick="EpisodeUI.closeModal('episode-modal')" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">ยกเลิก</button>
+                <button onclick="closeEpisodeModal('episode-modal')" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">ยกเลิก</button>
                 <button type="submit" form="episode-form" class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg">บันทึก</button>
             </div>
         </div>
@@ -375,7 +375,7 @@
         <div class="bg-[#1e293b] w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-700 flex flex-col max-h-[90vh]">
             <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-[#0f172a]/50 rounded-t-2xl">
                 <h3 class="text-xl font-bold text-white"><i class="ri-file-list-3-line mr-2"></i> เพิ่มหลายตอนพร้อมกัน</h3>
-                <button onclick="EpisodeUI.closeModal('bulk-episode-modal')" class="text-gray-400 hover:text-white"><i class="ri-close-line text-2xl"></i></button>
+                <button onclick="closeEpisodeModal('bulk-episode-modal')" class="text-gray-400 hover:text-white"><i class="ri-close-line text-2xl"></i></button>
             </div>
             <div class="p-6 flex-1 overflow-y-auto space-y-4">
                 <div class="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-lg text-sm text-indigo-200">
@@ -397,7 +397,7 @@
                 </div>
             </div>
             <div class="p-4 border-t border-gray-700 bg-[#0f172a]/50 rounded-b-2xl flex justify-end gap-3">
-                <button onclick="EpisodeUI.closeModal('bulk-episode-modal')" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">ยกเลิก</button>
+                <button onclick="closeEpisodeModal('bulk-episode-modal')" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">ยกเลิก</button>
                 <button id="btn-submit-bulk" class="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg">เริ่มบันทึกข้อมูล</button>
             </div>
         </div>
@@ -407,7 +407,7 @@
         <div class="bg-[#1e293b] w-full max-w-lg rounded-2xl shadow-2xl border border-gray-700 flex flex-col">
             <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-[#0f172a]/50 rounded-t-2xl">
                 <h3 class="text-xl font-bold text-white">จัดการป้ายแนะนำ</h3>
-                <button onclick="BannerUI.closeModal()" class="text-gray-400 hover:text-white"><i class="ri-close-line text-2xl"></i></button>
+                <button onclick="closeBannerModal()" class="text-gray-400 hover:text-white"><i class="ri-close-line text-2xl"></i></button>
             </div>
             <form id="banner-form" class="p-6 space-y-4">
                 <div>
@@ -434,7 +434,7 @@
                 </div>
             </form>
             <div class="p-4 border-t border-gray-700 bg-[#0f172a]/50 rounded-b-2xl flex justify-end gap-3">
-                <button onclick="BannerUI.closeModal()" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">ยกเลิก</button>
+                <button onclick="closeBannerModal()" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">ยกเลิก</button>
                 <button type="submit" form="banner-form" class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg">บันทึก</button>
             </div>
         </div>
@@ -444,13 +444,13 @@
         <div class="bg-[#1e293b] w-full max-w-md rounded-2xl shadow-2xl border border-gray-700 flex flex-col">
             <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-[#0f172a]/50 rounded-t-2xl">
                 <h3 class="text-xl font-bold text-white" id="tag-modal-title">จัดการหมวดหมู่</h3>
-                <button onclick="TagUI.closeModal()" class="text-gray-400 hover:text-white"><i class="ri-close-line text-2xl"></i></button>
+                <button onclick="closeTagModal()" class="text-gray-400 hover:text-white"><i class="ri-close-line text-2xl"></i></button>
             </div>
              <div class="p-6 text-center text-gray-400">
                  (ฟอร์มแก้ไขหมวดหมู่ใช้งานร่วมกับแผงด้านบน)
              </div>
              <div class="p-4 border-t border-gray-700 bg-[#0f172a]/50 rounded-b-2xl flex justify-end gap-3">
-                <button onclick="TagUI.closeModal()" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">ปิด</button>
+                <button onclick="closeTagModal()" class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">ปิด</button>
             </div>
         </div>
     </div>
