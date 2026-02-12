@@ -128,7 +128,7 @@ const ShowService = {
 const ShowUI = {
     renderTable(data, onAction) {
         const tbody = document.getElementById('show-table-body');
-        if (!tbody) return; // Safety Check
+        if (!tbody) return; 
         tbody.innerHTML = '';
         
         if(data.length === 0) {
@@ -159,7 +159,6 @@ const ShowUI = {
             tbody.appendChild(tr);
         });
 
-        // ✅ FIXED: ใช้ onclick เพื่อป้องกัน Event ซ้ำซ้อน
         tbody.querySelectorAll('.btn-manage').forEach(b => b.onclick = () => onAction('manage', b.dataset.id));
         tbody.querySelectorAll('.btn-edit').forEach(b => b.onclick = () => onAction('edit', b.dataset.id));
         tbody.querySelectorAll('.btn-del').forEach(b => b.onclick = () => onAction('delete', b.dataset.id));
@@ -181,7 +180,6 @@ const ShowUI = {
         form.reset();
         form.dataset.id = show ? show.id : '';
 
-        // Reset Tags
         document.querySelectorAll('.show-tag-option').forEach(cb => cb.checked = false);
 
         if (show) {
@@ -209,7 +207,6 @@ const ShowUI = {
 
 // --- 🎮 CONTROLLER ---
 export function initShowModule() {
-    // ✅ FIXED: จัดการปุ่มแบบ Clean Event (ล้างคำสั่งเก่าก่อนใส่ใหม่)
     const btnSearch = document.getElementById('btn-search-show');
     if(btnSearch) {
         const newBtn = btnSearch.cloneNode(true);
@@ -227,13 +224,11 @@ export function initShowModule() {
         };
     }
     
-    // ✅ FIXED: Form Submit ใช้ onsubmit (มีได้แค่ 1 คำสั่งเสมอ)
     const form = document.getElementById('show-form');
     if(form) {
         form.onsubmit = handleFormSubmit;
     }
 
-    // Pagination
     const btnNext = document.getElementById('next-page-show');
     const btnPrev = document.getElementById('prev-page-show');
     if(btnNext) btnNext.onclick = () => loadShows('next');
@@ -245,6 +240,9 @@ export function initShowModule() {
         ShowService.toggleSort(field);
         refreshShows(false);
     };
+
+    // ✅ FIXED: ประกาศฟังก์ชันปิด Modal ให้เป็น Global (แก้ปัญหาปุ่มยกเลิก)
+    window.closeShowModal = () => ShowUI.closeModal();
 
     // First Load
     refreshShows();
@@ -293,12 +291,11 @@ async function handleOpenModal(id = null) {
 async function handleFormSubmit(e) {
     e.preventDefault();
     
-    // ✅ FIXED: ป้องกันการกดรัว (Double Click Prevention)
     const btnSubmit = e.submitter || e.target.querySelector('button[type="submit"]');
     if (btnSubmit && btnSubmit.disabled) return; 
 
     toggleLoading(true, "กำลังบันทึก...");
-    if (btnSubmit) btnSubmit.disabled = true; // 🔒 ล็อคปุ่มทันที
+    if (btnSubmit) btnSubmit.disabled = true;
 
     try {
         const id = e.target.dataset.id;
@@ -322,7 +319,7 @@ async function handleFormSubmit(e) {
         showToast(err.message, 'error');
     } finally {
         toggleLoading(false);
-        if (btnSubmit) btnSubmit.disabled = false; // 🔓 ปลดล็อคเมื่อเสร็จ
+        if (btnSubmit) btnSubmit.disabled = false;
     }
 }
 
